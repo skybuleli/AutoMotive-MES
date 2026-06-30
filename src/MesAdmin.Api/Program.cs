@@ -1,3 +1,4 @@
+using MemoryPack;
 using MemoryPack.AspNetCoreMvcFormatter;
 using Microsoft.EntityFrameworkCore;
 using MesAdmin.Application.Security;
@@ -48,11 +49,16 @@ app.MapPost("/api/auth/login", (LoginRequest req, ITokenService tokenService) =>
         return Results.Unauthorized();
 
     var token = tokenService.GenerateToken(req.Username, user.Name, user.Roles);
-    return Results.Ok(new { token, user = user.Name, roles = user.Roles });
+    return Results.Ok(new LoginResponse(token, user.Name, user.Roles));
 })
 .WithTags("Auth");
 
 app.Run();
 
 /// <summary>登录请求</summary>
-public record LoginRequest(string Username, string Password);
+[MemoryPackable]
+public partial record LoginRequest(string Username, string Password);
+
+/// <summary>登录响应（record，MemoryPack 可序列化）</summary>
+[MemoryPackable]
+public partial record LoginResponse(string Token, string User, string[] Roles);

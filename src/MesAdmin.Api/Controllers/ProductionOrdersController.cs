@@ -1,3 +1,4 @@
+using MemoryPack;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MesAdmin.Application.Security;
@@ -17,7 +18,7 @@ public class ProductionOrdersController : ControllerBase
     [HttpGet]
     public IActionResult List()
     {
-        return Ok(new { message = "工单列表", user = User.Identity?.Name });
+        return Ok(new ApiResponse("工单列表", User.Identity?.Name ?? ""));
     }
 
     /// <summary>
@@ -28,7 +29,7 @@ public class ProductionOrdersController : ControllerBase
     [Authorize(Roles = MesRoles.QualityEngineer)]
     public IActionResult Complete(string id)
     {
-        return Ok(new { message = $"工单 {id} 完工确认已放行", approvedBy = User.Identity?.Name });
+        return Ok(new ApiResponse($"工单 {id} 完工确认已放行", User.Identity?.Name ?? ""));
     }
 
     /// <summary>
@@ -39,7 +40,7 @@ public class ProductionOrdersController : ControllerBase
     [Authorize(Roles = MesRoles.QualityEngineer)]
     public IActionResult UnlockEquipment(string id)
     {
-        return Ok(new { message = $"工单 {id} 设备已解锁", unlockedBy = User.Identity?.Name });
+        return Ok(new ApiResponse($"工单 {id} 设备已解锁", User.Identity?.Name ?? ""));
     }
 
     /// <summary>
@@ -50,6 +51,10 @@ public class ProductionOrdersController : ControllerBase
     [Authorize(Roles = $"{MesRoles.ShiftLeader},{MesRoles.ProductionManager}")]
     public IActionResult Start(string id)
     {
-        return Ok(new { message = $"工单 {id} 已开工", startedBy = User.Identity?.Name });
+        return Ok(new ApiResponse($"工单 {id} 已开工", User.Identity?.Name ?? ""));
     }
 }
+
+/// <summary>通用 API 响应（record，MemoryPack 可序列化）</summary>
+[MemoryPackable]
+public partial record ApiResponse(string Message, string Operator);
