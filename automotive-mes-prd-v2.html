@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoMES PRD v2 — 博世 ESP® 制动系统 MES 产品需求文档</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;0,700&family=Noto+Serif:ital,wght@0,500&family=JetBrains+Mono:ital,wght@0,400;0,500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --outer-bg:#E4E1DC;--page-bg:#FDFCF9;--surface:#FFFFFF;
+  --border:#E8E6E2;--divider:#C5C0BA;
+  --text-primary:#151515;--text-body:#3D3D3D;--text-secondary:#717171;
+  --hero-bg:#F0E4D8;--hero-deco:#D4A882;--hero-deco2:#B87D50;
+  --success-bg:#E8FBCF;--success-fg:#3D4826;
+  --warning-bg:#FFF0DC;--warning-fg:#E47700;
+  --info-bg:#DEE5F7;--info-fg:#3E54CE;
+  --error-bg:#FDECEA;--error-fg:#C4433A;
+  --neutral-bg:#FDF9F2;--neutral-fg:#7C746F;
+  --code-bg:#F4F4F0;
+}
+body{font-family:'Inter Tight',sans-serif;background:var(--outer-bg);color:var(--text-body);font-size:14px;line-height:1.65;-webkit-font-smoothing:antialiased;padding:32px 16px}
+.page{max-width:1200px;margin:0 auto;background:var(--page-bg);border-radius:24px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+@media(max-width:768px){body{padding:0}.page{border-radius:0}}
+.toc{position:sticky;top:0;z-index:10;background:rgba(253,252,249,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;gap:10px;overflow-x:auto;white-space:nowrap}
+.toc a{font-size:12px;font-weight:500;color:var(--text-secondary);text-decoration:none;padding:4px 10px;border-radius:20px;transition:all .2s}
+.toc a:hover{color:var(--text-primary);background:var(--info-bg)}
+.toc-sep{width:1px;height:14px;background:var(--divider);flex-shrink:0}
+.hero{position:relative;background:var(--hero-bg);padding:44px 48px;overflow:hidden}
+@media(max-width:768px){.hero{padding:28px 20px}}
+.hero-blob{position:absolute;border-radius:60% 40% 55% 45%/45% 55% 40% 60%;opacity:0.12;pointer-events:none}
+.hero-blob.a{width:320px;height:280px;background:var(--hero-deco);top:-60px;right:-30px}
+.hero-blob.b{width:200px;height:180px;background:var(--hero-deco2);bottom:-40px;left:8%}
+.hero-blob.c{width:140px;height:150px;background:var(--hero-deco);top:20px;left:-20px}
+.hero-eyebrow{font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--hero-deco2);margin-bottom:8px;position:relative}
+.hero-title{font-size:30px;font-weight:700;color:var(--text-primary);line-height:1.3;margin-bottom:10px;position:relative}
+.hero-subtitle{font-size:15px;color:var(--text-secondary);margin-bottom:22px;max-width:700px;position:relative}
+.hero-metrics{display:flex;gap:36px;flex-wrap:wrap;padding-top:16px;border-top:1px solid rgba(0,0,0,0.06);position:relative}
+.hero-metric-val{font-family:'Noto Serif',serif;font-size:34px;font-weight:500;color:var(--text-primary);letter-spacing:-0.02em}
+.hero-metric-label{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.content{padding:40px 48px}
+@media(max-width:768px){.content{padding:24px 20px}}
+.section{margin-bottom:44px}
+.section-title{font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:4px}
+.section-sub{font-size:12px;color:var(--text-secondary);margin-bottom:16px}
+.section-rule{height:0.5px;background:var(--border);margin-bottom:20px}
+.sec-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:var(--info-bg);color:var(--info-fg);font-size:13px;font-weight:600;margin-right:8px;flex-shrink:0}
+.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:768px){.card-grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:20px}
+.card-title{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.card-body{font-size:13px;color:var(--text-body);line-height:1.55}
+.card-full{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:24px;margin-bottom:14px}
+.pill{display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px}
+.pill-inc{background:var(--success-bg);color:var(--success-fg)}
+.pill-wip{background:var(--warning-bg);color:var(--warning-fg)}
+.pill-err{background:var(--error-bg);color:var(--error-fg)}
+.pill-inf{background:var(--info-bg);color:var(--info-fg)}
+.table-wrap{overflow-x:auto;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{font-size:11px;font-weight:500;color:var(--text-secondary);text-align:left;padding:8px 10px;border-bottom:1px solid var(--divider);white-space:nowrap}
+tbody td{padding:9px 10px;border-bottom:0.5px solid var(--border);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.mono{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-primary)}
+.code-block{background:var(--code-bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin:12px 0;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;overflow-x:auto;white-space:pre;color:var(--text-primary)}
+.code-inline{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--code-bg);padding:1px 6px;border-radius:4px;color:var(--text-primary)}
+.alert{padding:14px 16px;border-radius:10px;font-size:13px;margin-bottom:12px}
+.alert-title{font-weight:600;margin-bottom:4px}
+.alert-info{background:var(--info-bg);color:var(--info-fg)}
+.alert-warn{background:var(--warning-bg);color:var(--warning-fg)}
+.alert-err{background:var(--error-bg);color:var(--error-fg)}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat-card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+.stat-val{font-size:22px;font-weight:600;color:var(--text-primary)}
+.stat-label{font-size:11px;color:var(--text-secondary);margin-top:2px}
+
+/* Process flow */
+.process-flow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin:16px 0;overflow-x:auto;padding:8px 0}
+.process-step{flex-shrink:0;width:160px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 12px;text-align:center}
+.process-step.active{border-color:var(--info-fg);background:var(--info-bg)}
+.process-step h4{font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px}
+.process-step p{font-size:11px;color:var(--text-secondary);line-height:1.4}
+.process-arrow{font-size:18px;color:var(--text-secondary);align-self:center;flex-shrink:0;padding:0 2px}
+
+/* Step detail */
+.step-list{margin:8px 0 8px 16px}
+.step-list li{padding:6px 0;font-size:13px;line-height:1.6}
+.step-list li b{color:var(--text-primary)}
+
+/* Module detail */
+.mod-detail{border-left:3px solid var(--border);padding-left:16px;margin:12px 0}
+.mod-detail.p0{border-left-color:var(--warning-fg)}
+.mod-detail.p1{border-left-color:var(--info-fg)}
+.mod-detail.p2{border-left-color:var(--success-fg)}
+.mod-header{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:2px}
+.mod-sub{font-size:12px;color:var(--text-secondary);margin-bottom:10px}
+
+.footer{background:var(--hero-bg);padding:32px 48px;border-top:1px solid var(--border);position:relative;overflow:hidden}
+.footer-blob{position:absolute;border-radius:50%;opacity:0.08;pointer-events:none;width:180px;height:160px;background:var(--hero-deco);bottom:-30px;right:10%}
+.footer-inner{position:relative;display:flex;justify-content:space-between;flex-wrap:wrap;gap:20px}
+.footer-brand{font-size:15px;font-weight:600;color:var(--text-primary)}
+.footer-links{display:flex;gap:32px;flex-wrap:wrap}
+.footer-col h5{font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.footer-col a{display:block;font-size:12px;color:var(--text-secondary);text-decoration:none;line-height:1.8}
+.footer-bottom{margin-top:20px;padding-top:16px;border-top:0.5px solid var(--hero-deco);display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);flex-wrap:wrap;gap:8px}
+.chart-box{position:relative;border:0.5px solid var(--border);border-radius:12px;padding:20px;background:var(--surface);margin-bottom:14px}
+.chart-wrap{position:relative;height:300px}
+@media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0;max-width:100%}.toc{display:none}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<nav class="toc">
+  <a href="#case">博世ESP案例</a><span class="toc-sep"></span>
+  <a href="#regulations">合规要求</a><span class="toc-sep"></span>
+  <a href="#users">用户角色</a><span class="toc-sep"></span>
+  <a href="#m01">M01 工单</a><span class="toc-sep"></span>
+  <a href="#m02">M02 物料</a><span class="toc-sep"></span>
+  <a href="#m03">M03 质量</a><span class="toc-sep"></span>
+  <a href="#m04">M04 追溯</a><span class="toc-sep"></span>
+  <a href="#m05">M05 设备</a><span class="toc-sep"></span>
+  <a href="#m06">M06~M10</a><span class="toc-sep"></span>
+  <a href="#arch">技术架构</a><span class="toc-sep"></span>
+  <a href="#roadmap">路线图</a>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="case">
+  <div class="hero-blob a"></div><div class="hero-blob b"></div><div class="hero-blob c"></div>
+  <div class="hero-eyebrow">产品需求文档 PRD v2.0 · 行业深度版</div>
+  <h1 class="hero-title">AutoMES — 博世 ESP® 制动系统<br>制造执行系统</h1>
+  <p class="hero-subtitle">以博世 ESP® 电子稳定程序制动系统总成（ECU + HCU + 电机总成）为行业锚点，面向汽车安全件 Tier-1 供应商的全链路 MES 系统。覆盖 SMT 贴片 → 电磁阀装配 → HCU 加工 → 总成合装 → 液压功能测试 → ECU 刷写标定 → 成品追溯的全制造过程。满足 IATF 16949 质量管理体系 + ISO 26262 ASIL-D 功能安全对软件工具的要求。</p>
+  <div class="hero-metrics">
+    <div><div class="hero-metric-val">31</div><div class="hero-metric-label">博世ESP产线工序</div></div>
+    <div><div class="hero-metric-val">12</div><div class="hero-metric-label">核心功能模块</div></div>
+    <div><div class="hero-metric-val">ASIL-D</div><div class="hero-metric-label">功能安全等级</div></div>
+    <div><div class="hero-metric-val">6σ</div><div class="hero-metric-label">质量目标 Cpk≥1.67</div></div>
+  </div>
+</section>
+
+<div class="content">
+
+<!-- ═══ 1. 博世 ESP 产品与生产过程 ═══ -->
+<div class="section">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">1</span><span class="section-title">行业锚点：博世 ESP® 制动系统总成</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">🔧 产品结构分解</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>总成</th><th>子组件</th><th>关键工艺</th><th>过程参数</th><th>追溯等级</th></tr></thead>
+        <tbody>
+          <tr><td><b>ECU</b> 电子控制单元</td><td>PCB板、MCU芯片、ASIC、CAN收发器</td><td>SMT贴片 → 回流焊 → AOI → ICT → 分板</td><td>回流焊温度曲线、AOI缺陷率</td><td>S/N + 固件版本</td></tr>
+          <tr><td><b>HCU</b> 液压控制单元</td><td>铝合金阀体、12个电磁阀、柱塞泵</td><td>精密加工 → 清洗 → 电磁阀压装 → 密封测试</td><td>压装力/位移曲线、泄漏率</td><td>S/N + 阀体批次</td></tr>
+          <tr><td><b>电机总成</b></td><td>永磁电机、轴承、转子、定子</td><td>绕线 → 动平衡 → 电机测试</td><td>转速/电流特性、动平衡精度</td><td>S/N</td></tr>
+          <tr><td><b>ESP总成</b> (合装)</td><td>ECU+HCU+电机+压力传感器</td><td>合装 → 螺栓拧紧 → 液压功能测试 → ECU刷写 → 终检</td><td>拧紧扭矩/角度、液压压力曲线、刷写校验和</td><td>VIN绑定</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">🏭 总装线工序流程（7 大站，31 道工序）</h3>
+    <div class="process-flow">
+      <div class="process-step active"><h4>站1 · 上料扫码</h4><p>ECU S/N + HCU S/N + 电机 S/N 扫码确认 · BOM 版本校验</p></div>
+      <div class="process-arrow">→</div>
+      <div class="process-step"><h4>站2 · 合装装配</h4><p>ECU 预装 → HCU 定位 → 电机安装 · 4 颗关键螺栓</p></div>
+      <div class="process-arrow">→</div>
+      <div class="process-step"><h4>站3 · 螺栓拧紧</h4><p>扭矩 + 角度法拧紧 4 处关键紧固件 · 扭矩曲线实时采集</p></div>
+      <div class="process-arrow">→</div>
+      <div class="process-step"><h4>站4 · 液压测试</h4><p>12路电磁阀逐一动作测试 · 建压/保压/泄压循环 · 泄漏检测</p></div>
+      <div class="process-arrow">→</div>
+      <div class="process-step"><h4>站5 · ECU 刷写</h4><p>Bootloader → 应用固件 → 标定参数 · 校验和确认 · 防变砖回滚</p></div>
+      <div class="process-arrow">→</div>
+      <div class="process-step"><h4>站6 · 功能终检</h4><p>CAN通信测试 · 传感器标定 · ESP功能模拟 · SPC采样</p></div>
+      <div class="process-arrow">→</div>
+      <div class="process-step"><h4>站7 · 追溯绑定</h4><p>打印唯一追溯标签 · VIN码绑定（装车后回传）· 打包入库</p></div>
+    </div>
+  </div>
+
+  <div class="alert alert-err">
+    <div class="alert-title">⚠️ 为什么 ESP 必须 100% 追溯？</div>
+    ESP 是汽车安全件（ISO 26262 ASIL-D 最高等级）。一旦发生召回，博世必须在 <b>24 小时内</b>从 VIN 码追溯到 ECU S/N → HCU S/N → 电机 S/N → 电磁阀批次 → 阀体原材料批次。追溯失败 = 无法界定召回范围 = 整车厂将要求全批次召回，损失可达数亿欧元。<b>这是 MES 系统存在的第一性原理。</b>
+  </div>
+</div>
+
+<!-- ═══ 2. 合规要求 ═══ -->
+<div class="section" id="regulations">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">2</span><span class="section-title">合规要求矩阵</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">IATF 16949 条款覆盖</div>
+      <div class="table-wrap" style="margin-top:6px">
+        <table><thead><tr><th>条款</th><th>要求</th><th>MES模块</th></tr></thead>
+        <tbody>
+          <tr><td>8.5.1.4</td><td>作业准备验证</td><td>M01+M07</td></tr>
+          <tr><td>8.5.1.5</td><td>全面生产维护</td><td>M05</td></tr>
+          <tr><td>8.5.6.1.1</td><td>过程参数记录</td><td>M03+M05</td></tr>
+          <tr><td>8.6.1</td><td>产品放行</td><td>M03</td></tr>
+          <tr><td>8.7.1.5</td><td>返工可追溯</td><td>M04</td></tr>
+          <tr><td>9.1.1.1</td><td>SPC应用</td><td>M03</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">ISO 26262 ASIL-D 软件工具要求</div>
+      <div class="card-body" style="line-height:1.9;font-size:12px">
+        • <b>工具置信度 (TCL)：</b>MES 作为生产工具需达到 TCL2/TCL3<br>
+        • <b>数据完整性：</b>过程参数记录不可篡改，需审计追踪<br>
+        • <b>软件刷写：</b>ECU 固件版本与标定参数的强制校验<br>
+        • <b>异常处理：</b>任何工序异常必须有记录+评审+处置闭环<br>
+        • <b>工具验证：</b>MES 自身需通过工具验证 (Tool Qualification)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 3. 用户角色 ═══ -->
+<div class="section" id="users">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">3</span><span class="section-title">用户角色</span>
+  </div>
+  <div class="section-rule"></div>
+  <div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(155px,1fr))">
+    <div class="stat-card"><div style="font-size:28px;margin-bottom:4px">👨‍💼</div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">生产经理</div><div class="stat-label">实时OEE看板 · 工单进度 · 异常升级处理</div></div>
+    <div class="stat-card"><div style="font-size:28px;margin-bottom:4px">🔧</div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">班组长</div><div class="stat-label">开班/报工/Andon · 首件确认 · 换型操作</div></div>
+    <div class="stat-card"><div style="font-size:28px;margin-bottom:4px">🔬</div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">质量工程师</div><div class="stat-label">SPC监控 · Cpk报告 · 8D/CAR闭环</div></div>
+    <div class="stat-card"><div style="font-size:28px;margin-bottom:4px">⚙️</div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">设备工程师</div><div class="stat-label">PLC数据 · TPM计划 · OEE分析</div></div>
+    <div class="stat-card"><div style="font-size:28px;margin-bottom:4px">📦</div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">仓库员</div><div class="stat-label">批次扫码 · 线边库存 · JIT看板</div></div>
+    <div class="stat-card"><div style="font-size:28px;margin-bottom:4px">🏢</div><div style="font-size:13px;font-weight:600;color:var(--text-primary)">SQE</div><div class="stat-label">来料合格率 · PPAP · 供应商评分</div></div>
+  </div>
+</div>
+
+<!-- ═══ 4. M01 生产工单管理 ═══ -->
+<div class="section" id="m01">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">4</span><span class="section-title">M01 生产工单管理</span> <span class="pill pill-wip">P0 核心</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="mod-detail p0">
+    <div class="mod-header">📋 模块概述</div>
+    <div class="mod-sub">管理 ESP 总成从 ERP 下达到成品入库的完整生产工单生命周期。与博世 SAP 系统通过 RFC/BAPI 接口双向同步工单状态。</div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">工单生命周期 9 个步骤</h3>
+    <div class="step-list">
+      <ol>
+        <li><b>步骤 1 · 工单创建与校验</b> — SAP 通过 Webhook 推送工单 → MES 接收并校验产品编码（ESP-9.0/ESP-9.1）、BOM 版本、工艺路线版本 → 验证通过后创建本地工单，分配 <span class="code-inline">Ulid</span> 主键 + 工单号 <span class="code-inline">WO-YYYYMMDD-NNNN</span> → 如 BOM 版本不符则拒单并回写 SAP 异常</li>
+        <li><b>步骤 2 · 物料齐套检查</b> — 根据 BOM 展开物料清单 → 查询线边库存 + ERP 库存 → 检查 ECU S/N 批次、HCU 阀体批次、电机批次是否足够 500 件 → 缺料则触发 JIT 看板拉动 → 齐套确认通过后工单状态变为 <span class="code-inline">Released</span></li>
+        <li><b>步骤 3 · 首件检验</b> — 每班次/换型后强制首件检验 → 班组长扫码选择首件模板 → 按控制计划逐项检验并录入结果 → 系统自动判定合格/不合格 → 不合格则锁定工单，触发 CAR</li>
+        <li><b>步骤 4 · 工单开工</b> — 班组长在工位终端扫码工单 → 系统分配设备 → 触发 Cleipnir Saga 启动 31 道工序序列 → 状态变为 <span class="code-inline">InProgress</span></li>
+        <li><b>步骤 5 · 工序执行监控</b> — Saga 按工艺路线依次执行每道工序 → 每道工序完成时自动记录：操作员工号、设备号、开始/结束时间、过程参数 → 异常时自动触发 Andon</li>
+        <li><b>步骤 6 · 过程巡检 (IPQC)</b> — 按控制计划频率（如每 50 件）自动弹出巡检任务 → 检验员扫码录入实测值 → SPC 控制图实时更新 → 超出控制限自动报警</li>
+        <li><b>步骤 7 · 物料批次绑定</b> — 每件产品经过关键工位时扫码绑定：ECU S/N → HCU S/N → 电机 S/N → 电磁阀批次 → 阀体批次 → 全部写入追溯链接表</li>
+        <li><b>步骤 8 · 完工确认</b> — 全部 31 道工序完成 → 系统自动统计合格数/不良数 → 质量工程师审核放行 → 状态变为 <span class="code-inline">Completed</span></li>
+        <li><b>步骤 9 · 成品入库</b> — 打印唯一追溯标签（含二维码，编码规则：供应商代码+产品代码+年月日+序列号+校验位）→ SAP 同步完工数量 → 状态变为 <span class="code-inline">Closed</span></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">🔄 Cleipnir Saga 流程定义</h3>
+    <div class="code-block">// ProductionOrderSaga — 31工序 × 7站，全Saga编排
+public async Task Execute(ProductionOrder order, Workflow workflow) {
+    var state = await workflow.States.CreateOrGetDefault&lt;OrderState&gt;();
+
+    // 站1: 上料扫码确认（Effect之外：人工扫码确认）
+    if (!await ValidateMaterialScan(order)) { await PauseOrder(order); return; }
+
+    // 站2: ECU+HCU+电机合装 — Effect.AtLeastOnce（不可丢失）
+    await workflow.Effect.Capture("Assembly", async () => {
+        await _plc.ClampHCU(order.EquipmentId);        // 夹紧HCU
+        await _plc.InstallECU(order.EquipmentId);       // ECU预装
+        await _plc.InstallMotor(order.EquipmentId);     // 电机安装
+        await _db.RecordOperation(order, "ASSY-001", OperationStatus.Completed);
+    }, ResiliencyLevel.AtLeastOnce);
+
+    // 站3: 4处关键螺栓拧紧 — 每处独立Effect + 扭矩曲线采集
+    foreach (var bolt in new[]{"M6-FL","M6-FR","M8-RL","M8-RR"}) {
+        await workflow.Effect.Capture($"Torque-{bolt}", async () => {
+            var curve = await _plc.TorqueToAngle(order.EquipmentId, bolt, 22.0, 180.0);
+            if (!curve.IsPassed) throw new TorqueException(bolt, curve);
+            await _db.SaveTorqueCurve(order.Id, bolt, curve);
+        }, ResiliencyLevel.AtLeastOnce);
+    }
+
+    // 站4: 液压功能测试 — AtLeastOnce（安全件100%测试）
+    await workflow.Effect.Capture("HydraulicTest", async () => {
+        var result = await _tester.RunHydraulicTest(order.SerialNumber);
+        if (result.LeakRate > 0.5) { /* CC/hour超标 → 不合格品处置 */ }
+        await _db.SaveHydraulicTestResult(order.Id, result);
+    }, ResiliencyLevel.AtLeastOnce);
+
+    // 站5: ECU刷写 — AtLeastOnce + 回滚保护
+    await workflow.Effect.Capture("ECUFlashing", async () => {
+        var checksum = await _flasher.FlashFirmware(order.SerialNumber, order.FwVersion);
+        if (checksum != order.ExpectedChecksum) {
+            await _flasher.Rollback(order.SerialNumber); // 防变砖
+            throw new FlashException(order.SerialNumber, checksum);
+        }
+    }, ResiliencyLevel.AtLeastOnce);
+
+    // 站6: CAN通信 + 传感器标定 — AtMostOnce（重放复用结果）
+    await workflow.Effect.Capture("FinalTest", async () => {
+        await _tester.RunCANTest(order.SerialNumber);
+        await _tester.CalibrateSensors(order.SerialNumber);
+    }, ResiliencyLevel.AtMostOnce);
+
+    // 站7: VIN绑定 + 标签打印 — AtLeastOnce
+    await workflow.Effect.Capture("VinBinding", async () => {
+        var label = await _labelPrinter.PrintTraceabilityLabel(order);
+        await _db.SaveTraceabilityLink(order, label);
+    }, ResiliencyLevel.AtLeastOnce);
+}</div>
+    <div class="alert alert-info" style="margin-top:8px"><b>崩溃恢复保证：</b>即使 Saga 执行到站5时服务器断电，重启后 Cleipnir 自动从上次 Checkpoint 恢复，已完成站1~4的 Effect 不重复执行（AtMostOnce）或重试到成功（AtLeastOnce）。工序永不丢失。</div>
+  </div>
+</div>
+
+<!-- ═══ 5. M02 物料管理 ═══ -->
+<div class="section" id="m02">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">5</span><span class="section-title">M02 物料管理 (JIT/JIS)</span> <span class="pill pill-wip">P0 核心</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="mod-detail p0">
+    <div class="mod-header">📦 模块概述</div>
+    <div class="mod-sub">管理 ESP 总成所需 87 种物料的批次追溯、线边库存和 JIT 看板拉动。与博世 SAP WM 模块通过 IDoc 接口同步库存数据。</div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">物料管理 7 个核心步骤</h3>
+    <div class="step-list">
+      <ol>
+        <li><b>步骤 1 · BOM 版本管理</b> — 从 SAP/PLM 同步 ESP-9.0 BOM（87种物料，4层结构）→ 本地缓存到 MasterMemory → 工单创建时校验 BOM 版本 → 版本不符则拒单</li>
+        <li><b>步骤 2 · 来料扫码入库</b> — 仓库员用扫码枪扫描供应商来料标签 → 系统自动解析 GS1-128 条码（含物料编码+批次号+数量+生产日期）→ 校验是否在合格供应商名录内 → 写入 <span class="code-inline">material_bindings</span> 表</li>
+        <li><b>步骤 3 · 线边库存实时监控</b> — 每个工位配置电子看板 → 显示当前物料库存量、安全库存、最大库存 → 低于安全库存时黄色预警 → 低于最低库存时红色报警 + 自动触发叫料</li>
+        <li><b>步骤 4 · JIT 看板拉动</b> — 工位扫描空料箱 → 生成电子看板信号 → 推送至仓库 PDA → 仓库员按看板备料 → 送达工位后扫码确认 → 全流程时间戳记录</li>
+        <li><b>步骤 5 · 投料批次绑定</b> — 操作员在投料前扫描物料批次码 → MES 自动绑定：物料编码+批次号 → 工单号 → 当前产品 S/N → 写入追溯链</li>
+        <li><b>步骤 6 · 物料防错 (Poka-Yoke)</b> — 关键物料（ECU芯片、电磁阀）启用防错校验 → 扫描物料码后与 BOM 比对 → 物料错误时锁定设备并声光报警 → 必须质量工程师解锁</li>
+        <li><b>步骤 7 · 物料消耗反冲</b> — 工单完工后自动反冲物料消耗 → 按 BOM 标准用量扣减线边库存 → 差异 > 2% 时生成异常报告 → 同步 SAP 物料移动凭证</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 6. M03 质量管理 ═══ -->
+<div class="section" id="m03">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">6</span><span class="section-title">M03 质量管理 (SPC + 全检)</span> <span class="pill pill-wip">P0 核心</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="mod-detail p0">
+    <div class="mod-header">✅ 模块概述</div>
+    <div class="mod-sub">覆盖 IQC（来料）→ IPQC（过程）→ FQC（成品）三级检验 + SPC 统计过程控制。ESP 总成须 100% 通过液压功能测试（安全件强制要求）。</div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">质量管理 8 个核心步骤</h3>
+    <div class="step-list">
+      <ol>
+        <li><b>步骤 1 · 来料检验 (IQC)</b> — 关键物料（ECU芯片、电磁阀、压力传感器）按 AQL 抽样方案检验 → 检验员扫码录入：外观/尺寸/电性能 → 系统自动判定 → 不合格则锁定批次并触发 SQE 8D</li>
+        <li><b>步骤 2 · 首件检验</b> — 每班次/换型/设备维修后强制首件 → 按控制计划逐项检验（ESP 共 23 个检验特性）→ 全部合格方可批量生产 → 不合格则锁定工单</li>
+        <li><b>步骤 3 · 过程巡检 (IPQC)</b> — 按控制计划频率：螺栓拧紧每 50 件抽 5 件 → 液压压力每 100 件抽 3 件 → 系统自动弹出巡检任务 → 超时未完成升级报警</li>
+        <li><b>步骤 4 · SPC 实时控制图</b> — 6 个关键特性实时 X̄-R 控制图：M6螺栓扭矩、M8螺栓扭矩、液压建压时间、保压压力、泄漏率、CAN通信延迟 → R3 响应式管道：每 5 样本自动计算 Cpk → 超限自动报警</li>
+        <li><b>步骤 5 · 100% 在线测试</b> — 液压功能测试 100% 全检（ESP 安全件强制）→ 12 路电磁阀逐一动作测试 → 建压/保压/泄压循环 → 泄漏率 ≤ 0.5 CC/hour → 任一不合格则设备自动锁止</li>
+        <li><b>步骤 6 · 不合格品处置</b> — 不合格品自动移入隔离区 → 质量工程师评审：返工/让步/报废 → 返工品经重新检验合格后回线 → 全流程可追溯（原始不合格+返工+复检）</li>
+        <li><b>步骤 7 · 8D/CAR 闭环</b> — 重复性问题自动触发 8D 报告流程 → D1~D8 每个步骤责任人和截止日期 → 超时自动升级 → 永久纠正措施验证后关闭</li>
+        <li><b>步骤 8 · 质量报表自动生成</b> — 日报：一次合格率+不良品分布 → 周报：Cpk 趋势+控制图+异常总结 → 月报：PPM+供应商质量排名+质量成本 → PDF 自动邮件推送</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">📊 SPC 控制图配置（以 M8 螺栓扭矩为例）</h3>
+    <div class="code-block">// R3 响应式 SPC 管道
+var spcStream = _plcStream
+    .Where(s => s.CheckPoint == "M8-Torque")
+    .Buffer(5)                              // 每5个样本一组
+    .Select(samples => {
+        var xbar = samples.Average(s => s.Value);
+        var r = samples.Max(s => s.Value) - samples.Min(s => s.Value);
+        return new SpcResult(xbar, r);
+    })
+    .Subscribe(async result => {
+        // X̄-R 控制限计算（基于历史120个样本）
+        // UCL_Xbar = X̄̄ + A2 × R̄ = 22.5 + 0.577 × 0.8 = 22.96 Nm
+        // LCL_Xbar = X̄̄ - A2 × R̄ = 22.5 - 0.577 × 0.8 = 22.04 Nm
+        // Cpk = min((USL-X̄̄)/3σ, (X̄̄-LSL)/3σ) = min(0.67, 2.03) = 1.67
+
+        if (result.XBar > 22.96 || result.XBar < 22.04) {
+            await _andon.Trigger("M8扭矩超控制限", "critical");
+        }
+        await _push.PublishSpcSample(result);
+    });</div>
+  </div>
+</div>
+
+<!-- ═══ 7. M04 追溯 ═══ -->
+<div class="section" id="m04">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">7</span><span class="section-title">M04 全链路追溯</span> <span class="pill pill-wip">P0 核心</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">🔍 4 级双向追溯（ESP 实际案例）</h3>
+    <table>
+      <thead><tr><th>追溯级</th><th>标识</th><th>示例数据</th><th>采集方式</th></tr></thead>
+      <tbody>
+        <tr><td><b>L1 · 车辆</b></td><td>VIN 码 (17位)</td><td class="mono">WDD2040771F123456</td><td>整车厂装车后回传 MES</td></tr>
+        <tr><td><b>L2 · ESP总成</b></td><td>产品序列号</td><td class="mono">ESP9-20260701-001234</td><td>激光打标 + 二维码标签</td></tr>
+        <tr><td><b>L3 · 关键零部件</b></td><td>ECU S/N + HCU S/N + 电机 S/N + 电磁阀批次</td><td class="mono">ECU-0265.001.234 / HCU-0265.200.567</td><td>装配工位扫码自动绑定</td></tr>
+        <tr><td><b>L4 · 原材料</b></td><td>阀体铝合金批次 / PCB板材批次</td><td class="mono">AL-6082-L2506-003</td><td>IQC 来料检验时录入</td></tr>
+      </tbody>
+    </table>
+
+    <h4 style="font-size:13px;font-weight:600;color:var(--text-primary);margin:16px 0 8px">召回场景演练</h4>
+    <div class="step-list">
+      <ol>
+        <li><b>场景：</b>整车厂报告 VIN <span class="code-inline">WDD2040771F123456</span> 的 ESP 在 8 万公里时液压泄漏</li>
+        <li><b>正向追溯（30秒内完成）：</b>MES 输入 VIN → 查出 ESP总成 S/N <span class="code-inline">ESP9-20260701-001234</span> → 查出生产工单 <span class="code-inline">WO-20260701-0089</span> → 查出 HCU S/N <span class="code-inline">HCU-0265.200.567</span> → 查出阀体批次 <span class="code-inline">AL-6082-L2506-003</span> → 查出供应商 <span class="code-inline">XX铝业-2025年6月第3批</span></li>
+        <li><b>反向追溯（60秒内完成）：</b>查出同一阀体批次 <span class="code-inline">AL-6082-L2506-003</span> 共生产 1,247 件 ESP 总成 → 查出对应 1,247 个 VIN 码 → 导出 Excel 发送整车厂 → 界定召回范围</li>
+        <li><b>技术保证：</b>追溯链接表每次绑定写入 <span class="code-inline">Effect.AtLeastOnce</span> + 数据库唯一约束防重复 → 追溯链不可篡改（哈希链审计）</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 8. M05 设备管理 ═══ -->
+<div class="section" id="m05">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">8</span><span class="section-title">M05 设备管理 (TPM+OEE)</span> <span class="pill pill-inc">P1 重要</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="mod-detail p1">
+    <div class="mod-header">⚙️ 模块概述</div>
+    <div class="mod-sub">管理 ESP 产线 8 台核心设备（拧紧机、液压测试台、刷写台、SMT线等）的 OEE、PLC 数据采集、预防性维护和备件管理。</div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">ESP 产线核心设备清单</h3>
+    <table>
+      <thead><tr><th>设备</th><th>PLC连接</th><th>关键采集参数</th><th>OEE目标</th></tr></thead>
+      <tbody>
+        <tr><td>拧紧机 (Atlas Copco)</td><td>OPC UA / Open Protocol</td><td>扭矩值、角度、曲线、拧紧次数</td><td>≥ 85%</td></tr>
+        <tr><td>液压功能测试台</td><td>EtherNet/IP</td><td>压力曲线、泄漏率、测试节拍</td><td>≥ 88%</td></tr>
+        <tr><td>ECU 刷写台</td><td>Modbus TCP</td><td>刷写成功率、固件版本、错误码</td><td>≥ 92%</td></tr>
+        <tr><td>SMT 贴片线</td><td>OPC UA</td><td>贴装速度、抛料率、AOI 直通率</td><td>≥ 90%</td></tr>
+        <tr><td>电磁阀压装机</td><td>Profinet</td><td>压装力/位移曲线、节拍</td><td>≥ 87%</td></tr>
+      </tbody>
+    </table>
+
+    <h4 style="font-size:13px;font-weight:600;color:var(--text-primary);margin:16px 0 8px">OEE 实时计算管道（R3响应式）</h4>
+    <div class="step-list">
+      <ol>
+        <li><b>数据采集：</b><span class="code-inline">OpcUaPlcClient</span> 每 500ms 读取设备状态寄存器 → 发布 <span class="code-inline">PlcDataChanged</span> 消息到 MessagePipe</li>
+        <li><b>OEE计算：</b><span class="code-inline">OeeReactivePipeline</span> 订阅 PlcDataChanged → <span class="code-inline">Sample(5s)</span> 采样 → 计算可用率（实际运行时间/计划运行时间）、性能率（理想节拍×合格数/实际运行时间）、良品率（合格数/总生产数）</li>
+        <li><b>实时推送：</b>计算结果通过 MessagePipe → <span class="code-inline">DashboardPushService</span> → SignalR <span class="code-inline">OeeUpdated</span> 事件 → 管理后台实时更新</li>
+        <li><b>预防性维护：</b>基于运行时间/次数自动触发维护工单（拧紧机每 10 万次标定、液压台每月密封件更换）</li>
+        <li><b>备件关联：</b>维护工单自动关联备件清单 → 检查备件库存 → 不足则生成采购申请</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 9. M06~M10 概要 ═══ -->
+<div class="section" id="m06">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">9</span><span class="section-title">M06~M10 概要展开</span> <span class="pill pill-inc">P1~P3</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">M06 Andon 报警 <span class="pill pill-inc">P1</span></div>
+      <div class="card-body" style="font-size:12px">
+        <b>三级上报机制：</b><br>
+        L1：工位声光报警 + 看板显示（5分钟未响应 → L2）<br>
+        L2：班组长 PDA + 企业微信推送（10分钟 → L3）<br>
+        L3：生产经理电话 + 邮件<br>
+        <b>ESP专用报警：</b>扭矩超差、泄漏超标、刷写失败、CAN通信异常<br>
+        <b>R3防抖：</b><span class="code-inline">ThrottleFirst(5s)</span> 避免重复报警风暴
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">M07 工艺管理 <span class="pill pill-inc">P1</span></div>
+      <div class="card-body" style="font-size:12px">
+        <b>工艺路线：</b>31道工序 × 7站，含标准工时、工装夹具、参数模板<br>
+        <b>ESP参数模板：</b>M6扭矩22±1Nm/180°±5°、M8扭矩45±2Nm/270°±10°<br>
+        <b>防错校验：</b>扫描物料码→BOM比对→设备参数比对→三重校验通过方可启动<br>
+        <b>版本控制：</b>工艺变更需 ECO 审批，旧版本归档可追溯
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">M08 SQE <span class="pill p2">P2</span></div>
+      <div class="card-body" style="font-size:12px">
+        <b>供应商评分：</b>来料合格率(30%)+交货准时率(25%)+8D响应速度(20%)+PPAP通过率(15%)+价格(10%)<br>
+        <b>PPAP管理：</b>18项文档电子归档→到期自动提醒→逾期升级<br>
+        <b>ESP关键供应商：</b>电磁阀、压力传感器、PCB板材 三类需最高等级管控
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">M09~M10 排程/报表 <span class="pill p2">P2~P3</span></div>
+      <div class="card-body" style="font-size:12px">
+        <b>有限产能排程：</b>8台设备×3班次×换型时间约束→Bryntum Gantt可视化<br>
+        <b>紧急插单：</b>OEM急单→自动计算最早可排时间→推送冲突预警<br>
+        <b>OEE日报：</b>8台设备OEE+MTBF/MTTR+停机原因柏拉图→PDF自动邮件<br>
+        <b>月报：</b>Cpk趋势+一次合格率+PPM+质量成本→管理层看板
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 10. 技术架构 ═══ -->
+<div class="section" id="arch">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">10</span><span class="section-title">技术架构与依赖版本（精确到 patch）</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">📦 NuGet 依赖清单（2026年7月最新稳定版）</h3>
+    <table>
+      <thead><tr><th>包名</th><th>版本</th><th>用途</th><th>所在项目</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">MudBlazor</td><td class="mono">9.6.0</td><td>Blazor 管理后台 UI 组件库</td><td>Web</td></tr>
+        <tr><td class="mono">MemoryPack</td><td class="mono">1.21.4</td><td>零分配二进制序列化（全局）</td><td>Domain, App, Infra, Web, API</td></tr>
+        <tr><td class="mono">MemoryPack.AspNetCoreMvcFormatter</td><td class="mono">1.21.4</td><td>MVC 二进制输入输出格式化器</td><td>Web, API</td></tr>
+        <tr><td class="mono">MessagePipe</td><td class="mono">1.8.2</td><td>进程内零分配消息管道（Pub/Sub）</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">R3</td><td class="mono">1.3.1</td><td>响应式数据流处理（OEE/SPC）</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">ZLogger</td><td class="mono">2.5.10</td><td>零分配结构化日志</td><td>全局</td></tr>
+        <tr><td class="mono">Ulid</td><td class="mono">1.4.1</td><td>可排序全局唯一 ID</td><td>Domain</td></tr>
+        <tr><td class="mono">ObservableCollections</td><td class="mono">3.3.4</td><td>高性能可观察集合</td><td>Web</td></tr>
+        <tr><td class="mono">ObservableCollections.Blazor</td><td class="mono">3.3.4</td><td>Blazor UI 集合绑定扩展</td><td>Web</td></tr>
+        <tr><td class="mono">MasterMemory</td><td class="mono">3.0.4</td><td>主数据内存数据库（BOM/工艺）</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">Cleipnir.ResilientFunctions</td><td class="mono">4.2.5</td><td>弹性 Saga 工作流引擎</td><td>Application</td></tr>
+        <tr><td class="mono">Cleipnir.ResilientFunctions.PostgreSQL</td><td class="mono">4.2.5</td><td>Saga 状态 PostgreSQL 持久化</td><td>Application</td></tr>
+        <tr><td class="mono">Npgsql.EntityFrameworkCore.PostgreSQL</td><td class="mono">10.0.2</td><td>PostgreSQL EF Core 驱动</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">Microsoft.AspNetCore.SignalR</td><td class="mono">10.*</td><td>实时双向通信 Hub</td><td>Web, API</td></tr>
+      </tbody>
+    </table>
+    <div class="alert alert-info" style="margin-top:12px">
+      <div class="alert-title">📐 版本策略</div>
+      所有 Cysharp 系列库锁定最新稳定版（非 preview）。Cleipnir 4.2.5 为当前最新发布版。ASP.NET Core / EF Core 随 .NET 10 SDK 版本（10.0.x）。每年 11 月 .NET 新版本发布后统一升级。
+    </div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">🏗 分层架构</h3>
+    <table>
+      <thead><tr><th>层</th><th>技术</th><th>关键库</th></tr></thead>
+      <tbody>
+        <tr><td><b>表示层</b></td><td>Blazor Server (.NET 10)</td><td>MudBlazor 9.6.0 + ECharts 5.6.0 + Bryntum Gantt 6.x</td></tr>
+        <tr><td><b>API层</b></td><td>ASP.NET Core 10 Minimal API</td><td>MemoryPack 1.21.4 + SignalR + JWT</td></tr>
+        <tr><td><b>业务层</b></td><td>Cleipnir Saga 4.2.5 + MessagePipe 1.8.2</td><td>R3 1.3.1 + ZLogger 2.5.10</td></tr>
+        <tr><td><b>数据层</b></td><td>EF Core 10 + Npgsql 10.0.2</td><td>Ulid 1.4.1 + MasterMemory 3.0.4</td></tr>
+        <tr><td><b>基础设施</b></td><td>PostgreSQL 17 + Docker + Uncloud</td><td>OPC UA + Modbus TCP + WireGuard</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ 11. 路线图 ═══ -->
+<div class="section" id="roadmap">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">11</span><span class="section-title">开发路线图（28 周 4 阶段，ESP产线从零到全量）</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="chart-box">
+    <h4>📅 4 阶段里程碑甘特图</h4>
+    <div class="chart-wrap"><canvas id="roadmapChart"></canvas></div>
+  </div>
+
+  <div class="card-full" style="margin-top:16px">
+    <table>
+      <thead><tr><th>阶段</th><th>周</th><th>目标</th><th>交付物</th></tr></thead>
+      <tbody>
+        <tr><td><b>阶段1 MVP</b></td><td>1~8</td><td>M01工单+M02物料+M04追溯 核心闭环</td><td>工单CRUD+批次绑定+追溯查询 → 最小可用</td></tr>
+        <tr><td><b>阶段2 质量</b></td><td>9~14</td><td>M03 SPC+M05设备OEE+M06 Andon</td><td>SPC控制图+OEE看板+三级报警 → 质量体系就绪</td></tr>
+        <tr><td><b>阶段3 集成</b></td><td>15~22</td><td>M07工艺+M08 SQE+M09排程+ERP对接</td><td>工艺防错+供应商评分+甘特图 → 完整MES</td></tr>
+        <tr><td><b>阶段4 优化</b></td><td>23~28</td><td>M10报表+离线模式+性能压测+IATF审核</td><td>自定义报表+混沌工程+审核文档 → 生产就绪</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ 附录 ═══ -->
+<div class="section">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">A</span><span class="section-title">附录：ESP 产线 31 道工序完整清单</span>
+  </div>
+  <div class="section-rule"></div>
+  <table>
+    <thead><tr><th>站</th><th>工序号</th><th>工序名称</th><th>工艺参数</th><th>Cp/Cpk目标</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>10~30</td><td>ECU扫码 → HCU扫码 → 电机扫码 → BOM校验</td><td>—</td><td>—</td></tr>
+      <tr><td>2</td><td>40~80</td><td>HCU定位 → ECU预装 → 电机安装 → 线束连接 → 外观检查</td><td>定位精度±0.05mm</td><td>—</td></tr>
+      <tr><td>3</td><td>90~130</td><td>M6-FL拧紧 → M6-FR拧紧 → M8-RL拧紧 → M8-RR拧紧 → 扭矩曲线采集</td><td>22/45Nm ±5%</td><td>Cpk≥1.67</td></tr>
+      <tr><td>4</td><td>140~190</td><td>注油 → 排气 → 12路电磁阀测试 → 建压循环 → 保压测试 → 泄漏检测</td><td>&lt;0.5 CC/hr</td><td>Cpk≥1.33</td></tr>
+      <tr><td>5</td><td>200~230</td><td>Bootloader刷写 → 应用固件 → 标定参数 → 校验和确认</td><td>CRC32=0x3F2A...</td><td>刷写成功率≥99.9%</td></tr>
+      <tr><td>6</td><td>240~280</td><td>CAN通信 → 传感器标定 → ESP功能模拟 → 噪声测试 → 终检判定</td><td>CAN延迟&lt;10ms</td><td>Cpk≥1.67</td></tr>
+      <tr><td>7</td><td>290~310</td><td>追溯标签打印 → VIN预绑定 → 包装 → 入库 → SAP同步</td><td>—</td><td>标签可读率≥99.99%</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</div><!-- /content -->
+
+<footer class="footer">
+  <div class="footer-blob"></div>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">AutoMES PRD v2.0 — 博世 ESP® 深度版</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">汽车安全件 MES 产品需求文档 · 文档编号 PRD-AUTOMES-2026-002</div>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col"><h5>参考资料</h5>
+        <a href="https://www.bosch-mobility.com/en/solutions/braking/esp/" target="_blank">Bosch ESP® 产品</a>
+        <a href="https://www.iatfglobaloversight.org/" target="_blank">IATF 16949 标准</a>
+        <a href="https://www.iso.org/standard/68383.html" target="_blank">ISO 26262 功能安全</a>
+        <a href="https://github.com/stidsborg/Cleipnir.ResilientFunctions" target="_blank">Cleipnir 4.2.5</a>
+      </div>
+      <div class="footer-col"><h5>核心库</h5>
+        <a href="https://mudblazor.com/" target="_blank">MudBlazor 9.6.0</a>
+        <a href="https://github.com/Cysharp/MemoryPack" target="_blank">MemoryPack 1.21.4</a>
+        <a href="https://github.com/Cysharp/MessagePipe" target="_blank">MessagePipe 1.8.2</a>
+        <a href="https://github.com/Cysharp/R3" target="_blank">R3 1.3.1</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>保密等级：内部 · 仅授权人员可访问</span>
+    <span>由 <a href="https://allyhub.com" target="_blank" style="color:var(--text-secondary)">AllyHub AI</a> 生成</span>
+  </div>
+</footer>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(()=>{
+const ctx=document.getElementById('roadmapChart');if(!ctx)return;
+new Chart(ctx,{type:'bar',data:{labels:['M01 工单','M02 物料','M04 追溯','权限+部署','M03 SPC','M05 设备','M06 Andon','M07 工艺','M08 SQE','M09 排程','M10 报表','IATF审核'],
+datasets:[
+{label:'阶段1 MVP',data:[8,8,6,4,0,0,0,0,0,0,0,0],backgroundColor:'#B87D50',borderRadius:3},
+{label:'阶段2 质量',data:[0,0,0,0,6,6,6,0,0,0,0,0],backgroundColor:'#D4A882',borderRadius:3},
+{label:'阶段3 集成',data:[0,0,0,0,0,0,0,8,6,8,0,0],backgroundColor:'#3E54CE',borderRadius:3},
+{label:'阶段4 优化',data:[0,0,0,0,0,0,0,0,0,0,6,2],backgroundColor:'#00a86b',borderRadius:3},
+]},
+options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',
+plugins:{legend:{display:false}},
+scales:{x:{stacked:true,title:{display:true,text:'开发周数'},grid:{color:'#E8E6E2'}},
+y:{stacked:true,grid:{display:false}}}}});
+})();
+</script>
+</body>
+</html>

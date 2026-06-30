@@ -1,0 +1,28 @@
+# OrbStack 本地开发环境
+# 用法：docker compose -f docker/compose.dev.yaml up -d
+# 前置：orb start（OrbStack 提供 Docker 引擎）
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: automes-pg
+    environment:
+      POSTGRES_DB: automes
+      POSTGRES_USER: mes
+      POSTGRES_PASSWORD: mes_dev_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mes -d automes"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local

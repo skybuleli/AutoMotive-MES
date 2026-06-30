@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoMES TAD — 技术架构设计文档</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,400;0,500;0,600;0,700&family=Noto+Serif:ital,wght@0,500&family=JetBrains+Mono:ital,wght@0,400;0,500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --outer-bg:#E4E1DC;--page-bg:#FDFCF9;--surface:#FFFFFF;
+  --border:#E8E6E2;--divider:#C5C0BA;
+  --text-primary:#151515;--text-body:#3D3D3D;--text-secondary:#717171;
+  --hero-bg:#DDE3E8;--hero-deco:#9BADB0;--hero-deco2:#6E9298;
+  --success-bg:#E8FBCF;--success-fg:#3D4826;
+  --warning-bg:#FFF0DC;--warning-fg:#E47700;
+  --info-bg:#DEE5F7;--info-fg:#3E54CE;
+  --error-bg:#FDECEA;--error-fg:#C4433A;
+  --neutral-bg:#FDF9F2;--neutral-fg:#7C746F;
+  --code-bg:#F4F4F0;
+}
+body{font-family:'Inter Tight',sans-serif;background:var(--outer-bg);color:var(--text-body);font-size:14px;line-height:1.65;-webkit-font-smoothing:antialiased;padding:32px 16px}
+.page{max-width:1200px;margin:0 auto;background:var(--page-bg);border-radius:24px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+@media(max-width:768px){body{padding:0}.page{border-radius:0}}
+.toc{position:sticky;top:0;z-index:10;background:rgba(253,252,249,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;gap:10px;overflow-x:auto;white-space:nowrap}
+.toc a{font-size:12px;font-weight:500;color:var(--text-secondary);text-decoration:none;padding:4px 10px;border-radius:20px;transition:all .2s}
+.toc a:hover{color:var(--text-primary);background:var(--info-bg)}
+.toc-sep{width:1px;height:14px;background:var(--divider);flex-shrink:0}
+.hero{position:relative;background:var(--hero-bg);padding:40px 48px;overflow:hidden}
+@media(max-width:768px){.hero{padding:28px 20px}}
+.hero-blob{position:absolute;border-radius:60% 40% 55% 45%/45% 55% 40% 60%;opacity:0.12;pointer-events:none}
+.hero-blob.a{width:300px;height:260px;background:var(--hero-deco);top:-50px;right:-20px}
+.hero-blob.b{width:180px;height:200px;background:var(--hero-deco2);bottom:-40px;left:5%}
+.hero-blob.c{width:120px;height:130px;background:var(--hero-deco);top:30px;left:-15px}
+.hero-eyebrow{font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--hero-deco2);margin-bottom:8px;position:relative}
+.hero-title{font-size:28px;font-weight:700;color:var(--text-primary);line-height:1.25;margin-bottom:8px;position:relative}
+.hero-subtitle{font-size:15px;color:var(--text-secondary);margin-bottom:20px;max-width:640px;position:relative}
+.hero-metrics{display:flex;gap:40px;flex-wrap:wrap;padding-top:16px;border-top:1px solid rgba(0,0,0,0.06);position:relative}
+.hero-metric-val{font-family:'Noto Serif',serif;font-size:36px;font-weight:500;color:var(--text-primary);letter-spacing:-0.02em}
+.hero-metric-label{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.content{padding:40px 48px}
+@media(max-width:768px){.content{padding:24px 20px}}
+.section{margin-bottom:44px}
+.section-title{font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:4px}
+.section-sub{font-size:12px;color:var(--text-secondary);margin-bottom:16px}
+.section-rule{height:0.5px;background:var(--border);margin-bottom:20px}
+.sec-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:var(--info-bg);color:var(--info-fg);font-size:13px;font-weight:600;margin-right:8px;flex-shrink:0}
+.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:768px){.card-grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:20px}
+.card-title{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.card-body{font-size:13px;color:var(--text-body);line-height:1.55}
+.card-full{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:24px;margin-bottom:14px}
+.pill{display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px}
+.pill-inc{background:var(--success-bg);color:var(--success-fg)}
+.pill-wip{background:var(--warning-bg);color:var(--warning-fg)}
+.pill-err{background:var(--error-bg);color:var(--error-fg)}
+.pill-inf{background:var(--info-bg);color:var(--info-fg)}
+.table-wrap{overflow-x:auto;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{font-size:11px;font-weight:500;color:var(--text-secondary);text-align:left;padding:8px 10px;border-bottom:1px solid var(--divider);white-space:nowrap}
+tbody td{padding:9px 10px;border-bottom:0.5px solid var(--border);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.mono{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-primary)}
+.code-block{background:var(--code-bg);border:0.5px solid var(--border);border-radius:8px;padding:16px;margin:12px 0;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;overflow-x:auto;white-space:pre;color:var(--text-primary)}
+.code-inline{font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--code-bg);padding:1px 6px;border-radius:4px;color:var(--text-primary)}
+.alert{padding:14px 16px;border-radius:10px;font-size:13px;margin-bottom:12px}
+.alert-title{font-weight:600;margin-bottom:4px}
+.alert-info{background:var(--info-bg);color:var(--info-fg)}
+.alert-warn{background:var(--warning-bg);color:var(--warning-fg)}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.stat-card{background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:16px;text-align:center}
+.stat-val{font-size:22px;font-weight:600;color:var(--text-primary)}
+.stat-label{font-size:11px;color:var(--text-secondary);margin-top:2px}
+.ep-card{background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start}
+.ep-method{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;flex-shrink:0;min-width:48px;text-align:center}
+.ep-get{background:var(--success-bg);color:var(--success-fg)}
+.ep-post{background:var(--info-bg);color:var(--info-fg)}
+.ep-patch{background:var(--warning-bg);color:var(--warning-fg)}
+.ep-path{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:var(--text-primary);flex:1;word-break:break-all}
+.ep-desc{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.arch-layer-wrap{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:16px 0}
+@media(max-width:768px){.arch-layer-wrap{grid-template-columns:1fr}}
+.arch-layer{padding:16px;border-radius:10px;font-size:12px}
+.al-top{background:var(--info-bg);border:1px solid rgba(62,84,206,0.15)}
+.al-mid{background:var(--warning-bg);border:1px solid rgba(228,119,0,0.15)}
+.al-base{background:var(--neutral-bg);border:1px solid rgba(124,116,111,0.15)}
+.arch-layer h4{font-size:13px;font-weight:600;margin-bottom:8px}
+.arch-layer ul{list-style:none;line-height:1.8}
+.saga-states{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0;overflow-x:auto;padding:16px 0}
+.saga-state{padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;text-align:center;border:1.5px solid var(--divider);background:var(--surface);flex-shrink:0}
+.saga-state.current{border-color:var(--info-fg);background:var(--info-bg)}
+.saga-arrow{font-size:16px;color:var(--text-secondary);flex-shrink:0}
+.footer{background:var(--hero-bg);padding:32px 48px;border-top:1px solid var(--border);position:relative;overflow:hidden}
+.footer-blob{position:absolute;border-radius:50%;opacity:0.08;pointer-events:none;width:180px;height:160px;background:var(--hero-deco);bottom:-30px;right:10%}
+.footer-inner{position:relative;display:flex;justify-content:space-between;flex-wrap:wrap;gap:20px}
+.footer-brand{font-size:15px;font-weight:600;color:var(--text-primary)}
+.footer-sublabel{font-size:12px;color:var(--text-secondary);margin-top:4px}
+.footer-links{display:flex;gap:32px;flex-wrap:wrap}
+.footer-col h5{font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.footer-col a{display:block;font-size:12px;color:var(--text-secondary);text-decoration:none;line-height:1.8}
+.footer-bottom{margin-top:20px;padding-top:16px;border-top:0.5px solid var(--hero-deco);display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);flex-wrap:wrap;gap:8px}
+.chart-box{position:relative;border:0.5px solid var(--border);border-radius:12px;padding:20px;background:var(--surface);margin-bottom:14px}
+.chart-box h4{font-size:14px;font-weight:600;color:var(--text-primary);margin-bottom:12px}
+.chart-wrap{position:relative;height:280px}
+.chart-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text-secondary)}
+.chart-legend span{display:flex;align-items:center;gap:6px}
+.chart-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;flex-shrink:0}
+@media print{body{background:#fff;padding:0}.page{box-shadow:none;border-radius:0;max-width:100%}.toc{display:none}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<nav class="toc">
+  <a href="#overview">架构总览</a><span class="toc-sep"></span>
+  <a href="#tech-stack">技术选型</a><span class="toc-sep"></span>
+  <a href="#data-model">数据模型</a><span class="toc-sep"></span>
+  <a href="#api">API 契约</a><span class="toc-sep"></span>
+  <a href="#signalr">SignalR</a><span class="toc-sep"></span>
+  <a href="#saga">Saga 设计</a><span class="toc-sep"></span>
+  <a href="#messagepipe">消息管道</a><span class="toc-sep"></span>
+  <a href="#deploy">部署架构</a><span class="toc-sep"></span>
+  <a href="#security">安全</a>
+</nav>
+
+<section class="hero" id="overview">
+  <div class="hero-blob a"></div><div class="hero-blob b"></div><div class="hero-blob c"></div>
+  <div class="hero-eyebrow">技术架构设计文档 · TAD v1.0</div>
+  <h1 class="hero-title">AutoMES 技术架构设计</h1>
+  <p class="hero-subtitle">基于 ASP.NET Core 10 + Cleipnir Saga + SignalR + Cysharp 全家桶的汽车供应链 MES 系统。本文档定义完整的技术分层、数据模型、API 契约、工作流设计和部署拓扑，可直接指导开发实施。</p>
+  <div class="hero-metrics">
+    <div><div class="hero-metric-val">42</div><div class="hero-metric-label">REST API 端点</div></div>
+    <div><div class="hero-metric-val">12</div><div class="hero-metric-label">核心数据表</div></div>
+    <div><div class="hero-metric-val">7</div><div class="hero-metric-label">SignalR 事件</div></div>
+    <div><div class="hero-metric-val">9</div><div class="hero-metric-label">MessagePipe 消息</div></div>
+  </div>
+</section>
+
+<div class="content">
+
+<!-- 1. 架构总览 -->
+<div class="section">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">1</span><span class="section-title">架构总览</span>
+    <span class="section-sub" style="margin-bottom:0;margin-left:auto">分层架构 / 决策记录</span>
+  </div>
+  <div class="section-rule"></div>
+  <div class="arch-layer-wrap">
+    <div class="arch-layer al-top"><h4>🖥 表示层</h4><ul><li><b>MudBlazor</b> — Blazor Server 管理后台</li><li><b>ECharts</b> — JSInterop 图表渲染</li><li><b>Bryntum Gantt</b> — 排程甘特图</li><li><b>Avalonia</b> — 工位桌面终端</li><li><b>SignalR Client</b> — 实时看板推送</li></ul></div>
+    <div class="arch-layer al-mid"><h4>⚙️ 业务层</h4><ul><li><b>ASP.NET Core 10</b> — Minimal API</li><li><b>Cleipnir Saga</b> — 弹性工作流引擎</li><li><b>SignalR Hub</b> — 实时双向通信</li><li><b>MessagePipe</b> — 进程内消息总线</li><li><b>R3</b> — 响应式数据管道</li></ul></div>
+    <div class="arch-layer al-base"><h4>💾 持久化层</h4><ul><li><b>PostgreSQL 17</b> — 主数据库</li><li><b>EF Core 10</b> — ORM + Ulid</li><li><b>MasterMemory</b> — 主数据内存缓存</li><li><b>Cloudflare R2</b> — S3 备份存储</li><li><b>OPC UA</b> — PLC 设备连接</li></ul></div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">📋 关键架构决策记录 (ADR)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>决策</th><th>方案</th><th>替代方案</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>工作流引擎</td><td class="mono">Cleipnir.ResilientFunctions</td><td>MassTransit / Temporal</td><td>纯 C#、内嵌式、零依赖外部服务、Saga 崩溃恢复</td></tr>
+          <tr><td>序列化</td><td class="mono">MemoryPack</td><td>System.Text.Json</td><td>零分配、比 JSON 快 10x、Source Generator 消除反射</td></tr>
+          <tr><td>主键</td><td class="mono">Ulid → PostgreSQL uuid</td><td>Guid / 自增 ID</td><td>可排序、B+Tree 友好、128-bit 分布式安全</td></tr>
+          <tr><td>实时通信</td><td class="mono">SignalR + MemoryPack</td><td>WebSocket / gRPC Stream</td><td>自动重连、组管理、二进制协议、ASP.NET 深度集成</td></tr>
+          <tr><td>进程内消息</td><td class="mono">Cysharp MessagePipe</td><td>MediatR / Channels</td><td>零分配、Source Generator、比 MediatR 快 10x</td></tr>
+          <tr><td>管理后台 UI</td><td class="mono">MudBlazor (Blazor Server)</td><td>React / Angular</td><td>纯 C# 全栈、10.5k★ 生态、统一技术栈</td></tr>
+          <tr><td>前端图表</td><td class="mono">ECharts (JSInterop)</td><td>Chart.js</td><td>工业级图表、SPC 控制图、大数据量性能</td></tr>
+          <tr><td>部署</td><td class="mono">Uncloud + Docker Compose</td><td>Kubernetes / Kamal</td><td>WireGuard 网状网络、简单运维、适合中小规模</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 2. 技术选型 -->
+<div class="section" id="tech-stack">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">2</span><span class="section-title">技术选型详情</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="chart-box">
+    <h4>📊 API 端点分布（按模块与优先级）</h4>
+    <div class="chart-wrap"><canvas id="apiDistChart"></canvas></div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">🧩 Cysharp 全家桶集成矩阵</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>库</th><th>版本</th><th>集成层</th><th>核心用途</th><th>收益</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">MemoryPack</td><td>1.x</td><td>全局</td><td>SignalR 消息 + API 响应 + Saga 状态序列化</td><td>零分配，比 JSON 快 10~15x</td></tr>
+          <tr><td class="mono">MemoryPack.AspNetCoreMvcFormatter</td><td>1.x</td><td>API + Web</td><td>Controller 返回二进制</td><td>配合 Accept 头自动选择</td></tr>
+          <tr><td class="mono">MessagePipe</td><td>1.x</td><td>Infrastructure</td><td>Saga→Dashboard | PLC→R3 | 质检→Andon</td><td>零分配进程内消息，模块解耦</td></tr>
+          <tr><td class="mono">R3</td><td>1.x</td><td>Infrastructure</td><td>OEE 管道 | SPC 采样 | Andon 防抖</td><td>零分配响应式，Debounce/Window</td></tr>
+          <tr><td class="mono">ZLogger</td><td>2.x</td><td>全局</td><td>结构化日志（生产/质检/设备）</td><td>比 Serilog 快 5x，文件滚动</td></tr>
+          <tr><td class="mono">Ulid</td><td>1.x</td><td>Domain</td><td>所有实体主键</td><td>可排序 UUID，B+Tree 友好</td></tr>
+          <tr><td class="mono">ObservableCollections</td><td>3.x</td><td>Web</td><td>MudBlazor 列表增量绑定</td><td>避免全量刷新 UI</td></tr>
+          <tr><td class="mono">MasterMemory</td><td>3.x</td><td>Infrastructure</td><td>BOM/工艺路线/质检标准内存缓存</td><td>比 EF Core 快 50~100x</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 3. 数据模型 -->
+<div class="section" id="data-model">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">3</span><span class="section-title">数据模型</span>
+    <span class="section-sub" style="margin-bottom:0;margin-left:auto">PostgreSQL 17 · Ulid 主键 · 12 表</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">🗄 核心 DDL</h3>
+
+    <h4 style="font-size:13px;font-weight:600;color:var(--text-primary);margin:16px 0 8px">1. production_orders — 生产工单 (聚合根)</h4>
+    <div class="code-block">CREATE TABLE production_orders (
+    id              UUID PRIMARY KEY,              -- Ulid → Guid
+    order_number    VARCHAR(32)  NOT NULL UNIQUE,   -- WO-20260701-0001
+    product_code    VARCHAR(32)  NOT NULL,
+    product_name    VARCHAR(128) NOT NULL,
+    quantity        INTEGER      NOT NULL,
+    completed_qty   INTEGER      NOT NULL DEFAULT 0,
+    defect_qty      INTEGER      NOT NULL DEFAULT 0,
+    status          VARCHAR(16)  NOT NULL DEFAULT 'Created',
+    priority        SMALLINT     NOT NULL DEFAULT 1,
+    routing_id      UUID         REFERENCES routings(id),
+    equipment_id    UUID         REFERENCES equipments(id),
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    started_at      TIMESTAMPTZ,
+    completed_at    TIMESTAMPTZ
+);
+CREATE INDEX idx_orders_status ON production_orders(status);
+CREATE INDEX idx_orders_created ON production_orders(created_at);</div>
+
+    <h4 style="font-size:13px;font-weight:600;color:var(--text-primary);margin:16px 0 8px">2. traceability_links — 追溯链 (4 级双向)</h4>
+    <div class="code-block">CREATE TABLE traceability_links (
+    id              UUID PRIMARY KEY,
+    vin_or_serial   VARCHAR(64)  NOT NULL,          -- VIN码 或 成品序列号
+    order_id        UUID         NOT NULL REFERENCES production_orders(id),
+    component_batch VARCHAR(64)  NOT NULL,          -- 关键零部件批次
+    material_batch  VARCHAR(64)  NOT NULL,          -- 原材料批次
+    link_level      SMALLINT     NOT NULL DEFAULT 4,
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_trace_vin       ON traceability_links(vin_or_serial);
+CREATE INDEX idx_trace_component ON traceability_links(component_batch);
+CREATE INDEX idx_trace_material  ON traceability_links(material_batch);</div>
+
+    <h4 style="font-size:13px;font-weight:600;color:var(--text-primary);margin:16px 0 8px">3. quality_records — 质检记录</h4>
+    <div class="code-block">CREATE TABLE quality_records (
+    id              UUID PRIMARY KEY,
+    order_id        UUID         NOT NULL REFERENCES production_orders(id),
+    inspection_type VARCHAR(8)   NOT NULL,          -- IQC|IPQC|FQC
+    check_point     VARCHAR(64)  NOT NULL,
+    characteristic  VARCHAR(64)  NOT NULL,
+    measured_value  DECIMAL(12,4) NOT NULL,
+    lower_limit     DECIMAL(12,4),
+    upper_limit     DECIMAL(12,4),
+    is_passed       BOOLEAN      NOT NULL,
+    inspector_id    UUID         NOT NULL REFERENCES users(id),
+    checked_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_quality_order ON quality_records(order_id);
+CREATE INDEX idx_quality_checked ON quality_records(checked_at);</div>
+
+    <h4 style="font-size:13px;font-weight:600;color:var(--text-primary);margin:16px 0 8px">4~12. 其余核心表</h4>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>表名</th><th>用途</th><th>关键索引</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">operations</td><td>工序（嵌套，PK=(order_id,sequence)）</td><td class="mono">PRIMARY KEY (order_id, sequence)</td></tr>
+          <tr><td class="mono">material_bindings</td><td>物料批次绑定（追溯数据源）</td><td class="mono">(order_id), (batch_no), (material_code)</td></tr>
+          <tr><td class="mono">equipments</td><td>设备台账 + OEE</td><td class="mono">(code) UNIQUE</td></tr>
+          <tr><td class="mono">andon_alerts</td><td>Andon 报警事件</td><td class="mono">(status, created_at)</td></tr>
+          <tr><td class="mono">routings</td><td>工艺路线模板</td><td class="mono">(product_code, version)</td></tr>
+          <tr><td class="mono">control_plans</td><td>控制计划</td><td class="mono">(product_code)</td></tr>
+          <tr><td class="mono">suppliers</td><td>供应商信息</td><td class="mono">(code) UNIQUE</td></tr>
+          <tr><td class="mono">inspection_standards</td><td>检验标准</td><td class="mono">(material_code)</td></tr>
+          <tr><td class="mono">users</td><td>用户与权限</td><td class="mono">(username) UNIQUE</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-info" style="margin-top:14px">
+      <div class="alert-title">🔑 Ulid 主键说明</div>
+      所有实体使用 <span class="code-inline">Ulid.NewUlid()</span> 生成可排序 UUID，通过 <span class="code-inline">UlidToGuidConverter</span> 存入 PostgreSQL <span class="code-inline">uuid</span> 列。B+Tree 索引性能比随机 UUID 提升 30~50%，比自增 ID 更适合分布式环境（多工厂数据交换无冲突）。
+    </div>
+  </div>
+</div>
+
+<!-- 4. API 契约 -->
+<div class="section" id="api">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">4</span><span class="section-title">REST API 完整契约</span>
+    <span class="section-sub" style="margin-bottom:0;margin-left:auto">42 端点 · 10 模块 · MemoryPack 二进制可选</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:4px">M01 生产工单管理 <span class="pill pill-wip">P0</span></h3>
+    <div class="ep-card"><span class="ep-method ep-post">POST</span><div><div class="ep-path">/api/v1/orders</div><div class="ep-desc">创建工单 → 201 + OrderResponse</div></div></div>
+    <div class="ep-card"><span class="ep-method ep-get">GET</span><div><div class="ep-path">/api/v1/orders?status=&workCenter=&page=&size=</div><div class="ep-desc">分页查询列表 → 200 + Page&lt;OrderSummary&gt;</div></div></div>
+    <div class="ep-card"><span class="ep-method ep-get">GET</span><div><div class="ep-path">/api/v1/orders/{orderId}</div><div class="ep-desc">工单详情（含工序+物料+质检）→ 200 + OrderDetail</div></div></div>
+    <div class="ep-card"><span class="ep-method ep-patch">PATCH</span><div><div class="ep-path">/api/v1/orders/{orderId}/status</div><div class="ep-desc">状态流转（触发 Saga）→ 200</div></div></div>
+    <div class="ep-card"><span class="ep-method ep-post">POST</span><div><div class="ep-path">/api/v1/orders/{orderId}/operations/{seq}/report</div><div class="ep-desc">工序报工 → 200 + OperationResult</div></div></div>
+    <div class="ep-card"><span class="ep-method ep-get">GET</span><div><div class="ep-path">/api/v1/orders/{orderId}/timeline</div><div class="ep-desc">事件溯源时间线 → 200 + TimelineEntry[]</div></div></div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">M02 物料管理 <span class="pill pill-wip">P0</span></div>
+      <div class="card-body" style="font-size:12px;line-height:2">
+        <span class="ep-method ep-get" style="font-size:10px;padding:2px 6px">GET</span> <span class="code-inline">/api/v1/materials?workCenter=</span><br>
+        <span class="ep-method ep-post" style="font-size:10px;padding:2px 6px">POST</span> <span class="code-inline">/api/v1/orders/{id}/materials/bind</span><br>
+        <span class="ep-method ep-get" style="font-size:10px;padding:2px 6px">GET</span> <span class="code-inline">/api/v1/inventory/line-side?workCenter=</span><br>
+        <span class="ep-method ep-post" style="font-size:10px;padding:2px 6px">POST</span> <span class="code-inline">/api/v1/kanban/pull</span><br>
+        <span class="ep-method ep-get" style="font-size:10px;padding:2px 6px">GET</span> <span class="code-inline">/api/v1/kanban/status?workCenter=</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">M03 质量管理 (SPC) <span class="pill pill-wip">P0</span></div>
+      <div class="card-body" style="font-size:12px;line-height:2">
+        <span class="ep-method ep-post" style="font-size:10px;padding:2px 6px">POST</span> <span class="code-inline">/api/v1/inspections</span><br>
+        <span class="ep-method ep-get" style="font-size:10px;padding:2px 6px">GET</span> <span class="code-inline">/api/v1/inspections?orderId=&type=</span><br>
+        <span class="ep-method ep-get" style="font-size:10px;padding:2px 6px">GET</span> <span class="code-inline">/api/v1/inspections/spc/data?checkPoint=&hours=</span><br>
+        <span class="ep-method ep-get" style="font-size:10px;padding:2px 6px">GET</span> <span class="code-inline">/api/v1/inspections/spc/cpk?checkPoint=</span><br>
+        <span class="ep-method ep-post" style="font-size:10px;padding:2px 6px">POST</span> <span class="code-inline">/api/v1/inspections/nonconformance</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">M04 追溯 <span class="pill pill-wip">P0</span></div>
+      <div class="card-body" style="font-size:12px;line-height:2">
+        <span class="code-inline">GET .../forward?vin=</span> — VIN→原材料<br>
+        <span class="code-inline">GET .../backward?batch=</span> — 批次→所有成品<br>
+        <span class="code-inline">GET .../report?orderId=</span> — 追溯报告导出
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">M05~M07 设备/Andon/工艺 <span class="pill pill-inc">P1</span></div>
+      <div class="card-body" style="font-size:12px;line-height:2">
+        <b>设备：</b><span class="code-inline">GET /equipment</span> · <span class="code-inline">GET ../oee</span><br>
+        <b>Andon：</b><span class="code-inline">POST /andon/alerts</span> · <span class="code-inline">POST ../resolve</span><br>
+        <b>工艺：</b><span class="code-inline">GET /routings</span> · <span class="code-inline">GET /sop/{id}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">M08~M10 SQE/排程/报表 <span class="pill p2">P2</span></div>
+      <div class="card-body" style="font-size:12px;line-height:2">
+        <b>SQE：</b> <span class="code-inline">GET /suppliers</span> · <span class="code-inline">POST ../ppap</span><br>
+        <b>排程：</b> <span class="code-inline">GET /schedule</span> · <span class="code-inline">POST ../optimize</span><br>
+        <b>报表：</b> <span class="code-inline">GET /reports/oee</span> · <span class="code-inline">GET ../daily</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 API 设计规范</div>
+      <div class="card-body" style="font-size:12px;line-height:1.8">
+        • <b>版本化：</b><span class="code-inline">/api/v1/</span> 前缀<br>
+        • <b>序列化：</b>默认 JSON；<span class="code-inline">Accept: application/x-memorypack</span> 获取二进制<br>
+        • <b>分页：</b><span class="code-inline">page + size</span>，响应含 <span class="code-inline">X-Total-Count</span><br>
+        • <b>错误：</b>RFC 7807 ProblemDetails<br>
+        • <b>认证：</b>Bearer JWT Token
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 5. SignalR -->
+<div class="section" id="signalr">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">5</span><span class="section-title">SignalR 实时接口</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">📡 Hub: /hubs/dashboard · 协议: MemoryPack 二进制</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>客户端方法 (Client→Server)</th><th>参数</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">JoinEquipmentGroup</td><td class="mono">equipmentId: Ulid</td><td>订阅设备 OEE 实时推送</td></tr>
+          <tr><td class="mono">LeaveEquipmentGroup</td><td class="mono">equipmentId: Ulid</td><td>取消设备订阅</td></tr>
+          <tr><td class="mono">JoinProductionLine</td><td class="mono">workCenter: string</td><td>订阅产线生产进度</td></tr>
+          <tr><td class="mono">LeaveProductionLine</td><td class="mono">workCenter: string</td><td>取消产线订阅</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4 style="font-size:13px;font-weight:600;color:var(--text-primary);margin:16px 0 8px">服务端推送事件 (Server→Client)</h4>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>事件名</th><th>负载关键字段</th><th>频率</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">OeeUpdated</td><td class="mono">{code, oee, availability, performance, quality, status, timestamp}</td><td>~3s</td></tr>
+          <tr><td class="mono">ProductionProgressUpdated</td><td class="mono">{orderId, orderNumber, completed, total, progressPercent}</td><td>事件驱动</td></tr>
+          <tr><td class="mono">AndonAlert</td><td class="mono">{equipmentCode, message, level, timestamp}</td><td>事件驱动</td></tr>
+          <tr><td class="mono">AndonResolved</td><td class="mono">{alertId, resolvedBy, resolvedAt}</td><td>事件驱动</td></tr>
+          <tr><td class="mono">SpcSample</td><td class="mono">{checkPoint, value, lowerLimit, upperLimit, isPassed}</td><td>~1~5s</td></tr>
+          <tr><td class="mono">EquipmentStatusChanged</td><td class="mono">{equipmentId, oldStatus, newStatus}</td><td>事件驱动</td></tr>
+          <tr><td class="mono">OrderStatusChanged</td><td class="mono">{orderId, orderNumber, oldStatus, newStatus}</td><td>事件驱动</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 6. Saga -->
+<div class="section" id="saga">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">6</span><span class="section-title">Cleipnir Saga 工作流设计</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">🔄 ProductionOrderSaga 状态机</h3>
+    <div class="saga-states">
+      <div class="saga-state" style="background:var(--neutral-bg)">Created<div style="font-size:10px;color:var(--text-secondary)">ERP 推单</div></div>
+      <div class="saga-arrow">→</div>
+      <div class="saga-state" style="background:var(--info-bg)">Released<div style="font-size:10px;color:var(--text-secondary)">工单下发</div></div>
+      <div class="saga-arrow">→</div>
+      <div class="saga-state current">InProgress<div style="font-size:10px;color:var(--text-secondary)">工序执行</div></div>
+      <div class="saga-arrow">→</div>
+      <div class="saga-state" style="background:var(--success-bg)">Completed<div style="font-size:10px;color:var(--text-secondary)">全部完成</div></div>
+      <div class="saga-arrow">→</div>
+      <div class="saga-state" style="background:var(--neutral-bg)">Closed<div style="font-size:10px;color:var(--text-secondary)">质量放行</div></div>
+    </div>
+    <div style="text-align:center;margin-top:-4px"><span class="pill pill-err">任意时刻 → Paused（异常暂停，可恢复）</span></div>
+  </div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">📊 Effect 策略矩阵</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>阶段</th><th>Effect ID</th><th>策略</th><th>幂等保护</th><th>崩溃恢复行为</th></tr></thead>
+        <tbody>
+          <tr><td>安全联锁检查</td><td class="mono">—</td><td><b>Effect 之外</b></td><td>不适用</td><td>重放时重新评估物理安全</td></tr>
+          <tr><td>设备就绪确认</td><td class="mono">EnsureReady-{seq}</td><td class="mono">AtMostOnce</td><td>重放复用上次结果</td><td>不重复查询 PLC</td></tr>
+          <tr><td>下发加工参数</td><td class="mono">WriteParam-{seq}-{tag}</td><td class="mono">AtLeastOnce</td><td>先读后写 (read-before-write)</td><td>重试直到 PLC 确认</td></tr>
+          <tr><td>启动加工</td><td class="mono">StartOperation-{seq}</td><td class="mono">AtLeastOnce</td><td>PLC 启动命令幂等</td><td>重试直到设备启动</td></tr>
+          <tr><td>过程监控</td><td class="mono">Monitor-{seq}</td><td class="mono">AtMostOnce</td><td>重放使用上次监控结果</td><td>不重复轮询</td></tr>
+          <tr><td>完工确认</td><td class="mono">CompleteOperation-{seq}</td><td class="mono">AtLeastOnce</td><td>DB 写入幂等 (by PK)</td><td>重试直到 DB 确认</td></tr>
+          <tr><td>物料绑定</td><td class="mono">BindMaterial-{batchNo}</td><td class="mono">AtLeastOnce</td><td>唯一约束 (orderId+batchNo)</td><td>不重复绑定</td></tr>
+          <tr><td>质检记录</td><td class="mono">RecordInspection-{id}</td><td class="mono">AtLeastOnce</td><td>记录 ID 去重</td><td>不重复记录</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alert alert-warn" style="margin-top:12px">
+      <div class="alert-title">⚠️ 核心原则</div>
+      Effect 内禁止读 Redis/外部缓存；AtLeastOnce 必须幂等保护；安全联锁永远在 Effect 外实时判断。
+    </div>
+  </div>
+</div>
+
+<!-- 7. MessagePipe -->
+<div class="section" id="messagepipe">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">7</span><span class="section-title">MessagePipe 进程内消息管道</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-full">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">📨 9 种消息类型拓扑</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>消息类型</th><th>发布者</th><th>订阅者</th><th>触发时机</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">OrderStatusChanged</td><td>ProductionOrderSaga</td><td>DashboardPushService, AuditLogger</td><td>工单状态流转</td></tr>
+          <tr><td class="mono">OperationCompleted</td><td>ProductionOrderSaga</td><td>DashboardPushService, OeePipeline</td><td>单道工序完成</td></tr>
+          <tr><td class="mono">MaterialBound</td><td>物料绑定 Effect</td><td>TraceabilityService</td><td>批次绑定完成</td></tr>
+          <tr><td class="mono">PlcDataChanged</td><td>OpcUaPlcClient</td><td>OeeReactivePipeline, AndonService</td><td>PLC 数据变化</td></tr>
+          <tr><td class="mono">QualityRecorded</td><td>质检 Effect</td><td>SpcService, AndonService</td><td>质检记录提交</td></tr>
+          <tr><td class="mono">AndonTriggered</td><td>AndonService</td><td>DashboardPushService, Notification</td><td>报警触发</td></tr>
+          <tr><td class="mono">EquipmentStateChanged</td><td>OpcUaPlcClient</td><td>OeePipeline, Dashboard</td><td>设备状态变更</td></tr>
+          <tr><td class="mono">KanbanPulled</td><td>物料 API</td><td>物料补货服务</td><td>看板拉动</td></tr>
+          <tr><td class="mono">InspectionFailed</td><td>质检 Effect</td><td>AndonService, SqeService</td><td>检验不合格</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="code-block" style="margin-top:12px">// Saga 中发布事件（Effect 内，AtLeastOnce 可靠性）
+await _publisher.PublishAsync(new OrderStatusChanged(
+    order.Id, order.OrderNumber, oldStatus, newStatus));
+
+// 注册订阅者
+builder.Services.AddMessagePipe();
+builder.Services.AddSingleton&lt;IAsyncSubscriber&lt;OrderStatusChanged&gt;&gt;(/* handler */);</div>
+  </div>
+</div>
+
+<!-- 8. 部署 -->
+<div class="section" id="deploy">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">8</span><span class="section-title">部署架构</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">🐳 Docker Compose</div>
+      <div class="card-body" style="font-size:12px;line-height:2.2">
+        <b>postgres</b> (17-alpine :5432) — Volume pgdata<br>
+        <b>mes-web</b> (:5000→5000) — Volume mes-logs<br>
+        <b>mes-api</b> (:5100→5100) — Volume mes-logs<br>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🌐 Uncloud 网状网络</div>
+      <div class="card-body" style="font-size:12px;line-height:2.2">
+        • WireGuard 加密传输 (25519)<br>
+        • 自动服务发现<br>
+        • Cleipnir ReplicaWatchdog 跨主机心跳<br>
+        • 零信任安全模型<br>
+        • 无需 Kubernetes
+      </div>
+    </div>
+  </div>
+
+  <div class="card-full" style="margin-top:14px">
+    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px">💾 3 级备份策略</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>级别</th><th>方案</th><th>频率</th><th>保留</th></tr></thead>
+        <tbody>
+          <tr><td>全量备份</td><td class="mono">pg_dump → Cloudflare R2 (S3)</td><td>每日 02:00</td><td>30 天</td></tr>
+          <tr><td>WAL 归档</td><td class="mono">archive_command → R2</td><td>持续</td><td>7 天</td></tr>
+          <tr><td>PITR 基础备份</td><td class="mono">pg_basebackup</td><td>每周日</td><td>4 周</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alert alert-info" style="margin-top:12px">支持 PITR 恢复到任意时间点（精确到秒），满足 IATF 16949 数据完整性审计要求。Cloudflare R2 零出口费。</div>
+  </div>
+</div>
+
+<!-- 9. 安全 -->
+<div class="section" id="security">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">9</span><span class="section-title">安全架构</span>
+  </div>
+  <div class="section-rule"></div>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">🔐 RBAC 角色 (8 个)</div>
+      <div class="table-wrap" style="margin-top:8px">
+        <table>
+          <thead><tr><th>角色</th><th>权限范围</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">Admin</td><td>全部权限，用户管理</td></tr>
+            <tr><td class="mono">ProductionManager</td><td>工单 CRUD、排程、报表</td></tr>
+            <tr><td class="mono">ShiftLeader</td><td>工单执行、工序报工、Andon</td></tr>
+            <tr><td class="mono">QualityEngineer</td><td>质检、SPC、NC、CAR</td></tr>
+            <tr><td class="mono">EquipmentEngineer</td><td>设备台账、OEE、维护</td></tr>
+            <tr><td class="mono">WarehouseKeeper</td><td>物料、库存、批次绑定</td></tr>
+            <tr><td class="mono">SQE</td><td>供应商、PPAP、8D</td></tr>
+            <tr><td class="mono">Viewer</td><td>只读看板、报表</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🛡 安全措施清单</div>
+      <div class="card-body" style="line-height:2.2">
+        ✅ JWT Bearer Token (Access 2h + Refresh 7d)<br>
+        ✅ TLS 1.3 全覆盖 + WireGuard 隧道<br>
+        ✅ 操作日志不可删除（仅追加）<br>
+        ✅ 追溯数据哈希链防篡改<br>
+        ✅ bcrypt 密码哈希 (cost=12)<br>
+        ✅ 所有输入验证 + SQL 注入防护<br>
+        ✅ CORS 严格白名单
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 附录 -->
+<div class="section">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="sec-num">A</span><span class="section-title">附录：NuGet 包完整清单</span>
+  </div>
+  <div class="section-rule"></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>包名</th><th>版本</th><th>用途</th><th>所在项目</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">Cleipnir.ResilientFunctions</td><td>1.x</td><td>Saga 工作流引擎</td><td>Application</td></tr>
+        <tr><td class="mono">Cleipnir.ResilientFunctions.PostgreSQL</td><td>1.x</td><td>Saga 状态持久化</td><td>Application</td></tr>
+        <tr><td class="mono">MemoryPack</td><td>1.x</td><td>零分配序列化</td><td>全局</td></tr>
+        <tr><td class="mono">MemoryPack.AspNetCoreMvcFormatter</td><td>1.x</td><td>MVC 二进制格式化器</td><td>API, Web</td></tr>
+        <tr><td class="mono">MessagePipe</td><td>1.x</td><td>进程内消息管道</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">R3</td><td>1.x</td><td>响应式数据管道</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">ZLogger</td><td>2.x</td><td>结构化日志</td><td>全局</td></tr>
+        <tr><td class="mono">Ulid</td><td>1.x</td><td>可排序 UUID</td><td>Domain</td></tr>
+        <tr><td class="mono">ObservableCollections</td><td>3.x</td><td>高性能集合</td><td>Web</td></tr>
+        <tr><td class="mono">ObservableCollections.Blazor</td><td>3.x</td><td>Blazor UI 绑定</td><td>Web</td></tr>
+        <tr><td class="mono">MasterMemory</td><td>3.x</td><td>主数据内存缓存</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">MudBlazor</td><td>8.x</td><td>Blazor 组件库</td><td>Web</td></tr>
+        <tr><td class="mono">Npgsql.EntityFrameworkCore.PostgreSQL</td><td>10.x</td><td>PostgreSQL EF Core 驱动</td><td>Infrastructure</td></tr>
+        <tr><td class="mono">Microsoft.AspNetCore.SignalR</td><td>1.x</td><td>实时通信 Hub</td><td>API, Web</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<footer class="footer">
+  <div class="footer-blob"></div>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">AutoMES 技术架构设计文档 v1.0</div>
+      <div class="footer-sublabel">基于 PRD v1.0 · 文档编号 TAD-AUTOMES-2026-001</div>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h5>核心依赖</h5>
+        <a href="https://github.com/stidsborg/Cleipnir.ResilientFunctions" target="_blank">Cleipnir 工作流引擎</a>
+        <a href="https://github.com/Cysharp/MemoryPack" target="_blank">MemoryPack 序列化器</a>
+        <a href="https://github.com/Cysharp/MessagePipe" target="_blank">MessagePipe 消息管道</a>
+        <a href="https://github.com/Cysharp/R3" target="_blank">R3 响应式库</a>
+      </div>
+      <div class="footer-col">
+        <h5>相关文档</h5>
+        <a href="#" target="_blank">产品需求文档 (PRD)</a>
+        <a href="#" target="_blank">API 详细规范 (OpenAPI)</a>
+        <a href="#" target="_blank">部署运维手册</a>
+        <a href="https://www.iatfglobaloversight.org/" target="_blank">IATF 16949</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>保密等级：内部 · 仅授权人员可访问</span>
+    <span>由 <a href="https://allyhub.com" target="_blank" style="color:var(--text-secondary)">AllyHub AI</a> 生成</span>
+  </div>
+</footer>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(()=>{
+const ctx=document.getElementById('apiDistChart');if(!ctx)return;
+new Chart(ctx,{type:'bar',data:{labels:['M01\n工单','M02\n物料','M03\n质量','M04\n追溯','M05\n设备','M06\nAndon','M07\n工艺','M08\nSQE','M09\n排程','M10\n报表'],
+datasets:[
+{label:'P0 核心',data:[6,5,6,3,0,0,0,0,0,0],backgroundColor:'#E47700',borderRadius:3},
+{label:'P1 重要',data:[0,0,0,0,4,4,3,0,0,0],backgroundColor:'#3E54CE',borderRadius:3},
+{label:'P2 增强',data:[0,0,0,0,0,0,0,4,3,0],backgroundColor:'#00a86b',borderRadius:3},
+{label:'P3 补充',data:[0,0,0,0,0,0,0,0,0,4],backgroundColor:'#6E9298',borderRadius:3},
+]},
+options:{responsive:true,maintainAspectRatio:false,indexAxis:'x',
+plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.raw+' 端点'}}}},
+scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:11}}},
+y:{stacked:true,title:{display:true,text:'端点数量'},grid:{color:'#E8E6E2'},ticks:{stepSize:2,font:{size:10}}}}}});
+})();
+</script>
+</body>
+</html>

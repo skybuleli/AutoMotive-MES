@@ -1,0 +1,38 @@
+# ── .NET ──
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+*.userprefs
+*.cache
+*.log
+TestResults/
+[Bb]uild[Ll]og.*
+
+# ── NuGet ──
+*.nupkg
+*.snupkg
+.nuget/
+
+# ── IDE ──
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# ── Docker / 容器数据 ──
+docker/data/
+docker/volumes/
+
+# ── 环境与密钥 ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── EF Core 迁移临时 ──
+*.tmp
