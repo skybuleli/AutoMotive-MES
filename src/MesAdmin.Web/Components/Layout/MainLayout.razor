@@ -1,13 +1,10 @@
 ﻿@inherits LayoutComponentBase
-@using MesAdmin.Web.Themes
 
-<MudThemeProvider Theme="@MesTheme.DarkTheme" />
 <MudLayout>
     <MudAppBar Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
         <MudText Typo="Typo.h6">AutoMES — 博世 ESP® 制动系统 MES</MudText>
         <MudSpacer />
-        <MudSwitch T="bool" @bind-Checked="@_isDarkMode" Color="Color.Secondary" />
     </MudAppBar>
     <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipAlways="true">
         <NavMenu />
@@ -19,7 +16,6 @@
 
 @code {
     private bool _drawerOpen = true;
-    private bool _isDarkMode = true;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 }
