@@ -1,0 +1,47 @@
+﻿@page "/"
+
+<PageTitle>AutoMES 仪表盘</PageTitle>
+
+<MudText Typo="Typo.h3" GutterBottom="true">博世 ESP® 制动系统 MES</MudText>
+<MudText Typo="Typo.body1" Color="Color.Surface" Class="mb-6">
+    汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序 · 热路径零堆分配
+</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="3">
+        <MudCard Class="glass-kpi-card pa-4">
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Color="Color.Primary">OEE</MudText>
+                <MudText Typo="Typo.h3">85.2%</MudText>
+                <MudText Typo="Typo.body2">全局设备综合效率</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudCard Class="glass-kpi-card pa-4">
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Color="Color.Success">合格率</MudText>
+                <MudText Typo="Typo.h3">97.5%</MudText>
+                <MudText Typo="Typo.body2">一次合格率</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudCard Class="glass-kpi-card pa-4">
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Color="Color.Warning">在产工单</MudText>
+                <MudText Typo="Typo.h3">12</MudText>
+                <MudText Typo="Typo.body2">进行中工单数</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" md="3">
+        <MudCard Class="glass-kpi-card pa-4">
+            <MudCardContent>
+                <MudText Typo="Typo.h5" Color="Color.Error">Andon 报警</MudText>
+                <MudText Typo="Typo.h3">3</MudText>
+                <MudText Typo="Typo.body2">未处理报警</MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>

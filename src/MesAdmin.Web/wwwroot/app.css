@@ -1,0 +1,71 @@
+/* ── AutoMES 工业级 UI 自定义样式（T0.9）── */
+
+html, body {
+    font-family: 'Inter Tight', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+/* ── 玻璃态 KPI 卡片 ── */
+.glass-kpi-card {
+    background: rgba(30, 30, 46, 0.6);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(203, 166, 247, 0.15);
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(203, 166, 247, 0.2);
+}
+
+/* ── Andon 报警脉冲动画 ── */
+.andon-pulse {
+    animation: andonPulse 2s ease-in-out infinite;
+}
+
+@keyframes andonPulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+    50% { opacity: 0.7; box-shadow: 0 0 24px rgba(239, 68, 68, 0.9); }
+}
+
+/* ── 设备状态指示器（绿/橙/红发光圆点）── */
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.status-dot.running { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+.status-dot.idle { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+.status-dot.alarm {
+    background: #ef4444;
+    box-shadow: 0 0 8px #ef4444;
+    animation: glowPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+    50% { box-shadow: 0 0 20px rgba(239, 68, 68, 1); }
+}
+
+/* ── 动画渐变边框 ── */
+.grad-border {
+    position: relative;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(203, 166, 247, 0.1), rgba(143, 106, 175, 0.1));
+}
+
+.grad-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    padding: 1px;
+    background: linear-gradient(135deg, #CBA6F7, #8F6AAF);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+}
