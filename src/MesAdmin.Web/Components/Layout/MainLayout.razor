@@ -1,21 +1,100 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 
-<MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" />
-        <MudText Typo="Typo.h6">AutoMES — 博世 ESP® 制动系统 MES</MudText>
+<MudLayout Class="automes-dark">
+    <MudAppBar Elevation="0" Dense="false" Style="height: 56px;">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="ToggleDrawer"
+                       Style="margin-right: 12px;" />
+        <MudIcon Icon="@Icons.Material.Filled.DashboardCustomize"
+                Color="Color.Primary"
+                Style="font-size: 22px; margin-right: 10px;" />
+        <MudText Typo="Typo.h6" Style="font-weight: 700; font-size: 1.1rem; letter-spacing: 0.02em;">
+            AutoMES
+        </MudText>
+
+        <MudText Typo="Typo.caption"
+                Style="margin-left: 12px; color: #9399B2; font-size: 0.75rem;">
+            博世 ESP® 制动系统 MES
+        </MudText>
+
         <MudSpacer />
+
+        <MudAvatar Color="Color.Primary" Size="Size.Small"
+                   Style="width: 32px; height: 32px; font-size: 0.8rem; font-weight: 600;">MES</MudAvatar>
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipAlways="true">
-        <NavMenu />
+
+    <MudDrawer @bind-Open="_drawerOpen"
+               Elevation="0"
+               Style="width: 240px;"
+               ClipMode="DrawerClipMode.Always">
+        <MudDrawerHeader Style="padding: 20px 16px 12px; border-bottom: 1px solid rgba(203,166,247,0.08);">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Factory"
+                        Color="Color.Primary"
+                        Style="font-size: 26px;" />
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 600; color: #CDD6F4;">产线 1</MudText>
+                    <MudText Typo="Typo.caption" Style="color: #6C7086; font-size: 0.7rem;">ESP 总成装配</MudText>
+                </MudStack>
+            </MudStack>
+        </MudDrawerHeader>
+
+        <MudNavMenu Style="padding: 8px;">
+            <MudNavLink Href=""
+                        Match="NavLinkMatch.All"
+                        Icon="@Icons.Material.Filled.Dashboard"
+                        IconColor="Color.Primary">
+                仪表盘
+            </MudNavLink>
+            <MudNavLink Href="production"
+                        Icon="@Icons.Material.Filled.Description"
+                        IconColor="Color.Surface">
+                生产工单
+            </MudNavLink>
+            <MudNavLink Href="material"
+                        Icon="@Icons.Material.Filled.Inventory"
+                        IconColor="Color.Surface">
+                物料管理
+            </MudNavLink>
+            <MudNavLink Href="traceability"
+                        Icon="@Icons.Material.Filled.Link"
+                        IconColor="Color.Surface">
+                全链路追溯
+            </MudNavLink>
+            <MudNavLink Href="spc"
+                        Icon="@Icons.Material.Filled.Analytics"
+                        IconColor="Color.Surface">
+                SPC 质量管理
+            </MudNavLink>
+            <MudNavLink Href="oee"
+                        Icon="@Icons.Material.Filled.PrecisionManufacturing"
+                        IconColor="Color.Surface">
+                设备 OEE
+            </MudNavLink>
+            <MudNavLink Href="andon"
+                        Icon="@Icons.Material.Filled.NotificationsActive"
+                        IconColor="Color.Surface">
+                Andon 报警
+            </MudNavLink>
+        </MudNavMenu>
+
+        <MudSpacer />
+
+        <MudStack Style="padding: 12px 16px; border-top: 1px solid rgba(203,166,247,0.08);">
+            <MudText Typo="Typo.caption" Style="color: #6C7086; font-size: 0.65rem;">
+                v0.1.0  ·  Phase 0 骨架
+            </MudText>
+        </MudStack>
     </MudDrawer>
-    <MudMainContent>
+
+    <MudMainContent Style="padding: 24px; background: #11111B; min-height: 100vh;">
         @Body
     </MudMainContent>
 </MudLayout>
 
 @code {
     private bool _drawerOpen = true;
-
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 }

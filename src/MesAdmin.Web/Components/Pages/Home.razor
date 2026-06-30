@@ -1,47 +1,79 @@
-﻿@page "/"
+@page "/"
 
 <PageTitle>AutoMES 仪表盘</PageTitle>
 
-<MudText Typo="Typo.h3" GutterBottom="true">博世 ESP® 制动系统 MES</MudText>
-<MudText Typo="Typo.body1" Color="Color.Surface" Class="mb-6">
-    汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序 · 热路径零堆分配
-</MudText>
+<div class="page-header">
+    <h1>博世 ESP® 制动系统 MES</h1>
+    <p class="subtitle">汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序 · 热路径零堆分配</p>
+</div>
 
-<MudGrid>
-    <MudItem xs="12" md="3">
-        <MudCard Class="glass-kpi-card pa-4">
-            <MudCardContent>
-                <MudText Typo="Typo.h5" Color="Color.Primary">OEE</MudText>
-                <MudText Typo="Typo.h3">85.2%</MudText>
-                <MudText Typo="Typo.body2">全局设备综合效率</MudText>
-            </MudCardContent>
-        </MudCard>
+<MudGrid Spacing="3">
+    <!-- OEE -->
+    <MudItem xs="12" sm="6" md="3">
+        <div class="glass-kpi-card pa-5">
+            <div class="kpi-icon-box oee">
+                <MudIcon Icon="@Icons.Material.Filled.Speed" />
+            </div>
+            <MudText Typo="Typo.caption" Style="color: #9399B2; font-weight: 500; letter-spacing: 0.05em;">OEE</MudText>
+            <div class="kpi-value kpi-oee">85.2%</div>
+            <MudText Typo="Typo.caption" Class="kpi-label">全局设备综合效率</MudText>
+        </div>
     </MudItem>
-    <MudItem xs="12" md="3">
-        <MudCard Class="glass-kpi-card pa-4">
-            <MudCardContent>
-                <MudText Typo="Typo.h5" Color="Color.Success">合格率</MudText>
-                <MudText Typo="Typo.h3">97.5%</MudText>
-                <MudText Typo="Typo.body2">一次合格率</MudText>
-            </MudCardContent>
-        </MudCard>
+
+    <!-- 合格率 -->
+    <MudItem xs="12" sm="6" md="3">
+        <div class="glass-kpi-card pa-5">
+            <div class="kpi-icon-box quality">
+                <MudIcon Icon="@Icons.Material.Filled.Verified" />
+            </div>
+            <MudText Typo="Typo.caption" Style="color: #9399B2; font-weight: 500; letter-spacing: 0.05em;">合格率</MudText>
+            <div class="kpi-value kpi-quality">97.5%</div>
+            <MudText Typo="Typo.caption" Class="kpi-label">一次合格率</MudText>
+        </div>
     </MudItem>
-    <MudItem xs="12" md="3">
-        <MudCard Class="glass-kpi-card pa-4">
-            <MudCardContent>
-                <MudText Typo="Typo.h5" Color="Color.Warning">在产工单</MudText>
-                <MudText Typo="Typo.h3">12</MudText>
-                <MudText Typo="Typo.body2">进行中工单数</MudText>
-            </MudCardContent>
-        </MudCard>
+
+    <!-- 在产工单 -->
+    <MudItem xs="12" sm="6" md="3">
+        <div class="glass-kpi-card pa-5">
+            <div class="kpi-icon-box order">
+                <MudIcon Icon="@Icons.Material.Filled.Assignment" />
+            </div>
+            <MudText Typo="Typo.caption" Style="color: #9399B2; font-weight: 500; letter-spacing: 0.05em;">在产工单</MudText>
+            <div class="kpi-value kpi-order">12</div>
+            <MudText Typo="Typo.caption" Class="kpi-label">进行中工单数</MudText>
+        </div>
     </MudItem>
-    <MudItem xs="12" md="3">
-        <MudCard Class="glass-kpi-card pa-4">
-            <MudCardContent>
-                <MudText Typo="Typo.h5" Color="Color.Error">Andon 报警</MudText>
-                <MudText Typo="Typo.h3">3</MudText>
-                <MudText Typo="Typo.body2">未处理报警</MudText>
-            </MudCardContent>
-        </MudCard>
+
+    <!-- Andon 报警 -->
+    <MudItem xs="12" sm="6" md="3">
+        <div class="glass-kpi-card pa-5">
+            <div class="kpi-icon-box andon">
+                <MudIcon Icon="@Icons.Material.Filled.NotificationImportant" />
+            </div>
+            <MudText Typo="Typo.caption" Style="color: #9399B2; font-weight: 500; letter-spacing: 0.05em;">Andon 报警</MudText>
+            <div class="kpi-value kpi-andon">3</div>
+            <MudText Typo="Typo.caption" Class="kpi-label">未处理报警</MudText>
+        </div>
     </MudItem>
 </MudGrid>
+
+<!-- 快速操作 -->
+<MudText Typo="Typo.subtitle1" Style="color: #CDD6F4; font-weight: 600; margin: 32px 0 16px;">快速操作</MudText>
+<div class="quick-actions">
+    <a href="production" class="quick-action-btn">
+        <MudIcon Icon="@Icons.Material.Filled.AddCircle" Size="Size.Small" />
+        新建工单
+    </a>
+    <a href="material" class="quick-action-btn">
+        <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Small" />
+        扫码入库
+    </a>
+    <a href="andon" class="quick-action-btn">
+        <MudIcon Icon="@Icons.Material.Filled.Campaign" Size="Size.Small" />
+        触发 Andon
+    </a>
+    <a href="traceability" class="quick-action-btn">
+        <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+        追溯查询
+    </a>
+</div>
