@@ -28,6 +28,7 @@ public class MesDbContext : DbContext
             b.Property(o => o.ProductCode).HasMaxLength(32).IsRequired();
             b.Property(o => o.Status).HasConversion<string>().HasMaxLength(16);
             b.Property(o => o.BomVersion).HasMaxLength(32);
+            b.Property(o => o.RoutingId).HasConversion<UlidToGuidConverter>();
             b.HasIndex(o => o.Status).HasDatabaseName("idx_orders_status");
             b.Property(o => o.CreatedAt).HasColumnType("timestamptz");
             b.Property(o => o.CompletedAt).HasColumnType("timestamptz");
