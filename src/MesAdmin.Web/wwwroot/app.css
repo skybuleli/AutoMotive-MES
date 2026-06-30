@@ -1,138 +1,27 @@
 /* ═══════════════════════════════════════════════════════════════
-   AutoMES 工业级暗色 UI（T0.9 完善版）
-   不依赖 MudThemeProvider，CSS 强制暗色主题
+   AutoMES 工业级暗色 UI — 精简版
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── 根 + body 暗色基础 ── */
 html, body {
     font-family: 'Inter Tight', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    background: #11111B !important;
-    color: #CDD6F4 !important;
+    background: #11111B;
     margin: 0;
     padding: 0;
-    min-height: 100vh;
 }
 
-body.automes-dark {
-    background: #11111B;
-    color: #CDD6F4;
+/* ── KPI 卡片 ── */
+.kpi-card {
+    background: #1E1E2E !important;
+    border-radius: 12px !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* ── MudBlazor 组件强制暗色覆盖 ── */
-.automes-dark .mud-drawer {
-    background: #181825 !important;
-    border-right: 1px solid rgba(203, 166, 247, 0.12) !important;
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
 }
 
-.automes-dark .mud-appbar {
-    background: #1A1A2E !important;
-    border-bottom: 1px solid rgba(203, 166, 247, 0.12) !important;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3) !important;
-}
-
-.automes-dark .mud-nav-link {
-    color: #BAC2DE !important;
-    border-radius: 8px;
-    margin: 2px 8px;
-    transition: all 0.15s ease;
-}
-
-.automes-dark .mud-nav-link:hover {
-    background: rgba(203, 166, 247, 0.08) !important;
-    color: #CBA6F7 !important;
-}
-
-.automes-dark .mud-nav-link.active {
-    background: rgba(203, 166, 247, 0.15) !important;
-    color: #CBA6F7 !important;
-    font-weight: 600;
-}
-
-.automes-dark .mud-nav-link .mud-nav-link-icon {
-    color: #9399B2 !important;
-}
-
-.automes-dark .mud-nav-link:hover .mud-nav-link-icon,
-.automes-dark .mud-nav-link.active .mud-nav-link-icon {
-    color: #CBA6F7 !important;
-}
-
-.automes-dark .mud-main-content {
-    background: #11111B;
-    min-height: 100vh;
-    padding: 24px;
-}
-
-/* ── 玻璃态 KPI 卡片 ── */
-.glass-kpi-card {
-    background: rgba(30, 30, 46, 0.7) !important;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(203, 166, 247, 0.12) !important;
-    border-radius: 16px !important;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25) !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.glass-kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #CBA6F7, #8F6AAF);
-    opacity: 0.6;
-}
-
-.glass-kpi-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 40px rgba(203, 166, 247, 0.15) !important;
-    border-color: rgba(203, 166, 247, 0.25) !important;
-}
-
-/* ── KPI 颜色 ── */
-.kpi-oee      { color: #CBA6F7 !important; }   /* 薰衣草紫 */
-.kpi-quality  { color: #4ADE80 !important; }   /* 绿 */
-.kpi-order    { color: #FBBF24 !important; }   /* 琥珀 */
-.kpi-andon    { color: #EF4444 !important; }   /* 红 */
-
-/* ── KPI 图标容器 ── */
-.kpi-icon-box {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    margin-bottom: 12px;
-}
-
-.kpi-icon-box.oee      { background: rgba(203, 166, 247, 0.12); color: #CBA6F7; }
-.kpi-icon-box.quality  { background: rgba(74,  222, 128, 0.12); color: #4ADE80; }
-.kpi-icon-box.order    { background: rgba(251, 191, 36,  0.12); color: #FBBF24; }
-.kpi-icon-box.andon    { background: rgba(239, 68,  68,  0.12); color: #EF4444; }
-
-/* ── KPI 数值 ── */
-.kpi-value {
-    font-size: 2.2rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-    margin: 8px 0;
-    color: #CDD6F4;
-}
-
-.kpi-label {
-    font-size: 0.8rem;
-    color: #9399B2;
-    letter-spacing: 0.02em;
-}
-
-/* ── Andon 报警脉冲动画 ── */
+/* ── Andon 脉冲 ── */
 .andon-pulse {
     animation: andonPulse 2s ease-in-out infinite;
 }
@@ -142,7 +31,7 @@ body.automes-dark {
     50%      { opacity: 0.85; box-shadow: 0 0 24px rgba(239, 68, 68, 0.8); }
 }
 
-/* ── 设备状态指示器（绿/橙/红发光圆点）── */
+/* ── 状态圆点 ── */
 .status-dot {
     display: inline-block;
     width: 10px;
@@ -160,77 +49,7 @@ body.automes-dark {
     50%      { box-shadow: 0 0 20px rgba(239, 68, 68, 1); }
 }
 
-/* ── 动画渐变边框 ── */
-.grad-border {
-    position: relative;
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(203, 166, 247, 0.08), rgba(143, 106, 175, 0.08));
-}
-
-.grad-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 12px;
-    padding: 1px;
-    background: linear-gradient(135deg, #CBA6F7, #8F6AAF);
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-}
-
-/* ── 标题区 ── */
-.page-header {
-    margin-bottom: 28px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid rgba(203, 166, 247, 0.1);
-}
-
-.page-header h1 {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #CDD6F4;
-    margin: 0 0 6px 0;
-}
-
-.page-header .subtitle {
-    font-size: 0.9rem;
-    color: #9399B2;
-    margin: 0;
-}
-
-/* ── 快速操作区 ── */
-.quick-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 28px;
-    flex-wrap: wrap;
-}
-
-.quick-action-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
-    border-radius: 10px;
-    background: rgba(30, 30, 46, 0.6);
-    border: 1px solid rgba(203, 166, 247, 0.1);
-    color: #BAC2DE;
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    text-decoration: none;
-}
-
-.quick-action-btn:hover {
-    background: rgba(203, 166, 247, 0.1);
-    border-color: rgba(203, 166, 247, 0.25);
-    color: #CBA6F7;
-    transform: translateY(-1px);
-}
-
-/* ── 滚动条暗色 ── */
+/* ── 滚动条 ── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #181825; }
 ::-webkit-scrollbar-thumb { background: #45475A; border-radius: 3px; }
