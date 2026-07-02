@@ -15,8 +15,7 @@ namespace MesAdmin.Application.Features.ProductionOrders;
 public sealed partial record StartOrderCommand(Ulid OrderId) : IWriteCommand<ProductionOrder>;
 
 internal sealed class StartOrderHandler(
-    IProductionOrderRepository orders,
-    IEventBus eventBus) : ICommandHandler<StartOrderCommand, ProductionOrder>
+    IProductionOrderRepository orders) : ICommandHandler<StartOrderCommand, ProductionOrder>
 {
     public async Task<ProductionOrder> ExecuteAsync(StartOrderCommand cmd, CancellationToken ct)
     {
@@ -28,7 +27,7 @@ internal sealed class StartOrderHandler(
 
         // ── 事件解耦：发布开工事件，Saga 负责状态推进 + 31 工序编排 ──
         // WaitForAll：确保 Saga 完成 Released→InProgress 转移后再返回
-        await eventBus.PublishAsync(new OrderStartedEvent(order.Id, order.OrderNumber), Mode.WaitForAll, ct);
+        await new OrderStartedEvent(order.Id, order.OrderNumber).PublishAsync(Mode.WaitForAll, ct);
 
         // 重新读取以反映 Saga 内部的状态变更（AsNoTracking，纯读）
         return await orders.GetByIdAsync(cmd.OrderId, ct)

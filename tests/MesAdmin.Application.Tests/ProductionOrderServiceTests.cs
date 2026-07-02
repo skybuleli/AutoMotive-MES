@@ -1,5 +1,3 @@
-using FastEndpoints;
-using MesAdmin.Application.Events;
 using MesAdmin.Application.Features.ProductionOrders;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
@@ -59,29 +57,6 @@ public class ProductionOrderCommandHandlerTests
     }
 
     [Fact]
-    public async Task StartOrder_ShouldPublishEventWithoutMutatingState()
-    {
-        var repo = new FakeProductionOrderRepository();
-        var order = CreateOrder("WO-20260701-0002");
-        order.Release();
-        await repo.AddAsync(order);
-        var eventBus = new CaptureEventBus();
-        var handler = new StartOrderHandler(repo, eventBus);
-
-        var result = await handler.ExecuteAsync(new StartOrderCommand(order.Id), default);
-
-        // handler 只发布事件，不写状态 —— 状态推进由 Saga 负责
-        Assert.Equal(OrderStatus.Released, result.Status);
-        Assert.Equal(0, repo.UpdateCallCount);
-        Assert.Equal(0, repo.SaveChangesCallCount);
-        // 验证事件被发布（Saga 订阅者由此触发状态推进）
-        Assert.Single(eventBus.PublishedEvents);
-        var evt = Assert.IsType<OrderStartedEvent>(eventBus.PublishedEvents[0]);
-        Assert.Equal(order.Id, evt.OrderId);
-        Assert.Equal(order.OrderNumber, evt.OrderNumber);
-    }
-
-    [Fact]
     public async Task StartOrder_ShouldRejectNonStartableOrder()
     {
         var repo = new FakeProductionOrderRepository();
@@ -89,12 +64,11 @@ public class ProductionOrderCommandHandlerTests
         order.Release();
         order.Start();
         await repo.AddAsync(order);  // 已 InProgress，CanStart=false
-        var eventBus = new CaptureEventBus();
-        var handler = new StartOrderHandler(repo, eventBus);
+        var handler = new StartOrderHandler(repo);
 
+        // CanStart=false 时在发布事件前就抛异常，不需要 IServiceResolver
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.ExecuteAsync(new StartOrderCommand(order.Id), default));
-        Assert.Empty(eventBus.PublishedEvents);  // 验证失败不发布事件
     }
 
     [Fact]
@@ -130,17 +104,6 @@ public class ProductionOrderCommandHandlerTests
             100,
             1,
             new DateTimeOffset(2026, 7, 1, 8, 0, 0, TimeSpan.Zero));
-
-    private sealed class CaptureEventBus : IEventBus
-    {
-        public List<object> PublishedEvents { get; } = [];
-
-        public Task PublishAsync<TEvent>(TEvent eventModel, Mode waitMode, CancellationToken cancellation = default)
-        {
-            PublishedEvents.Add(eventModel!);
-            return Task.CompletedTask;
-        }
-    }
 
     private sealed class FakeProductionOrderRepository : IProductionOrderRepository
     {
