@@ -1,0 +1,25 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<AuthorizeView>
+    <NotAuthorized>
+        @if (context.User.Identity?.IsAuthenticated != true)
+        {
+            <RedirectToLogin />
+        }
+        else
+        {
+            <MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
+                <MudPaper Elevation="4" Class="pa-8 rounded-xl text-center">
+                    <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Error" Size="Size.Large" />
+                    <MudText Typo="Typo.h6" Class="mt-4">权限不足</MudText>
+                    <MudText Typo="Typo.body2" Class="text-secondary mt-2">
+                        您的角色无权访问此页面，请联系管理员。
+                    </MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/">
+                        返回首页
+                    </MudButton>
+                </MudPaper>
+            </MudContainer>
+        }
+    </NotAuthorized>
+</AuthorizeView>

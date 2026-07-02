@@ -1,69 +1,96 @@
+@using MesAdmin.Web.Services
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
+@inject AuthService Auth
 
-<MudThemeProvider @ref="@_themeProvider" Theme="_theme" />
+<MudThemeProvider />
+<MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
-    <!-- 左侧边栏 -->
+    <MudAppBar Elevation="1" Color="Color.Default" Dense>
+        <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                       Color="Color.Inherit"
+                       Edge="Edge.Start"
+                       OnClick="ToggleDrawer" />
+
+        <MudStack Spacing="0">
+            <MudText Typo="Typo.h6">AutoMES</MudText>
+            <MudText Typo="Typo.caption" Class="layout-subtitle">@GetPageTitle()</MudText>
+        </MudStack>
+
+        <MudSpacer />
+
+        <AuthorizeView>
+            <Authorized>
+                <MudBadge Content="3" Color="Color.Error" Overlap>
+                    <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
+                </MudBadge>
+
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ms-3" OnClick="LogoutAsync">
+                    <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" Class="mr-1" />
+                    退出
+                </MudChip>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="GoLogin">
+                    登录
+                </MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+
     <MudDrawer @bind-Open="_drawerOpen"
-               Breakpoint="Breakpoint.Lg"
-               Elevation="0"
-               Variant="DrawerVariant.Mini"
-               Style="background:#181825; border-right:1px solid rgba(203,166,247,0.08);">
-        <MudDrawerHeader Style="padding: 16px;">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing"
-                        Color="Color.Primary" Size="Size.Large" />
-                <MudText Typo="Typo.h6" Style="font-weight:700; color:#CDD6F4;">AutoMES</MudText>
+               Variant="DrawerVariant.Responsive"
+               Breakpoint="Breakpoint.Md"
+               Elevation="1"
+               ClipMode="DrawerClipMode.Always"
+               Class="mes-drawer">
+        <MudDrawerHeader Class="px-4 py-4">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudAvatar Color="Color.Primary" Variant="Variant.Filled">
+                    <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" />
+                </MudAvatar>
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.subtitle1">生产执行中台</MudText>
+                    <MudText Typo="Typo.caption" Class="layout-subtitle">ESP 总成工厂</MudText>
+                </MudStack>
             </MudStack>
         </MudDrawerHeader>
 
-        <MudNavMenu Style="padding:8px 12px;">
-            <MudNavLink Href="" Match="NavLinkMatch.All"
-                        Icon="@Icons.Material.Filled.Dashboard"
-                        IconColor="Color.Primary">仪表盘</MudNavLink>
-            <MudNavLink Href="production"
-                        Icon="@Icons.Material.Filled.Description">生产工单</MudNavLink>
-            <MudNavLink Href="material"
-                        Icon="@Icons.Material.Filled.Inventory">物料管理</MudNavLink>
-            <MudNavLink Href="traceability"
-                        Icon="@Icons.Material.Filled.Link">全链路追溯</MudNavLink>
-            <MudNavLink Href="spc"
-                        Icon="@Icons.Material.Filled.Analytics">SPC 质量</MudNavLink>
-            <MudNavLink Href="oee"
-                        Icon="@Icons.Material.Filled.PrecisionManufacturing">设备 OEE</MudNavLink>
-            <MudNavLink Href="andon"
-                        Icon="@Icons.Material.Filled.NotificationsActive">Andon 报警</MudNavLink>
+        <MudNavMenu Class="px-3">
+            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+                仪表盘
+            </MudNavLink>
+            <MudNavGroup Title="生产工单" Icon="@Icons.Material.Filled.Description" Expanded>
+                <MudNavLink Href="production" Icon="@Icons.Material.Filled.List">
+                    工单列表
+                </MudNavLink>
+                <MudNavLink Href="production/kanban" Icon="@Icons.Material.Filled.ViewKanban">
+                    工单看板
+                </MudNavLink>
+            </MudNavGroup>
+            <MudNavLink Href="material" Icon="@Icons.Material.Filled.Inventory2">
+                物料管理
+            </MudNavLink>
+            <MudNavLink Href="traceability" Icon="@Icons.Material.Filled.Route">
+                全链路追溯
+            </MudNavLink>
+            <MudNavLink Href="spc" Icon="@Icons.Material.Filled.Analytics">
+                SPC 质量
+            </MudNavLink>
+            <MudNavLink Href="oee" Icon="@Icons.Material.Filled.Timeline">
+                设备 OEE
+            </MudNavLink>
+            <MudNavLink Href="andon" Icon="@Icons.Material.Filled.Campaign">
+                Andon 报警
+            </MudNavLink>
         </MudNavMenu>
     </MudDrawer>
 
-    <!-- 主内容区 -->
-    <MudMainContent Style="background:#11111B; min-height:100vh;">
-        <MudAppBar Elevation="0" Dense="true"
-                   Style="background:#1A1A2E; border-bottom:1px solid rgba(203,166,247,0.08); left:0 !important; width:auto !important;">
-            <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                           Color="Color.Inherit"
-                           Edge="Edge.Start"
-                           OnClick="ToggleDrawer" />
-
-            <MudText Typo="Typo.body2" Style="color:#9399B2; margin-left:12px;">
-                @GetPageTitle()
-            </MudText>
-
-            <MudSpacer />
-
-            <MudIconButton Icon="@Icons.Material.Filled.Notifications"
-                           Color="Color.Inherit"
-                           BadgeContent="3"
-                           BadgeColor="Color.Error" />
-
-            <MudAvatar Color="Color.Primary" Size="Size.Small"
-                       Style="width:32px; height:32px; font-size:0.8rem; font-weight:600; margin-left:8px;">MES</MudAvatar>
-        </MudAppBar>
-
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Style="padding-top:72px; padding-bottom:40px;">
+    <MudMainContent Class="mes-main">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-8">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -71,66 +98,30 @@
 
 @code {
     private bool _drawerOpen = true;
-    private MudThemeProvider? _themeProvider;
-
-    // 仅用暗色调色板，避免 MudThemeProvider SSR 双调色板崩溃
-    private readonly MudTheme _theme = new()
-    {
-        PaletteDark = new PaletteDark
-        {
-            Black = "#000000",
-            White = "#FFFFFF",
-            Primary = "#CBA6F7",
-            PrimaryContrastText = "#1E1E2E",
-            Secondary = "#9CA3AF",
-            SecondaryContrastText = "#000000",
-            Background = "#11111B",
-            Surface = "#1E1E2E",
-            DrawerBackground = "#181825",
-            DrawerText = "#CDD6F4",
-            AppbarBackground = "#1A1A2E",
-            AppbarText = "#CDD6F4",
-            TextPrimary = "#CDD6F4",
-            TextSecondary = "#9399B2",
-            TextDisabled = "#6C7086",
-            ActionDefault = "#9399B2",
-            ActionDisabled = "#45475A",
-            Divider = "#313244",
-            LinesDefault = "#313244",
-            TableLines = "#313244",
-            HoverOpacity = 0.06,
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "12px",
-            AppbarHeight = "48px",
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography
-            {
-                FontFamily = ["Inter Tight", "Helvetica", "Arial", "sans-serif"],
-                FontSize = "0.875rem",
-                FontWeight = "400",
-            },
-        },
-    };
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void GoLogin() => Navigation.NavigateTo("/login");
+
+    private async Task LogoutAsync()
+    {
+        await Auth.LogoutAsync();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
 
     private string GetPageTitle()
     {
         var path = Navigation.ToBaseRelativePath(Navigation.Uri);
         return path switch
         {
-            "" => "仪表盘",
-            "production" => "生产工单",
-            "material" => "物料管理",
-            "traceability" => "全链路追溯",
-            "spc" => "SPC 质量管理",
-            "oee" => "设备 OEE",
-            "andon" => "Andon 报警",
-            _ => "AutoMES"
+            "" => "总览与告警",
+            "production" => "生产工单管理",
+            "material" => "物料与批次",
+            "traceability" => "追溯链路",
+            "spc" => "SPC 质量控制",
+            "oee" => "设备效率",
+            "andon" => "现场报警",
+            _ => "制造执行系统"
         };
     }
 }

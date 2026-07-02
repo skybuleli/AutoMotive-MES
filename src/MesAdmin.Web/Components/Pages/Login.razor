@@ -1,0 +1,111 @@
+@page "/login"
+@attribute [StreamRendering]
+@using MesAdmin.Web.Services
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<PageTitle>登录 - AutoMES</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
+    <MudPaper Elevation="4" Class="pa-8 rounded-xl" Style="width: 100%; max-width: 420px;">
+        <MudStack Spacing="4" AlignItems="AlignItems.Center">
+            <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+                <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" />
+            </MudAvatar>
+
+            <MudText Typo="Typo.h5">AutoMES 登录</MudText>
+            <MudText Typo="Typo.body2" Class="text-secondary">
+                ESP 总成工厂 · 制造执行中台
+            </MudText>
+
+            <MudTextField @bind-Value="_username"
+                          Label="用户名"
+                          Variant="Variant.Outlined"
+                          FullWidth
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person" />
+
+            <MudTextField @bind-Value="_password"
+                          Label="密码"
+                          Variant="Variant.Outlined"
+                          FullWidth
+                          Margin="Margin.Dense"
+                          InputType="InputType.Password"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Lock"
+                          OnKeyDown="OnKeyDown" />
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense FullWidth>
+                    @_error
+                </MudAlert>
+            }
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       Size="Size.Large"
+                       FullWidth
+                       Disabled="_busy"
+                       OnClick="LoginAsync">
+                @if (_busy)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate Class="mr-2" />
+                    <span>登录中…</span>
+                }
+                else
+                {
+                    <span>登录</span>
+                }
+            </MudButton>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense FullWidth>
+                演示账号：manager / leader / qe / ee / warehouse / sqe（密码任意）
+            </MudAlert>
+        </MudStack>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private string _username = string.Empty;
+    private string _password = string.Empty;
+    private string _error = string.Empty;
+    private bool _busy;
+
+    private async Task LoginAsync()
+    {
+        _busy = true;
+        _error = string.Empty;
+
+        try
+        {
+            var ok = await Auth.LoginAsync(_username, _password);
+            if (ok)
+            {
+                var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(returnUrl.Contains('?') ? returnUrl.Substring(returnUrl.IndexOf('?')) : "");
+                var target = query.TryGetValue("returnUrl", out var v) ? v.ToString() : "/";
+                Navigation.NavigateTo(target, forceLoad: true);
+            }
+            else
+            {
+                _error = "用户名或密码错误";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"登录异常：{ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await LoginAsync();
+    }
+}

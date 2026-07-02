@@ -1,0 +1,113 @@
+@page "/production/kanban"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>工单看板 - AutoMES</PageTitle>
+
+<MudStack Spacing="3">
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+        <MudText Typo="Typo.h5">生产工单看板</MudText>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync">
+            刷新
+        </MudButton>
+    </MudStack>
+
+    @if (!string.IsNullOrWhiteSpace(_loadError))
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>@_loadError</MudAlert>
+    }
+
+    <MudGrid Spacing="2">
+        @foreach (var column in _columns)
+        {
+            <MudItem xs="12" sm="6" md="4" lg="2">
+                <MudPaper Elevation="2" Class="pa-3 kanban-column" Style="min-height: 60vh; background: #181825;">
+                    <MudStack Spacing="2">
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@column.Label</MudText>
+                            <MudBadge Content="@column.Orders.Count" Color="@column.BadgeColor" Overlap="false" Class="ml-2" />
+                        </MudStack>
+
+                        @foreach (var order in column.Orders)
+                        {
+                            <MudCard Elevation="1" Class="kanban-card" Style="background: #1E1E2E; cursor: pointer;" @onclick="() => GoToDetail(order.Id)">
+                                <MudCardContent Class="pa-3">
+                                    <MudStack Spacing="1">
+                                        <MudText Typo="Typo.body2" Style="font-weight: 600; color: #CBA6F7;">@order.OrderNumber</MudText>
+                                        <MudText Typo="Typo.caption" Class="text-secondary">@order.ProductCode · @order.BomVersion</MudText>
+                                        <MudDivider Class="my-1" />
+                                        <MudStack Row Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.caption">计划: @order.PlannedQuantity</MudText>
+                                            <MudText Typo="Typo.caption">良品: @order.QualifiedQuantity</MudText>
+                                        </MudStack>
+                                        <MudText Typo="Typo.caption" Class="text-secondary">@order.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudText>
+                                    </MudStack>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+
+                        @if (column.Orders.Count == 0)
+                        {
+                            <MudText Typo="Typo.caption" Align="Align.Center" Class="text-secondary py-4">暂无工单</MudText>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+</MudStack>
+
+@code {
+    private List<KanbanColumn> _columns = [];
+    private string? _loadError;
+
+    private static readonly string[] Statuses = ["Created", "Released", "InProgress", "Completed", "Closed"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { await LoadAsync(); }
+        catch (Exception ex) { _loadError = $"加载失败：{ex.Message}"; }
+    }
+
+    private async Task LoadAsync()
+    {
+        var columns = new List<KanbanColumn>();
+
+        foreach (var (status, label, badgeColor) in new[]
+        {
+            ("Created", "已创建", Color.Default),
+            ("Released", "已放行", Color.Info),
+            ("InProgress", "执行中", Color.Primary),
+            ("Completed", "已完工", Color.Success),
+            ("Closed", "已关闭", Color.Dark),
+        })
+        {
+            try
+            {
+                var items = await Api.GetAsync<List<OrderSummary>>($"api/v1/orders?status={status}&page=1&size=50");
+                columns.Add(new KanbanColumn(label, badgeColor, items ?? []));
+            }
+            catch
+            {
+                columns.Add(new KanbanColumn(label, badgeColor, []));
+            }
+        }
+
+        _columns = columns;
+        _loadError = null;
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private void GoToDetail(string id)
+        => Navigation.NavigateTo($"/production?orderId={id}");
+
+    private sealed record KanbanColumn(string Label, Color BadgeColor, List<OrderSummary> Orders);
+}

@@ -9,9 +9,13 @@ namespace MesAdmin.Application.Interfaces;
 public interface IProductionOrderRepository
 {
     Task<ProductionOrder?> GetByIdAsync(Ulid id, CancellationToken cancellationToken = default);
+    Task<ProductionOrder?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default);
     Task<List<ProductionOrder>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<List<ProductionOrder>> GetPageAsync(OrderStatus? status, int skip, int take, CancellationToken cancellationToken = default);
+    Task<int> CountAsync(OrderStatus? status, CancellationToken cancellationToken = default);
+    Task<int> CountByOrderNumberPrefixAsync(string orderNumberPrefix, CancellationToken cancellationToken = default);
     Task AddAsync(ProductionOrder order, CancellationToken cancellationToken = default);
-    Task UpdateAsync(ProductionOrder order, CancellationToken cancellationToken = default);
+    void Update(ProductionOrder order);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
 

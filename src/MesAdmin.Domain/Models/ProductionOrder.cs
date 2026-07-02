@@ -58,4 +58,138 @@ public partial class ProductionOrder
 
     /// <summary>完工时间</summary>
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>计划开始时间</summary>
+    public DateTimeOffset? PlannedStartAt { get; set; }
+
+    /// <summary>计划结束时间</summary>
+    public DateTimeOffset? PlannedEndAt { get; set; }
+
+    /// <summary>实际开始时间</summary>
+    public DateTimeOffset? ActualStartAt { get; set; }
+
+    /// <summary>实际结束时间</summary>
+    public DateTimeOffset? ActualEndAt { get; set; }
+
+    /// <summary>产线 Id</summary>
+    public Ulid? LineId { get; set; }
+
+    /// <summary>工作中心编号</summary>
+    public string? WorkCenterId { get; set; }
+
+    /// <summary>班次（早/中/晚）</summary>
+    public string? Shift { get; set; }
+
+    /// <summary>来源系统（SAP / 手动）</summary>
+    public string? SourceSystem { get; set; }
+
+    /// <summary>外部系统工单号（SAP 工单号）</summary>
+    public string? ExternalOrderNumber { get; set; }
+
+    /// <summary>取消原因</summary>
+    public string? CancelReason { get; set; }
+
+    public bool CanRelease => Status == OrderStatus.Created;
+    public bool CanStart => Status is OrderStatus.Created or OrderStatus.Released;
+    public bool CanComplete => Status == OrderStatus.InProgress;
+    public bool CanClose => Status == OrderStatus.Completed;
+
+    public static ProductionOrder Create(
+        Ulid id,
+        string orderNumber,
+        string productCode,
+        Ulid routingId,
+        string bomVersion,
+        int plannedQuantity,
+        short priority,
+        DateTimeOffset createdAt)
+    {
+        ValidateCreateInput(orderNumber, productCode, bomVersion, plannedQuantity, priority);
+
+        return new ProductionOrder
+        {
+            Id = id,
+            OrderNumber = orderNumber,
+            ProductCode = NormalizeProductCode(productCode),
+            RoutingId = routingId,
+            BomVersion = bomVersion.Trim(),
+            PlannedQuantity = plannedQuantity,
+            Priority = priority,
+            CreatedAt = createdAt,
+            Status = OrderStatus.Created,
+        };
+    }
+
+    public void Release()
+    {
+        EnsureStatus(OrderStatus.Created, "只有 Created 状态才能转为 Released");
+        Status = OrderStatus.Released;
+    }
+
+    public void Start()
+    {
+        EnsureStatus(OrderStatus.Released, "只有 Released 状态才能开工");
+        Status = OrderStatus.InProgress;
+    }
+
+    public void Complete(int qualifiedQuantity, int defectiveQuantity, DateTimeOffset completedAt)
+    {
+        EnsureStatus(OrderStatus.InProgress, "只有 InProgress 状态才能完工");
+
+        if (qualifiedQuantity < 0)
+            throw new ArgumentOutOfRangeException(nameof(qualifiedQuantity));
+
+        if (defectiveQuantity < 0)
+            throw new ArgumentOutOfRangeException(nameof(defectiveQuantity));
+
+        if (qualifiedQuantity + defectiveQuantity > PlannedQuantity)
+            throw new InvalidOperationException("完工数量不能超过计划数量");
+
+        QualifiedQuantity = qualifiedQuantity;
+        DefectiveQuantity = defectiveQuantity;
+        CompletedAt = completedAt;
+        Status = OrderStatus.Completed;
+    }
+
+    public void Close()
+    {
+        EnsureStatus(OrderStatus.Completed, "只有 Completed 状态才能关闭");
+        Status = OrderStatus.Closed;
+    }
+
+    private static void ValidateCreateInput(
+        string orderNumber,
+        string productCode,
+        string bomVersion,
+        int plannedQuantity,
+        short priority)
+    {
+        if (string.IsNullOrWhiteSpace(orderNumber))
+            throw new ArgumentException("工单号不能为空", nameof(orderNumber));
+
+        if (string.IsNullOrWhiteSpace(productCode))
+            throw new ArgumentException("产品编码不能为空", nameof(productCode));
+
+        var normalizedProductCode = NormalizeProductCode(productCode);
+        if (normalizedProductCode is not ("ESP-9.0" or "ESP-9.1"))
+            throw new ArgumentException("产品编码仅支持 ESP-9.0 / ESP-9.1", nameof(productCode));
+
+        if (string.IsNullOrWhiteSpace(bomVersion))
+            throw new ArgumentException("BOM 版本不能为空", nameof(bomVersion));
+
+        if (plannedQuantity <= 0)
+            throw new ArgumentOutOfRangeException(nameof(plannedQuantity), "计划数量必须大于 0");
+
+        if (priority is < 1 or > 2)
+            throw new ArgumentOutOfRangeException(nameof(priority), "优先级仅支持 1 或 2");
+    }
+
+    private static string NormalizeProductCode(string productCode)
+        => productCode.Trim().ToUpperInvariant();
+
+    private void EnsureStatus(OrderStatus expected, string message)
+    {
+        if (Status != expected)
+            throw new InvalidOperationException(message);
+    }
 }

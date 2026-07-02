@@ -22,15 +22,109 @@ namespace MesAdmin.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("MesAdmin.Domain.Models.Bom", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset>("EffectiveDate")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("ExpirationDate")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("ProductCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductCode", "Version")
+                        .IsUnique();
+
+                    b.ToTable("boms", (string)null);
+                });
+
+            modelBuilder.Entity("MesAdmin.Domain.Models.FirstArticleInspection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Conclusion")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("InspectionType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("InspectorId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("OperatorId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ProductCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("first_article_inspections", (string)null);
+                });
+
             modelBuilder.Entity("MesAdmin.Domain.Models.ProductionOrder", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ActualEndAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("ActualStartAt")
+                        .HasColumnType("timestamptz");
+
                     b.Property<string>("BomVersion")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamptz");
@@ -41,13 +135,26 @@ namespace MesAdmin.Infrastructure.Migrations
                     b.Property<int>("DefectiveQuantity")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ExternalOrderNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("LineId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("OrderNumber")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<DateTimeOffset?>("PlannedEndAt")
+                        .HasColumnType("timestamptz");
+
                     b.Property<int>("PlannedQuantity")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("PlannedStartAt")
+                        .HasColumnType("timestamptz");
 
                     b.Property<short>("Priority")
                         .HasColumnType("smallint");
@@ -63,12 +170,27 @@ namespace MesAdmin.Infrastructure.Migrations
                     b.Property<Guid>("RoutingId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Shift")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("SourceSystem")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<string>("WorkCenterId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("idx_orders_created_at");
 
                     b.HasIndex("OrderNumber")
                         .IsUnique();
@@ -131,6 +253,201 @@ namespace MesAdmin.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("traceability_links", (string)null);
+                });
+
+            modelBuilder.Entity("MesAdmin.Domain.Models.WorkOrderOperation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<DateTimeOffset?>("EndAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("EquipmentId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("OperationCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("OperationName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("OperatorId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("StartAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("Station")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("work_order_operations", (string)null);
+                });
+
+            modelBuilder.Entity("MesAdmin.Domain.Models.Bom", b =>
+                {
+                    b.OwnsMany("MesAdmin.Domain.Models.BomItem", "Items", b1 =>
+                        {
+                            b1.Property<Guid>("BomId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<bool>("IsCritical");
+
+                            b1.Property<int>("Level");
+
+                            b1.Property<string>("MaterialCode")
+                                .IsRequired();
+
+                            b1.Property<string>("MaterialName")
+                                .IsRequired();
+
+                            b1.Property<string>("ParentMaterialCode");
+
+                            b1.Property<double>("QuantityPerUnit");
+
+                            b1.Property<string>("Unit")
+                                .IsRequired();
+
+                            b1.HasKey("BomId", "__synthesizedOrdinal");
+
+                            b1.ToTable("boms");
+
+                            b1
+                                .ToJson("Items")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("BomId");
+                        });
+
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("MesAdmin.Domain.Models.FirstArticleInspection", b =>
+                {
+                    b.OwnsMany("MesAdmin.Domain.Models.InspectionItem", "Items", b1 =>
+                        {
+                            b1.Property<Guid>("FirstArticleInspectionId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<double?>("ActualValue");
+
+                            b1.Property<string>("CharacteristicCode")
+                                .IsRequired();
+
+                            b1.Property<string>("CharacteristicName")
+                                .IsRequired();
+
+                            b1.Property<string>("InspectionTool");
+
+                            b1.Property<bool>("IsPass");
+
+                            b1.Property<double?>("LowerLimit");
+
+                            b1.Property<string>("Remarks");
+
+                            b1.Property<double>("StandardValue");
+
+                            b1.Property<string>("Unit")
+                                .IsRequired();
+
+                            b1.Property<double?>("UpperLimit");
+
+                            b1.HasKey("FirstArticleInspectionId", "__synthesizedOrdinal");
+
+                            b1.ToTable("first_article_inspections");
+
+                            b1
+                                .ToJson("Items")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("FirstArticleInspectionId");
+                        });
+
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("MesAdmin.Domain.Models.WorkOrderOperation", b =>
+                {
+                    b.OwnsMany("MesAdmin.Domain.Models.ProcessParameter", "Parameters", b1 =>
+                        {
+                            b1.Property<Guid>("WorkOrderOperationId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<double?>("ActualValue");
+
+                            b1.Property<bool?>("IsPass");
+
+                            b1.Property<double?>("LowerLimit");
+
+                            b1.Property<string>("ParameterCode")
+                                .IsRequired();
+
+                            b1.Property<string>("ParameterName")
+                                .IsRequired();
+
+                            b1.Property<DateTimeOffset?>("RecordedAt");
+
+                            b1.Property<double>("StandardValue");
+
+                            b1.Property<string>("Unit")
+                                .IsRequired();
+
+                            b1.Property<double?>("UpperLimit");
+
+                            b1.HasKey("WorkOrderOperationId", "__synthesizedOrdinal");
+
+                            b1.ToTable("work_order_operations");
+
+                            b1
+                                .ToJson("Parameters")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("WorkOrderOperationId");
+                        });
+
+                    b.Navigation("Parameters");
                 });
 #pragma warning restore 612, 618
         }

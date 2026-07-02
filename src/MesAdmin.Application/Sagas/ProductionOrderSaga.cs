@@ -11,63 +11,229 @@ namespace MesAdmin.Application.Sagas;
 /// 对应 PRD M01 / TAD v2 Effect 策略矩阵。
 ///
 /// Effect 策略：
-///   - 站1 上料扫码：Effect 之外（人工确认）
-///   - 站2-5,7：AtLeastOnce（不可丢失，幂等保护）
-///   - 站6 功能终检：AtMostOnce（重放复用结果）
+///   - 站1 上料扫码：Effect 之外（安全联锁、人工确认）
+///   - 站2-5,7：AtLeastOnce（不可丢失，幂等保护：先读后写工序状态）
+///   - 站6 功能终检：AtMostOnce（重放复用上次结果）
 ///
-/// 崩溃恢复：服务器断电后 Cleipnir 自动从 Checkpoint 恢复，
-///   已完成 Effect 不重复执行（AtMostOnce）或重试到成功（AtLeastOnce）。
+/// 工站→工序序号映射（来自 DefaultRouting）：
+///   站1: seq 1     (上料扫码)
+///   站2: seq 2-5   (合装装配: HCU定位/ECU预装/电机安装/线束连接)
+///   站3: seq 6-10  (螺栓拧紧: M6-FL/M6-FR/M8-RL/M8-RR/扭矩复检)
+///   站4: seq 11-23 (液压测试: 12路电磁阀+建压保压泄压)
+///   站5: seq 24-27 (ECU刷写: Bootloader/固件/标定/CRC32)
+///   站6: seq 28-30 (功能终检: CAN通信/传感器标定/ESP模拟)
+///   站7: seq 31    (VIN绑定+标签打印)
 /// </summary>
-public class ProductionOrderSaga(IProductionOrderRepository orderRepo, IPlcClient plc)
+public class ProductionOrderSaga(
+    IProductionOrderRepository orderRepo,
+    IWorkOrderOperationRepository operationRepo,
+    IPlcClient plc)
 {
-    public async Task Execute(ProductionOrder order, Workflow workflow)
+    /// <summary>每个工站的代表性工序序号（用于幂等检查的"哨兵"工序）</summary>
+    private static readonly Dictionary<int, int> StationLastSequence = new()
     {
-        var state = workflow.States.CreateOrGet<SagaState>("SagaState");
+        { 2, 5 },   // 线束连接（站2 最后一道）
+        { 3, 10 },  // 扭矩复检（站3 最后一道）
+        { 4, 23 },  // 建压保压泄压循环（站4 最后一道）
+        { 5, 27 },  // CRC32 校验确认（站5 最后一道）
+        { 7, 31 },  // VIN 绑定（站7）
+    };
 
-        // ── 站1 上料扫码：Effect 之外（人工确认，重放时重新实时评估）──
-        if (order.Status == OrderStatus.Created)
-            throw new InvalidOperationException("工单未齐套放行，无法开工");
+    /// <summary>站3 四个螺栓对应的工序序号</summary>
+    private static readonly Dictionary<string, int> BoltSequence = new()
+    {
+        { "M6-FL", 6 },  // TQ-01
+        { "M6-FR", 7 },  // TQ-02
+        { "M8-RL", 8 },  // TQ-03
+        { "M8-RR", 9 },  // TQ-04
+    };
 
-        // ── 站2 合装装配：AtLeastOnce（PLC 状态机互锁幂等保护）──
-        await workflow.Effect.Capture("Assembly-" + order.Id, async () =>
+    public async Task Execute(Ulid orderId, Workflow workflow)
+    {
+        var state = await workflow.States.CreateOrGetDefault<SagaState>();
+
+        // ── 安全联锁：Effect 之外（重放时重新实时评估）──
+        if (!await plc.IsReadyAsync("Station-1"))
+            throw new SafetyInterlockException("站1 上料设备未就绪，安全联锁触发");
+
+        // Saga 拥有完整状态机控制权：从 DB 读取最新状态，推进 Created→Released→InProgress
+        var currentOrder = await orderRepo.GetByIdAsync(orderId)
+            ?? throw new InvalidOperationException($"工单 {orderId} 不存在");
+
+        if (currentOrder.Status == OrderStatus.Created)
         {
-            if (!await plc.IsReadyAsync(order.Id.ToString()))
+            currentOrder.Release();
+            orderRepo.Update(currentOrder);
+            await orderRepo.SaveChangesAsync();
+        }
+
+        if (currentOrder.Status == OrderStatus.Released)
+        {
+            currentOrder.Start();
+            orderRepo.Update(currentOrder);
+            await orderRepo.SaveChangesAsync();
+            state.CurrentStation = 2;
+            await state.Save();
+        }
+
+        // ── 站2 合装装配（seq 2-5）：AtLeastOnce ──
+        await workflow.Effect.Capture($"station-2-assembly-{orderId}", async () =>
+        {
+            if (await IsStationCompleted(orderId, 2))
+                return; // 幂等：哨兵工序 seq=5 已完工
+
+            if (!await plc.IsReadyAsync("Station-2"))
                 throw new Exception("合装设备未就绪");
-            // HCU 定位 → ECU 预装 → 电机安装 → 线束连接
+
+            // 完成站2 全部工序（seq 2-5: HCU定位→ECU预装→电机安装→线束连接）
+            await CompleteOperationRange(orderId, 2, 5, "AUTO", "EQ-ASM-01");
+
+            state.AssemblyCompletedAt = DateTimeOffset.UtcNow;
+            state.CurrentStation = 3;
+            await state.Save();
         }, ResiliencyLevel.AtLeastOnce);
 
-        // ── 站3 螺栓拧紧：AtLeastOnce（扭矩曲线 MD5 去重，4 处独立 Effect）──
+        // ── 站3 螺栓拧紧（seq 6-9 四个独立 Effect + seq 10 复检）：AtLeastOnce ──
         foreach (var bolt in new[] { "M6-FL", "M6-FR", "M8-RL", "M8-RR" })
         {
-            await workflow.Effect.Capture($"Torque-{bolt}", async () =>
+            var seq = BoltSequence[bolt];
+            await workflow.Effect.Capture($"station-3-torque-{bolt}-{orderId}", async () =>
             {
+                if (await IsOperationCompleted(orderId, seq))
+                    return; // 幂等
+
                 // 扭矩+角度法拧紧，曲线实时采集，不通过抛 TorqueException
+                await CompleteOperation(orderId, seq, "AUTO", "EQ-TQ-01");
             }, ResiliencyLevel.AtLeastOnce);
         }
 
-        // ── 站4 液压测试：AtLeastOnce（安全件 100% 测试，唯一约束 S/N）──
-        await workflow.Effect.Capture("Hydraulic-" + order.Id, async () =>
+        // 站3 扭矩复检（seq 10）
+        await workflow.Effect.Capture($"station-3-torque-recheck-{orderId}", async () =>
         {
-            // 12 路电磁阀逐一测试，泄漏率 ≤ 0.5 CC/hr
+            if (await IsOperationCompleted(orderId, 10))
+                return;
+
+            await CompleteOperation(orderId, 10, "AUTO", "EQ-TQ-01");
+            state.TorqueCompletedAt = DateTimeOffset.UtcNow;
+            state.CurrentStation = 4;
+            await state.Save();
         }, ResiliencyLevel.AtLeastOnce);
 
-        // ── 站5 ECU 刷写：AtLeastOnce（校验和+版本号，先回滚再重刷防变砖）──
-        await workflow.Effect.Capture("Flash-" + order.Id, async () =>
+        // ── 站4 液压测试（seq 11-23）：AtLeastOnce ──
+        await workflow.Effect.Capture($"station-4-hydraulic-{orderId}", async () =>
         {
+            if (await IsStationCompleted(orderId, 4))
+                return; // 幂等：哨兵工序 seq=23 已完工
+
+            // 12 路电磁阀逐一测试 + 建压/保压/泄压循环
+            await CompleteOperationRange(orderId, 11, 23, "AUTO", "EQ-HYD-01");
+
+            state.HydraulicCompletedAt = DateTimeOffset.UtcNow;
+            state.CurrentStation = 5;
+            await state.Save();
+        }, ResiliencyLevel.AtLeastOnce);
+
+        // ── 站5 ECU 刷写（seq 24-27）：AtLeastOnce ──
+        await workflow.Effect.Capture($"station-5-flash-{orderId}", async () =>
+        {
+            if (await IsStationCompleted(orderId, 5))
+                return; // 幂等：哨兵工序 seq=27 已完工
+
             // Bootloader → 应用固件 → 标定参数 → CRC32 校验和确认
+            await CompleteOperationRange(orderId, 24, 27, "AUTO", "EQ-FLS-01");
+
+            state.FlashCompletedAt = DateTimeOffset.UtcNow;
+            state.CurrentStation = 6;
+            await state.Save();
         }, ResiliencyLevel.AtLeastOnce);
 
-        // ── 站6 功能终检：AtMostOnce（测试 ID 去重，重放复用上次结果）──
-        await workflow.Effect.Capture("FinalTest-" + order.Id, async () =>
+        // ── 站6 功能终检（seq 28-30）：AtMostOnce ──
+        await workflow.Effect.Capture($"station-6-final-test-{orderId}", async () =>
         {
+            // AtMostOnce：重放时复用上次结果，不重复执行副作用
             // CAN 通信 → 传感器标定 → ESP 功能模拟
+            await CompleteOperationRange(orderId, 28, 30, "AUTO", "EQ-FT-01");
+
+            state.FinalTestCompletedAt = DateTimeOffset.UtcNow;
+            state.CurrentStation = 7;
+            await state.Save();
         }, ResiliencyLevel.AtMostOnce);
 
-        // ── 站7 VIN 绑定 + 标签打印：AtLeastOnce（唯一约束 S/N）──
-        await workflow.Effect.Capture("VinBind-" + order.Id, async () =>
+        // ── 站7 VIN 绑定 + 标签打印（seq 31）：AtLeastOnce ──
+        await workflow.Effect.Capture($"station-7-vin-bind-{orderId}", async () =>
         {
+            if (await IsStationCompleted(orderId, 7))
+                return; // 幂等：seq=31 已完工
+
             // 追溯标签打印 + VIN 预绑定 + 入库
+            await CompleteOperation(orderId, 31, "AUTO", "EQ-VN-01");
+
+            state.VinBindCompletedAt = DateTimeOffset.UtcNow;
+            state.CurrentStation = 8;
+            await state.Save();
         }, ResiliencyLevel.AtLeastOnce);
+
+        // ── 工单完工：AtLeastOnce（重放时以状态机幂等保护）──
+        await workflow.Effect.Capture($"complete-order-{orderId}", async () =>
+        {
+            var finalOrder = await orderRepo.GetByIdAsync(orderId);
+            if (finalOrder?.Status != OrderStatus.InProgress)
+                return; // 幂等：已完工或已关闭则跳过
+
+            finalOrder.Complete(finalOrder.PlannedQuantity, 0, DateTimeOffset.UtcNow);
+            orderRepo.Update(finalOrder);
+            await orderRepo.SaveChangesAsync();
+        }, ResiliencyLevel.AtLeastOnce);
+    }
+
+    // ═══════════════════════════════════════════
+    // 工序操作辅助方法
+    // ═══════════════════════════════════════════
+
+    /// <summary>检查指定工序是否已完工（幂等哨兵）</summary>
+    private async Task<bool> IsOperationCompleted(Ulid orderId, int sequence)
+    {
+        var op = await operationRepo.GetByOrderAndSequenceAsync(orderId, sequence);
+        return op?.Status == OperationStatus.Completed;
+    }
+
+    /// <summary>检查指定工站是否已完工（检查该站最后一道工序）</summary>
+    private async Task<bool> IsStationCompleted(Ulid orderId, int station)
+    {
+        if (!StationLastSequence.TryGetValue(station, out var lastSeq))
+            return false;
+        return await IsOperationCompleted(orderId, lastSeq);
+    }
+
+    /// <summary>完成单道工序：读取→启动→完工→保存</summary>
+    private async Task CompleteOperation(Ulid orderId, int sequence, string operatorId, string equipmentId)
+    {
+        var op = await operationRepo.GetByOrderAndSequenceAsync(orderId, sequence);
+        if (op is null || op.Status == OperationStatus.Completed)
+            return;
+
+        var now = DateTimeOffset.UtcNow;
+        if (op.Status == OperationStatus.Pending)
+            op.Start(operatorId, equipmentId, now);
+        op.Complete(now);
+        operationRepo.Update(op);
+        await operationRepo.SaveChangesAsync();
+    }
+
+    /// <summary>完成一个范围内的所有工序（同一工站）</summary>
+    private async Task CompleteOperationRange(Ulid orderId, int fromSeq, int toSeq, string operatorId, string equipmentId)
+    {
+        var ops = await operationRepo.GetByOrderIdAsync(orderId);
+        var now = DateTimeOffset.UtcNow;
+
+        foreach (var op in ops.Where(o => o.Sequence >= fromSeq && o.Sequence <= toSeq && o.Status == OperationStatus.Pending))
+        {
+            op.Start(operatorId, equipmentId, now);
+            op.Complete(now);
+            operationRepo.Update(op);
+        }
+
+        await operationRepo.SaveChangesAsync();
     }
 
     /// <summary>Saga 状态持久化（存 PostgreSQL）</summary>
@@ -79,5 +245,9 @@ public class ProductionOrderSaga(IProductionOrderRepository orderRepo, IPlcClien
         public DateTimeOffset? HydraulicCompletedAt { get; set; }
         public DateTimeOffset? FlashCompletedAt { get; set; }
         public DateTimeOffset? FinalTestCompletedAt { get; set; }
+        public DateTimeOffset? VinBindCompletedAt { get; set; }
     }
 }
+
+/// <summary>安全联锁异常（Effect 之外触发，重放时重新评估）</summary>
+public class SafetyInterlockException(string message) : Exception(message);

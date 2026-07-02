@@ -1,0 +1,369 @@
+@page "/production"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+
+<PageTitle>生产工单 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="production-page">
+    <MudPaper Class="production-hero pa-6">
+        <MudGrid Spacing="3" Class="hero-grid">
+            <MudItem xs="12" lg="8">
+                <MudStack Spacing="1">
+                    <MudText Typo="Typo.overline" Class="hero-kicker">M01 · Production Order</MudText>
+                    <MudText Typo="Typo.h4">生产工单管理</MudText>
+                    <MudText Typo="Typo.body1" Class="hero-copy">
+                        通过 API 创建工单、状态流转和 Saga 执行监控。所有操作经 JWT 认证后调用后端 API。
+                    </MudText>
+                </MudStack>
+            </MudItem>
+            <MudItem xs="12" lg="4">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudPaper Class="summary-card pa-4">
+                            <MudText Typo="Typo.caption">当前筛选</MudText>
+                            <MudText Typo="Typo.h6">@GetFilterLabel()</MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudPaper Class="summary-card pa-4">
+                            <MudText Typo="Typo.caption">已选工单</MudText>
+                            <MudText Typo="Typo.h6">@(_selected?.OrderNumber ?? "未选择")</MudText>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="module-card pa-5">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">创建工单</MudText>
+
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12">
+                            <MudSelect T="string" Label="产品编码" Variant="Variant.Outlined" Dense @bind-Value="_productCode">
+                                <MudSelectItem Value="@("ESP-9.0")">ESP-9.0</MudSelectItem>
+                                <MudSelectItem Value="@("ESP-9.1")">ESP-9.1</MudSelectItem>
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="_bomVersion" Label="BOM 版本" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="int" @bind-Value="_plannedQuantity" Label="计划数量" Variant="Variant.Outlined" Min="1" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSelect T="string" Label="工艺路线" Variant="Variant.Outlined" Dense @bind-Value="_routingId">
+                                @foreach (var option in RoutingOptions)
+                                {
+                                    <MudSelectItem Value="@option.Id">@option.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="short" @bind-Value="_priority" Label="优先级" Variant="Variant.Outlined" Min="1" Max="2" Margin="Margin.Dense" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth Disabled="@_busy" OnClick="CreateAsync">
+                        创建工单
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="8">
+            <MudPaper Class="module-card pa-5">
+                <MudStack Spacing="3">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudText Typo="Typo.h6">工单队列</MudText>
+                        <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                            <MudSelect T="string" Label="状态筛选" Variant="Variant.Outlined" Dense
+                                       Value="@_statusFilterText" ValueChanged="OnStatusFilterChanged" Class="filter-select">
+                                <MudSelectItem Value="@("all")">全部</MudSelectItem>
+                                <MudSelectItem Value="@("Created")">已创建</MudSelectItem>
+                                <MudSelectItem Value="@("Released")">已放行</MudSelectItem>
+                                <MudSelectItem Value="@("InProgress")">执行中</MudSelectItem>
+                                <MudSelectItem Value="@("Completed")">已完工</MudSelectItem>
+                                <MudSelectItem Value="@("Closed")">已关闭</MudSelectItem>
+                            </MudSelect>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ReloadAsync" Disabled="@_busy">刷新</MudButton>
+                        </MudStack>
+                    </MudStack>
+
+                    @if (_loadError is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>@_loadError</MudAlert>
+                    }
+
+                    <MudTable T="OrderSummary" Dense Hover Bordered Breakpoint="Breakpoint.Sm" Items="@_pageOrders" RowsPerPage="10">
+                        <HeaderContent>
+                            <MudTh>工单号</MudTh>
+                            <MudTh>产品</MudTh>
+                            <MudTh>状态</MudTh>
+                            <MudTh>计划</MudTh>
+                            <MudTh>产出</MudTh>
+                            <MudTh>创建时间</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="工单号">
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0" OnClick="@(() => SelectOrder(context))">
+                                    @context.OrderNumber
+                                </MudButton>
+                            </MudTd>
+                            <MudTd DataLabel="产品">@context.ProductCode</MudTd>
+                            <MudTd DataLabel="状态">
+                                <MudChip T="string" Value="@context.Status" Color="@GetStatusColor(context.Status)" Variant="Variant.Filled" Size="Size.Small">
+                                    @GetStatusLabel(context.Status)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="计划">@context.PlannedQuantity</MudTd>
+                            <MudTd DataLabel="产出">@context.QualifiedQuantity / @context.DefectiveQuantity</MudTd>
+                            <MudTd DataLabel="创建时间">@context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Typo="Typo.body2" Class="empty-copy">当前筛选下暂无工单。</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="7">
+            <MudPaper Class="module-card pa-5">
+                <MudStack Spacing="3">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.h6">工单详情</MudText>
+                        @if (_selected is not null)
+                        {
+                            <MudChip T="string" Value="@_selected.Status" Color="@GetStatusColor(_selected.Status)" Variant="Variant.Outlined">
+                                @GetStatusLabel(_selected.Status)
+                            </MudChip>
+                        }
+                    </MudStack>
+
+                    @if (_selected is null)
+                    {
+                        <MudText Typo="Typo.body2" Class="empty-copy">从右侧列表选择一张工单后，这里会显示主数据与执行结果。</MudText>
+                    }
+                    else
+                    {
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" sm="6"><div class="detail-item"><span class="detail-label">工单号</span><strong>@_selected.OrderNumber</strong></div></MudItem>
+                            <MudItem xs="12" sm="6"><div class="detail-item"><span class="detail-label">产品编码</span><strong>@_selected.ProductCode</strong></div></MudItem>
+                            <MudItem xs="12" sm="6"><div class="detail-item"><span class="detail-label">BOM 版本</span><strong>@_selected.BomVersion</strong></div></MudItem>
+                            <MudItem xs="12" sm="6"><div class="detail-item"><span class="detail-label">工艺路线</span><strong>@GetRoutingName(_selected.RoutingId)</strong></div></MudItem>
+                            <MudItem xs="12" sm="4"><div class="detail-item"><span class="detail-label">计划数量</span><strong>@_selected.PlannedQuantity</strong></div></MudItem>
+                            <MudItem xs="12" sm="4"><div class="detail-item"><span class="detail-label">良品数量</span><strong>@_selected.QualifiedQuantity</strong></div></MudItem>
+                            <MudItem xs="12" sm="4"><div class="detail-item"><span class="detail-label">不良数量</span><strong>@_selected.DefectiveQuantity</strong></div></MudItem>
+                            <MudItem xs="12" sm="6"><div class="detail-item"><span class="detail-label">创建时间</span><strong>@_selected.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</strong></div></MudItem>
+                            <MudItem xs="12" sm="6"><div class="detail-item"><span class="detail-label">完工时间</span><strong>@(_selected.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</strong></div></MudItem>
+                        </MudGrid>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="5">
+            <MudPaper Class="module-card pa-5">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">状态流转</MudText>
+
+                    @if (_selected is null)
+                    {
+                        <MudText Typo="Typo.body2" Class="empty-copy">选择工单后即可执行放行、开工、完工和关闭。</MudText>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense>
+                            开工会调用 Cleipnir Saga，自动推进整单到 Completed。
+                        </MudAlert>
+
+                        <MudStack Row Spacing="2" Wrap="Wrap.Wrap">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Info" Disabled="@(!CanRelease || _busy)" OnClick="ReleaseAsync">放行</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanStart || _busy)" OnClick="StartAsync">开工</MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="@(!CanComplete || _busy)" OnClick="CompleteAsync">完工</MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="@(!CanClose || _busy)" OnClick="CloseAsync">关闭</MudButton>
+                        </MudStack>
+
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField T="int" @bind-Value="_completeQualified" Label="良品数量" Variant="Variant.Outlined" Min="0" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField T="int" @bind-Value="_completeDefective" Label="不良数量" Variant="Variant.Outlined" Min="0" Margin="Margin.Dense" />
+                            </MudItem>
+                        </MudGrid>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudStack>
+
+@code {
+    private static readonly IReadOnlyList<RoutingOption> RoutingOptions =
+    [
+        new("01K25YQ2Y0Q0D8Z6EHKR1R4T3A", "前桥 ESP 总成主线"),
+        new("01K25YQ2Y0Y1HDQYJ0KQ6K8V7M", "后桥 ESP 总成主线"),
+        new("01K25YQ2Y0X2A9MJQPHH97M2C4", "返修与复判路线")
+    ];
+
+    private List<OrderSummary> _pageOrders = [];
+    private OrderSummary? _selected;
+    private OrderDetail? _selectedDetail;
+    private string _productCode = "ESP-9.0";
+    private string _bomVersion = "BOM-202607";
+    private string _routingId = RoutingOptions[0].Id;
+    private int _plannedQuantity = 500;
+    private short _priority = 1;
+    private int _completeQualified;
+    private int _completeDefective;
+    private string _statusFilterText = "all";
+    private string _message = string.Empty;
+    private string? _loadError;
+    private bool _isError;
+    private bool _busy;
+
+    private bool CanRelease => _selectedDetail?.CanRelease ?? false;
+    private bool CanStart => _selectedDetail?.CanStart ?? false;
+    private bool CanComplete => _selectedDetail?.CanComplete ?? false;
+    private bool CanClose => _selectedDetail?.CanClose ?? false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { await LoadPageAsync(); }
+        catch (Exception ex) { _loadError = $"加载失败：{ex.Message}"; }
+    }
+
+    private async Task LoadPageAsync()
+    {
+        var status = _statusFilterText == "all" ? null : _statusFilterText;
+        var path = status is null ? "api/v1/orders?page=1&size=20" : $"api/v1/orders?status={status}&page=1&size=20";
+        var items = await Api.GetAsync<List<OrderSummary>>(path);
+        _pageOrders = items ?? [];
+        _loadError = null;
+    }
+
+    private async Task ReloadAsync()
+    {
+        try { await LoadPageAsync(); StateHasChanged(); }
+        catch (Exception ex) { _loadError = $"刷新失败：{ex.Message}"; }
+    }
+
+    private async Task OnStatusFilterChanged(string value)
+    {
+        _statusFilterText = value;
+        _selected = null;
+        _selectedDetail = null;
+        await ReloadAsync();
+    }
+
+    private async Task SelectOrder(OrderSummary order)
+    {
+        _selected = order;
+        _completeQualified = order.QualifiedQuantity;
+        _completeDefective = order.DefectiveQuantity;
+        try
+        {
+            _selectedDetail = await Api.GetAsync<OrderDetail>($"api/v1/orders/{order.Id}");
+        }
+        catch { _selectedDetail = null; }
+    }
+
+    private async Task CreateAsync()
+    {
+        await RunBusyAsync(async () =>
+        {
+            var body = new CreateOrderBody(_productCode, _bomVersion, _routingId, _plannedQuantity, _priority);
+            var (ok, data, status) = await Api.PostAsync<OrderSummary>("api/v1/orders", body);
+            if (!ok)
+                throw new InvalidOperationException($"创建失败 (HTTP {status})");
+
+            _selected = data;
+            _message = $"已创建工单 {data!.OrderNumber}";
+            _isError = false;
+            await ReloadAsync();
+            if (_selected is not null)
+                await SelectOrder(_selected);
+        });
+    }
+
+    private async Task ReleaseAsync() => await MutateSelectedAsync("released", "api/v1/orders/{id}/status", new ChangeStatusBody("Released"));
+    private async Task StartAsync() => await MutateSelectedAsync("inprogress", "api/v1/orders/{id}/start");
+    private async Task CompleteAsync() => await MutateSelectedPost("api/v1/orders/{id}/complete", new CompleteOrderBody(_completeQualified, _completeDefective));
+    private async Task CloseAsync() => await MutateSelectedPost("api/v1/orders/{id}/close");
+
+    private async Task MutateSelectedAsync(string expected, string template, object? body = null)
+    {
+        if (_selected is null) return;
+        var path = template.Replace("{id}", _selected.Id);
+        await RunBusyAsync(async () =>
+        {
+            var (ok, data, status) = body is null
+                ? await Api.PostAsync<OrderDetail>(path, new { })
+                : await Api.PatchAsync<OrderDetail>(path, body);
+            if (!ok) throw new InvalidOperationException($"操作失败 (HTTP {status})");
+            if (data is not null) { _selectedDetail = data; _selected = data.Order; }
+            _message = $"工单 {_selected!.OrderNumber} 已更新为 {GetStatusLabel(_selected.Status)}";
+            _isError = false;
+            await ReloadAsync();
+        });
+    }
+
+    private async Task MutateSelectedPost(string template, object? body = null)
+    {
+        if (_selected is null) return;
+        var path = template.Replace("{id}", _selected.Id);
+        await RunBusyAsync(async () =>
+        {
+            var (ok, data, status) = body is null
+                ? await Api.PostAsync<OrderDetail>(path, new { })
+                : await Api.PostAsync<OrderDetail>(path, body);
+            if (!ok) throw new InvalidOperationException($"操作失败 (HTTP {status})");
+            if (data is not null) { _selectedDetail = data; _selected = data.Order; }
+            _message = $"工单 {_selected!.OrderNumber} 已更新为 {GetStatusLabel(_selected.Status)}";
+            _isError = false;
+            await ReloadAsync();
+        });
+    }
+
+    private async Task RunBusyAsync(Func<Task> action)
+    {
+        try { _busy = true; _message = string.Empty; await action(); }
+        catch (Exception ex) { _message = ex.Message; _isError = true; }
+        finally { _busy = false; }
+    }
+
+    private string GetRoutingName(string routingId)
+        => RoutingOptions.FirstOrDefault(o => o.Id == routingId)?.Name ?? routingId;
+
+    private string GetFilterLabel() => _statusFilterText == "all" ? "全部工单" : GetStatusLabel(_statusFilterText);
+
+    private static string GetStatusLabel(string status) => status switch
+    {
+        "Created" => "已创建", "Released" => "已放行", "InProgress" => "执行中",
+        "Completed" => "已完工", "Closed" => "已关闭", _ => status
+    };
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Created" => Color.Default, "Released" => Color.Info, "InProgress" => Color.Primary,
+        "Completed" => Color.Success, "Closed" => Color.Dark, _ => Color.Default
+    };
+
+    private sealed record RoutingOption(string Id, string Name);
+}

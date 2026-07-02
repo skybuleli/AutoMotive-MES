@@ -14,6 +14,9 @@ public class MesDbContext : DbContext
 
     public DbSet<ProductionOrder> ProductionOrders => Set<ProductionOrder>();
     public DbSet<TraceabilityLink> TraceabilityLinks => Set<TraceabilityLink>();
+    public DbSet<WorkOrderOperation> WorkOrderOperations => Set<WorkOrderOperation>();
+    public DbSet<FirstArticleInspection> FirstArticleInspections => Set<FirstArticleInspection>();
+    public DbSet<Bom> Boms => Set<Bom>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,9 +32,86 @@ public class MesDbContext : DbContext
             b.Property(o => o.Status).HasConversion<string>().HasMaxLength(16);
             b.Property(o => o.BomVersion).HasMaxLength(32);
             b.Property(o => o.RoutingId).HasConversion<UlidToGuidConverter>();
+            b.Property(o => o.WorkCenterId).HasMaxLength(32);
+            b.Property(o => o.Shift).HasMaxLength(16);
+            b.Property(o => o.SourceSystem).HasMaxLength(32);
+            b.Property(o => o.ExternalOrderNumber).HasMaxLength(64);
+            b.Property(o => o.CancelReason).HasMaxLength(256);
+            b.Property(o => o.LineId).HasConversion<UlidToGuidConverter>();
             b.HasIndex(o => o.Status).HasDatabaseName("idx_orders_status");
+            b.HasIndex(o => o.CreatedAt).HasDatabaseName("idx_orders_created_at");
             b.Property(o => o.CreatedAt).HasColumnType("timestamptz");
             b.Property(o => o.CompletedAt).HasColumnType("timestamptz");
+            b.Property(o => o.PlannedStartAt).HasColumnType("timestamptz");
+            b.Property(o => o.PlannedEndAt).HasColumnType("timestamptz");
+            b.Property(o => o.ActualStartAt).HasColumnType("timestamptz");
+            b.Property(o => o.ActualEndAt).HasColumnType("timestamptz");
+        });
+
+        // ── work_order_operations 表（31 工序 × 7 站）──
+        modelBuilder.Entity<WorkOrderOperation>(b =>
+        {
+            b.ToTable("work_order_operations");
+            b.HasKey(o => o.Id);
+            b.Property(o => o.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(o => o.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(o => new { o.OrderId, o.Sequence }).IsUnique();
+            b.Property(o => o.OperationCode).HasMaxLength(32).IsRequired();
+            b.Property(o => o.OperationName).HasMaxLength(64).IsRequired();
+            b.Property(o => o.Status).HasConversion<string>().HasMaxLength(16);
+            b.Property(o => o.OperatorId).HasMaxLength(32);
+            b.Property(o => o.EquipmentId).HasMaxLength(32);
+            b.Property(o => o.FailureReason).HasMaxLength(256);
+            b.Property(o => o.Remarks).HasMaxLength(512);
+            b.Property(o => o.StartAt).HasColumnType("timestamptz");
+            b.Property(o => o.EndAt).HasColumnType("timestamptz");
+            b.Property(o => o.CreatedAt).HasColumnType("timestamptz");
+
+            // 过程参数作为 JSONB 存储（PostgreSQL 原生支持，无需额外表）
+            b.OwnsMany(o => o.Parameters, p =>
+            {
+                p.ToJson();
+            });
+        });
+
+        // ── first_article_inspections 表（首件检验）──
+        modelBuilder.Entity<FirstArticleInspection>(b =>
+        {
+            b.ToTable("first_article_inspections");
+            b.HasKey(f => f.Id);
+            b.Property(f => f.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(f => f.OrderId).HasConversion<UlidToGuidConverter>();
+            b.Property(f => f.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(f => f.ProductCode).HasMaxLength(32).IsRequired();
+            b.Property(f => f.InspectionType).HasMaxLength(32).IsRequired();
+            b.Property(f => f.Status).HasConversion<string>().HasMaxLength(16);
+            b.Property(f => f.OperatorId).HasMaxLength(32);
+            b.Property(f => f.InspectorId).HasMaxLength(32);
+            b.Property(f => f.Conclusion).HasMaxLength(256);
+            b.Property(f => f.CreatedAt).HasColumnType("timestamptz");
+            b.Property(f => f.CompletedAt).HasColumnType("timestamptz");
+            b.OwnsMany(f => f.Items, p =>
+            {
+                p.ToJson();
+            });
+        });
+
+        // ── boms 表（物料清单）──
+        modelBuilder.Entity<Bom>(bom =>
+        {
+            bom.ToTable("boms");
+            bom.HasKey(x => x.Id);
+            bom.Property(x => x.Id).HasConversion<UlidToGuidConverter>();
+            bom.Property(x => x.ProductCode).HasMaxLength(32).IsRequired();
+            bom.Property(x => x.Version).HasMaxLength(32).IsRequired();
+            bom.HasIndex(x => new { x.ProductCode, x.Version }).IsUnique();
+            bom.Property(x => x.EffectiveDate).HasColumnType("timestamptz");
+            bom.Property(x => x.ExpirationDate).HasColumnType("timestamptz");
+            bom.Property(x => x.CreatedAt).HasColumnType("timestamptz");
+            bom.OwnsMany(x => x.Items, p =>
+            {
+                p.ToJson();
+            });
         });
 
         // ── traceability_links 表（4 级追溯）──

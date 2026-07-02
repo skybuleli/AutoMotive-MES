@@ -1,11 +1,9 @@
 using MesAdmin.Web.Components;
-using Microsoft.EntityFrameworkCore;
-using MesAdmin.Application.Interfaces;
-using MesAdmin.Application.Sagas;
-using MesAdmin.Infrastructure.Data;
-using MesAdmin.Infrastructure.Data.Repositories;
+using MesAdmin.Web.Services;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using MesAdmin.Infrastructure.Logging;
-using MesAdmin.Infrastructure.Plc;
+using MesAdmin.Infrastructure.Security;
 using MudBlazor;
 using MudBlazor.Services;
 
@@ -16,21 +14,25 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
 
-// ── 数据库（PostgreSQL 17 + EF Core + Ulid 主键）──
-builder.Services.AddDbContext<MesDbContext>(opt =>
-    opt.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSQL")));
+// ── JWT 认证 + HttpClient（Web 调用 API 获取 Token，本地验证）──
+builder.Services.AddMesJwtAuthentication(builder.Configuration);
 
-// ── 仓储（骨架版，委托 MesDbContext；T1.2 需完善查询优化）──
-builder.Services.AddScoped<IProductionOrderRepository, ProductionOrderRepository>();
-builder.Services.AddScoped<ITraceabilityLinkRepository, TraceabilityLinkRepository>();
+// ── Blazor Server 浏览器存储 ──
+builder.Services.AddScoped<ProtectedLocalStorage>();
 
-// ── PLC 客户端（骨架版；T2.12 需替换为 OpcUaPlcClient 真实驱动）──
-builder.Services.AddScoped<IPlcClient, StubPlcClient>();
+// ── API 客户端（所有页面通过 MesApiClient 调用后端 API，不再直接注入 Application 服务）──
+builder.Services.AddScoped<MesApiClient>();
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AuthenticationStateProvider, MesAuthenticationStateProvider>();
+builder.Services.AddCascadingAuthenticationState();
 
-// ── 业务服务（Saga 编排）──
-builder.Services.AddScoped<ProductionOrderSaga>();
+builder.Services.AddHttpClient("MesApi", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Api:BaseUrl"] ?? "http://localhost:5040/");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
 
-// ── ZLogger 结构化日志（零分配，IBufferWriter 直写，禁止字符串拼接）──
+// ── ZLogger 结构化日志 ──
 builder.Logging.AddZLogger();
 
 var app = builder.Build();
@@ -43,7 +45,8 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
 app.MapStaticAssets();

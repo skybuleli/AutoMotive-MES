@@ -5,6 +5,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FastEndpoints" Version="8.2.0" />
+    <PackageReference Include="FastEndpoints.Security" Version="8.2.0" />
+    <PackageReference Include="FastEndpoints.Swagger" Version="8.2.0" />
     <PackageReference Include="MemoryPack.AspNetCoreMvcFormatter" Version="1.21.4" />
     <PackageReference Include="ZLogger" Version="2.5.10" />
   </ItemGroup>

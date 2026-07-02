@@ -61,15 +61,15 @@
 
 | ID | 状态 | 任务 | 优先级 | 工时 | 依赖 |
 |----|------|------|--------|------|------|
-| T0.1 | `[ ]` | 解决方案 `MesAdmin.sln` + 5 个分层项目骨架（Domain/Application/Infrastructure/Web/Api），依赖方向 `Web→Infra→App→Domain`、`API→Infra` | P0 | 1d | — |
-| T0.2 | `[ ]` | NuGet 14 包精确版本引入（按 AGENTS.md 技术栈表：MudBlazor 9.6.0、MemoryPack 1.21.4、Cleipnir 4.2.5、MessagePipe 1.8.2、R3 1.3.1、ZLogger 2.5.10、Ulid 1.4.1、ObservableCollections 3.3.4、MasterMemory 3.0.4、Npgsql EF Core 10.0.2、SignalR、Channels、Pipelines） | P0 | 1d | T0.1 |
-| T0.3 | `[ ]` | **OrbStack 本地开发环境**：`orb start` + `docker/compose.dev.yaml`（postgres:17-alpine :5432 + 开发用 mes-web/mes-api 本地构建）+ 持久卷 + 一键 `docker compose up -d` | P0 | 1d | T0.1 |
-| T0.4 | `[ ]` | ZLogger 结构化日志配置（`IBufferWriter<byte>` 直写，禁止字符串拼接 + 默认 ILogger） | P0 | 1d | T0.2 |
-| T0.5 | `[ ]` | `MesDbContext` + `UlidToGuidConverter`（`ValueConverter<Ulid, Guid>`）+ EF Core DI 注册 | P0 | 2d | T0.2 |
-| T0.6 | `[ ]` | 首次 EF Core Migration（`production_orders` / `traceability_links` 核心表 DDL，对齐 TAD v2；索引 idx_orders_status、idx_trace_vin/component/material） | P0 | 1d | T0.5 |
-| T0.7 | `[ ]` | MemoryPack 全局配置 + `[MemoryPackable] public partial class` 基础模型约定 | P0 | 1d | T0.2 |
-| T0.8 | `[ ]` | JWT 认证 + 6 角色 RBAC（生产经理/班组长/质量工程师/设备工程师/仓库员/SQE） | P0 | 2d | T0.5 |
-| T0.9 | `[ ]` | MudBlazor 双主题（暗 `#CBA6F7` / 亮 `#8F6AAF`）+ `glass-kpi-card`/`andon-pulse`/`status-dot`/`grad-border` CSS + MainLayout/NavMenu + Inter Tight 字体 + 12px 圆角 | P0 | 2d | T0.2 |
+| T0.1 | `[x]` | 解决方案 `MesAdmin.sln` + 5 个分层项目骨架（Domain/Application/Infrastructure/Web/Api），依赖方向 `Web→Infra→App→Domain`、`API→Infra` | P0 | 1d | — |
+| T0.2 | `[x]` | NuGet 14 包精确版本引入（按 AGENTS.md 技术栈表：MudBlazor 9.6.0、MemoryPack 1.21.4、Cleipnir 4.2.5、MessagePipe 1.8.2、R3 1.3.1、ZLogger 2.5.10、Ulid 1.4.1、ObservableCollections 3.3.4、MasterMemory 3.0.4、Npgsql EF Core 10.0.2、SignalR、Channels、Pipelines） | P0 | 1d | T0.1 |
+| T0.3 | `[x]` | **OrbStack 本地开发环境**：`orb start` + `docker/compose.dev.yaml`（postgres:17-alpine :5432 + 开发用 mes-web/mes-api 本地构建）+ 持久卷 + 一键 `docker compose up -d` | P0 | 1d | T0.1 |
+| T0.4 | `[x]` | ZLogger 结构化日志配置（`IBufferWriter<byte>` 直写，禁止字符串拼接 + 默认 ILogger） | P0 | 1d | T0.2 |
+| T0.5 | `[x]` | `MesDbContext` + `UlidToGuidConverter`（`ValueConverter<Ulid, Guid>`）+ EF Core DI 注册 | P0 | 2d | T0.2 |
+| T0.6 | `[x]` | 首次 EF Core Migration（`production_orders` / `traceability_links` 核心表 DDL，对齐 TAD v2；索引 idx_orders_status、idx_trace_vin/component/material） | P0 | 1d | T0.5 |
+| T0.7 | `[x]` | MemoryPack 全局配置 + `[MemoryPackable] public partial class` 基础模型约定 | P0 | 1d | T0.2 |
+| T0.8 | `[x]` | JWT 认证 + 6 角色 RBAC（生产经理/班组长/质量工程师/设备工程师/仓库员/SQE） | P0 | 2d | T0.5 |
+| T0.9 | `[x]` | MudBlazor 双主题（暗 `#CBA6F7` / 亮 `#8F6AAF`）+ `glass-kpi-card`/`andon-pulse`/`status-dot`/`grad-border` CSS + MainLayout/NavMenu + Inter Tight 字体 + 12px 圆角 | P0 | 2d | T0.2 |
 
 ---
 

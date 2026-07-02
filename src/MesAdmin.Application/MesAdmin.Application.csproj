@@ -6,6 +6,9 @@
 
   <ItemGroup>
     <PackageReference Include="Cleipnir.ResilientFunctions" Version="4.2.5" />
+    <PackageReference Include="FastEndpoints.Messaging" Version="8.2.0" />
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+    <PackageReference Include="ZLogger" Version="2.5.10" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -14,5 +17,9 @@
     <Nullable>enable</Nullable>
       <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MesAdmin.Application.Tests" />
+  </ItemGroup>
 
 </Project>
