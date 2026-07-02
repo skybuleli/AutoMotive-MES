@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\MesAdmin.Application\MesAdmin.Application.csproj" />
     <ProjectReference Include="..\..\src\MesAdmin.Domain\MesAdmin.Domain.csproj" />
+    <ProjectReference Include="..\..\src\MesAdmin.Infrastructure\MesAdmin.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
