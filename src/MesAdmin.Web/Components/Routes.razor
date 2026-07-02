@@ -1,11 +1,19 @@
 ﻿<CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
         <Found Context="routeData">
-            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
-                <NotAuthorized>
-                    <NotAuthorizedContent />
-                </NotAuthorized>
-            </AuthorizeRouteView>
+            @* Login 页面无需认证，直接渲染，避免无限重定向 *@
+            @if (routeData.PageType == typeof(Pages.Login))
+            {
+                <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+            }
+            else
+            {
+                <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                    <NotAuthorized>
+                        <NotAuthorizedContent />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+            }
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>
     </Router>
