@@ -16,7 +16,7 @@ internal sealed class CompleteInspectionHandler(
 {
     public async Task<FirstArticleInspection> ExecuteAsync(CompleteInspectionCommand cmd, CancellationToken ct)
     {
-        var inspection = await repo.GetByIdAsync(cmd.InspectionId, ct)
+        var inspection = await repo.GetByIdTrackedAsync(cmd.InspectionId, ct)
             ?? throw new KeyNotFoundException($"首件检验 {cmd.InspectionId} 不存在");
 
         // 状态机修复：Complete 要求 InProgress，Pending 时先启动
@@ -25,7 +25,6 @@ internal sealed class CompleteInspectionHandler(
 
         var allPassed = inspection.IsAllItemsPassed;
         inspection.Complete(cmd.InspectorId, allPassed);
-        repo.Update(inspection);
         await repo.SaveChangesAsync(ct);
         return inspection;
     }

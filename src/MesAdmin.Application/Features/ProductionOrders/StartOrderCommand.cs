@@ -30,7 +30,7 @@ internal sealed class StartOrderHandler(
         // WaitForAll：确保 Saga 完成 Released→InProgress 转移后再返回
         await eventBus.PublishAsync(new OrderStartedEvent(order.Id, order.OrderNumber), Mode.WaitForAll, ct);
 
-        // 重新读取以反映 Saga 内部的状态变更
+        // 重新读取以反映 Saga 内部的状态变更（AsNoTracking，纯读）
         return await orders.GetByIdAsync(cmd.OrderId, ct)
             ?? throw new InvalidOperationException($"工单 {cmd.OrderId} 不存在");
     }

@@ -19,9 +19,19 @@ public class WorkOrderOperationRepository(MesDbContext db) : IWorkOrderOperation
             .AsNoTracking()
             .FirstOrDefaultAsync(o => o.OrderId == orderId && o.Sequence == sequence, ct);
 
+    public Task<WorkOrderOperation?> GetByOrderAndSequenceTrackedAsync(Ulid orderId, int sequence, CancellationToken ct = default)
+        => db.WorkOrderOperations
+            .FirstOrDefaultAsync(o => o.OrderId == orderId && o.Sequence == sequence, ct);
+
     public Task<List<WorkOrderOperation>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default)
         => db.WorkOrderOperations
             .AsNoTracking()
+            .Where(o => o.OrderId == orderId)
+            .OrderBy(o => o.Sequence)
+            .ToListAsync(ct);
+
+    public Task<List<WorkOrderOperation>> GetByOrderIdTrackedAsync(Ulid orderId, CancellationToken ct = default)
+        => db.WorkOrderOperations
             .Where(o => o.OrderId == orderId)
             .OrderBy(o => o.Sequence)
             .ToListAsync(ct);

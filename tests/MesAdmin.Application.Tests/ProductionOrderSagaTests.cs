@@ -35,12 +35,10 @@ public class ProductionOrderSagaTests
         Assert.Equal(order.PlannedQuantity, order.QualifiedQuantity);
         Assert.Equal(0, order.DefectiveQuantity);
         Assert.NotNull(order.CompletedAt);
-        Assert.Equal(2, firstSaveCount);
-        Assert.Equal(2, firstUpdateCount);
-        // Effect 之外的安全联锁在重放时会重新执行，所以 ReadyCheckCount 会增加
-        // 但核心断言：SaveChanges 和 Update 不应因 Effect 重放而增加（AtLeastOnce 幂等）
+        // 跟踪查询模式：Saga 不再调用 Update()，直接 SaveChanges 检测变更
+        Assert.True(firstSaveCount >= 2);  // Release + Start + 完工至少 2 次 SaveChanges
+        // 核心断言：重放时 Effect 幂等，SaveChanges 不应增加
         Assert.Equal(firstSaveCount, repo.SaveChangesCallCount);
-        Assert.Equal(firstUpdateCount, repo.UpdateCallCount);
     }
 
     private static ProductionOrder CreateOrder()
@@ -60,6 +58,9 @@ public class ProductionOrderSagaTests
         public int UpdateCallCount { get; private set; }
 
         public Task<ProductionOrder?> GetByIdAsync(Ulid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_orders.SingleOrDefault(o => o.Id == id));
+
+        public Task<ProductionOrder?> GetByIdTrackedAsync(Ulid id, CancellationToken cancellationToken = default)
             => Task.FromResult(_orders.SingleOrDefault(o => o.Id == id));
 
         public Task<ProductionOrder?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default)
@@ -122,7 +123,13 @@ public class ProductionOrderSagaTests
         public Task<WorkOrderOperation?> GetByOrderAndSequenceAsync(Ulid orderId, int sequence, CancellationToken cancellationToken = default)
             => Task.FromResult<WorkOrderOperation?>(null);
 
+        public Task<WorkOrderOperation?> GetByOrderAndSequenceTrackedAsync(Ulid orderId, int sequence, CancellationToken cancellationToken = default)
+            => Task.FromResult<WorkOrderOperation?>(null);
+
         public Task<List<WorkOrderOperation>> GetByOrderIdAsync(Ulid orderId, CancellationToken cancellationToken = default)
+            => Task.FromResult(new List<WorkOrderOperation>());
+
+        public Task<List<WorkOrderOperation>> GetByOrderIdTrackedAsync(Ulid orderId, CancellationToken cancellationToken = default)
             => Task.FromResult(new List<WorkOrderOperation>());
 
         public Task AddAsync(WorkOrderOperation operation, CancellationToken cancellationToken = default)

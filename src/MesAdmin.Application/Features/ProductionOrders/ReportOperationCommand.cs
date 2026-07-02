@@ -19,7 +19,7 @@ internal sealed class ReportOperationHandler(
 {
     public async Task<WorkOrderOperation> ExecuteAsync(ReportOperationCommand cmd, CancellationToken ct)
     {
-        var op = await operationRepo.GetByOrderAndSequenceAsync(cmd.OrderId, cmd.Sequence, ct)
+        var op = await operationRepo.GetByOrderAndSequenceTrackedAsync(cmd.OrderId, cmd.Sequence, ct)
             ?? throw new KeyNotFoundException($"工单 {cmd.OrderId} 工序 {cmd.Sequence} 不存在");
 
         var now = DateTimeOffset.UtcNow;
@@ -28,7 +28,6 @@ internal sealed class ReportOperationHandler(
             op.Parameters.AddRange(cmd.Parameters);
         op.Complete(now);
 
-        operationRepo.Update(op);
         await operationRepo.SaveChangesAsync(ct);
         return op;
     }

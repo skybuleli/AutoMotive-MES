@@ -14,6 +14,10 @@ public class ProductionOrderRepository(MesDbContext db) : IProductionOrderReposi
             .AsNoTracking()
             .FirstOrDefaultAsync(order => order.Id == id, ct);
 
+    public Task<ProductionOrder?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default)
+        => db.ProductionOrders
+            .FirstOrDefaultAsync(order => order.Id == id, ct);
+
     public Task<ProductionOrder?> GetByOrderNumberAsync(string orderNumber, CancellationToken ct = default)
         => db.ProductionOrders
             .AsNoTracking()

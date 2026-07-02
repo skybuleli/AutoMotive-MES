@@ -8,7 +8,10 @@ namespace MesAdmin.Application.Interfaces;
 /// </summary>
 public interface IProductionOrderRepository
 {
+    /// <summary>查询工单（AsNoTracking，适用于读操作）。</summary>
     Task<ProductionOrder?> GetByIdAsync(Ulid id, CancellationToken cancellationToken = default);
+    /// <summary>查询工单（跟踪，适用于写操作——修改属性后直接 SaveChangesAsync 即可，无需 Update）。</summary>
+    Task<ProductionOrder?> GetByIdTrackedAsync(Ulid id, CancellationToken cancellationToken = default);
     Task<ProductionOrder?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default);
     Task<List<ProductionOrder>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<List<ProductionOrder>> GetPageAsync(OrderStatus? status, int skip, int take, CancellationToken cancellationToken = default);

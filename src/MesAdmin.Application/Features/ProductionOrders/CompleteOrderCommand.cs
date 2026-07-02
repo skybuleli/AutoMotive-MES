@@ -17,11 +17,10 @@ internal sealed class CompleteOrderHandler(
 {
     public async Task<ProductionOrder> ExecuteAsync(CompleteOrderCommand cmd, CancellationToken ct)
     {
-        var order = await orders.GetByIdAsync(cmd.OrderId, ct)
+        var order = await orders.GetByIdTrackedAsync(cmd.OrderId, ct)
             ?? throw new KeyNotFoundException($"工单 {cmd.OrderId} 不存在");
 
         order.Complete(cmd.QualifiedQuantity, cmd.DefectiveQuantity, DateTimeOffset.UtcNow);
-        orders.Update(order);
         await orders.SaveChangesAsync(ct);
         return order;
     }

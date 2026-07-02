@@ -14,11 +14,10 @@ internal sealed class ReleaseOrderHandler(
 {
     public async Task<ProductionOrder> ExecuteAsync(ReleaseOrderCommand cmd, CancellationToken ct)
     {
-        var order = await orders.GetByIdAsync(cmd.OrderId, ct)
+        var order = await orders.GetByIdTrackedAsync(cmd.OrderId, ct)
             ?? throw new KeyNotFoundException($"工单 {cmd.OrderId} 不存在");
 
         order.Release();
-        orders.Update(order);
         await orders.SaveChangesAsync(ct);
         return order;
     }

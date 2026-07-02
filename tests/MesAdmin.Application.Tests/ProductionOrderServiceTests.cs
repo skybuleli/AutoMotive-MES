@@ -53,7 +53,8 @@ public class ProductionOrderCommandHandlerTests
         var released = await handler.ExecuteAsync(new ReleaseOrderCommand(order.Id), default);
 
         Assert.Equal(OrderStatus.Released, released.Status);
-        Assert.Equal(1, repo.UpdateCallCount);
+        // 跟踪查询模式：不再调用 Update()，SaveChanges 自动检测变更
+        Assert.Equal(0, repo.UpdateCallCount);
         Assert.Equal(1, repo.SaveChangesCallCount);
     }
 
@@ -150,6 +151,9 @@ public class ProductionOrderCommandHandlerTests
         public Task<ProductionOrder?> GetByIdAsync(Ulid id, CancellationToken cancellationToken = default)
             => Task.FromResult(StoredOrders.SingleOrDefault(order => order.Id == id));
 
+        public Task<ProductionOrder?> GetByIdTrackedAsync(Ulid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(StoredOrders.SingleOrDefault(order => order.Id == id));
+
         public Task<ProductionOrder?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default)
             => Task.FromResult(StoredOrders.SingleOrDefault(order => order.OrderNumber == orderNumber));
 
@@ -198,7 +202,13 @@ public class ProductionOrderCommandHandlerTests
         public Task<WorkOrderOperation?> GetByOrderAndSequenceAsync(Ulid orderId, int sequence, CancellationToken ct = default)
             => Task.FromResult(StoredOperations.SingleOrDefault(o => o.OrderId == orderId && o.Sequence == sequence));
 
+        public Task<WorkOrderOperation?> GetByOrderAndSequenceTrackedAsync(Ulid orderId, int sequence, CancellationToken ct = default)
+            => Task.FromResult(StoredOperations.SingleOrDefault(o => o.OrderId == orderId && o.Sequence == sequence));
+
         public Task<List<WorkOrderOperation>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default)
+            => Task.FromResult(StoredOperations.Where(o => o.OrderId == orderId).OrderBy(o => o.Sequence).ToList());
+
+        public Task<List<WorkOrderOperation>> GetByOrderIdTrackedAsync(Ulid orderId, CancellationToken ct = default)
             => Task.FromResult(StoredOperations.Where(o => o.OrderId == orderId).OrderBy(o => o.Sequence).ToList());
 
         public Task AddAsync(WorkOrderOperation operation, CancellationToken ct = default)

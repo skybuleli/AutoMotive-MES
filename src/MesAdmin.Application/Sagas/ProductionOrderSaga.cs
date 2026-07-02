@@ -56,21 +56,19 @@ public class ProductionOrderSaga(
         if (!await plc.IsReadyAsync("Station-1"))
             throw new SafetyInterlockException("站1 上料设备未就绪，安全联锁触发");
 
-        // Saga 拥有完整状态机控制权：从 DB 读取最新状态，推进 Created→Released→InProgress
-        var currentOrder = await orderRepo.GetByIdAsync(orderId)
+        // Saga 拥有完整状态机控制权：从 DB 读取最新状态（跟踪），推进 Created→Released→InProgress
+        var currentOrder = await orderRepo.GetByIdTrackedAsync(orderId)
             ?? throw new InvalidOperationException($"工单 {orderId} 不存在");
 
         if (currentOrder.Status == OrderStatus.Created)
         {
             currentOrder.Release();
-            orderRepo.Update(currentOrder);
             await orderRepo.SaveChangesAsync();
         }
 
         if (currentOrder.Status == OrderStatus.Released)
         {
             currentOrder.Start();
-            orderRepo.Update(currentOrder);
             await orderRepo.SaveChangesAsync();
             state.CurrentStation = 2;
             await state.Save();
@@ -176,12 +174,11 @@ public class ProductionOrderSaga(
         // ── 工单完工：AtLeastOnce（重放时以状态机幂等保护）──
         await workflow.Effect.Capture($"complete-order-{orderId}", async () =>
         {
-            var finalOrder = await orderRepo.GetByIdAsync(orderId);
+            var finalOrder = await orderRepo.GetByIdTrackedAsync(orderId);
             if (finalOrder?.Status != OrderStatus.InProgress)
                 return; // 幂等：已完工或已关闭则跳过
 
             finalOrder.Complete(finalOrder.PlannedQuantity, 0, DateTimeOffset.UtcNow);
-            orderRepo.Update(finalOrder);
             await orderRepo.SaveChangesAsync();
         }, ResiliencyLevel.AtLeastOnce);
     }
@@ -205,10 +202,10 @@ public class ProductionOrderSaga(
         return await IsOperationCompleted(orderId, lastSeq);
     }
 
-    /// <summary>完成单道工序：读取→启动→完工→保存</summary>
+    /// <summary>完成单道工序：读取（跟踪）→启动→完工→保存</summary>
     private async Task CompleteOperation(Ulid orderId, int sequence, string operatorId, string equipmentId)
     {
-        var op = await operationRepo.GetByOrderAndSequenceAsync(orderId, sequence);
+        var op = await operationRepo.GetByOrderAndSequenceTrackedAsync(orderId, sequence);
         if (op is null || op.Status == OperationStatus.Completed)
             return;
 
@@ -216,21 +213,19 @@ public class ProductionOrderSaga(
         if (op.Status == OperationStatus.Pending)
             op.Start(operatorId, equipmentId, now);
         op.Complete(now);
-        operationRepo.Update(op);
         await operationRepo.SaveChangesAsync();
     }
 
-    /// <summary>完成一个范围内的所有工序（同一工站）</summary>
+    /// <summary>完成一个范围内的所有工序（同一工站，跟踪查询）</summary>
     private async Task CompleteOperationRange(Ulid orderId, int fromSeq, int toSeq, string operatorId, string equipmentId)
     {
-        var ops = await operationRepo.GetByOrderIdAsync(orderId);
+        var ops = await operationRepo.GetByOrderIdTrackedAsync(orderId);
         var now = DateTimeOffset.UtcNow;
 
         foreach (var op in ops.Where(o => o.Sequence >= fromSeq && o.Sequence <= toSeq && o.Status == OperationStatus.Pending))
         {
             op.Start(operatorId, equipmentId, now);
             op.Complete(now);
-            operationRepo.Update(op);
         }
 
         await operationRepo.SaveChangesAsync();

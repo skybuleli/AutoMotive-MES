@@ -11,6 +11,10 @@ public class FirstArticleInspectionRepository(MesDbContext db) : IFirstArticleIn
             .AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == id, ct);
 
+    public Task<FirstArticleInspection?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default)
+        => db.FirstArticleInspections
+            .FirstOrDefaultAsync(f => f.Id == id, ct);
+
     public Task<List<FirstArticleInspection>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default)
         => db.FirstArticleInspections
             .AsNoTracking()
