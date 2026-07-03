@@ -22,6 +22,19 @@ public record ChangeStatusBody(string Status);
 public record CompleteOrderBody(int QualifiedQuantity, int DefectiveQuantity);
 public record ReportOperationBody(string OperatorId, string EquipmentId);
 
+public record TraceabilityLinkDto(
+    string Id,
+    int Level,
+    string LevelName,
+    string VinOrSerial,
+    string OrderId,
+    string ComponentBatch,
+    string MaterialBatch,
+    string PreviousHash,
+    string Hash,
+    DateTimeOffset CreatedAt,
+    bool HashVerified);
+
 /// <summary>工单状态枚举字符串（与 API 端 OrderStatus.ToString() 一致）</summary>
 public static class OrderStatusNames
 {

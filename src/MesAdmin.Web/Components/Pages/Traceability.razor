@@ -1,0 +1,228 @@
+@page "/traceability"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+
+<PageTitle>全链路追溯 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="traceability-page">
+    <MudPaper Class="trace-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">M04 · Traceability</MudText>
+                <MudText Typo="Typo.h4">全链路追溯</MudText>
+            </MudStack>
+            <MudChip T="string" Color="@(_hashBroken ? Color.Error : Color.Success)" Variant="Variant.Filled" Size="Size.Small">
+                @(_hashBroken ? "哈希异常" : "哈希链正常")
+            </MudChip>
+        </MudStack>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" lg="4">
+            <MudPaper Class="module-card pa-5">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.h6">查询条件</MudText>
+                    <MudSelect T="string" Label="查询方向" Variant="Variant.Outlined" Dense @bind-Value="_direction">
+                        <MudSelectItem Value="@("forward")">正向：VIN / 总成 S/N</MudSelectItem>
+                        <MudSelectItem Value="@("component")">反向：零部件批次</MudSelectItem>
+                        <MudSelectItem Value="@("material")">反向：原材料批次</MudSelectItem>
+                    </MudSelect>
+                    <MudTextField @bind-Value="_query" Label="@QueryLabel" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Immediate OnKeyDown="OnQueryKeyDown" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth Disabled="@_busy" OnClick="SearchAsync">
+                        查询
+                    </MudButton>
+                    <a class="trace-export mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-filled-size-large @(HasResults ? string.Empty : "disabled")"
+                       href="@CsvHref" download="@ExportFileName">
+                        导出 Excel CSV
+                    </a>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="8">
+            <MudPaper Class="module-card trace-list-card pa-5">
+                <MudStack Spacing="3">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h6">追溯链</MudText>
+                            <MudText Typo="Typo.caption" Class="section-copy">@ResultSummary</MudText>
+                        </MudStack>
+                        <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Size="Size.Small">共 @_links.Count 条</MudChip>
+                    </MudStack>
+
+                    <div class="trace-chain">
+                        @if (!HasResults)
+                        {
+                            <MudText Typo="Typo.body2" Class="empty-copy">输入 VIN、总成序列号或批次号后查询。</MudText>
+                        }
+                        else
+                        {
+                            @foreach (var link in _links.OrderBy(l => l.Level).ThenBy(l => l.CreatedAt))
+                            {
+                                <div class="trace-node">
+                                    <div class="trace-level">L@link.Level</div>
+                                    <div class="trace-node-body">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="1">
+                                            <MudText Typo="Typo.subtitle2">@GetLevelLabel(link)</MudText>
+                                            <MudChip T="string" Color="@(link.HashVerified ? Color.Success : Color.Error)" Variant="Variant.Filled" Size="Size.Small">
+                                                @(link.HashVerified ? "Hash OK" : "Hash NG")
+                                            </MudChip>
+                                        </MudStack>
+                                        <MudGrid Spacing="2" Class="mt-1">
+                                            <MudItem xs="12" sm="6"><div class="detail-item"><span>VIN / S/N</span><strong>@link.VinOrSerial</strong></div></MudItem>
+                                            <MudItem xs="12" sm="6"><div class="detail-item"><span>工单</span><strong>@link.OrderId</strong></div></MudItem>
+                                            <MudItem xs="12" sm="6"><div class="detail-item"><span>零部件批次</span><strong>@Blank(link.ComponentBatch)</strong></div></MudItem>
+                                            <MudItem xs="12" sm="6"><div class="detail-item"><span>原材料批次</span><strong>@Blank(link.MaterialBatch)</strong></div></MudItem>
+                                        </MudGrid>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="module-card pa-5">
+        <MudTable T="TraceabilityLinkDto" Dense Hover Breakpoint="Breakpoint.Sm" Items="@_links" Class="trace-table">
+            <HeaderContent>
+                <MudTh>层级</MudTh>
+                <MudTh>VIN / S/N</MudTh>
+                <MudTh>零部件批次</MudTh>
+                <MudTh>原材料批次</MudTh>
+                <MudTh>时间</MudTh>
+                <MudTh>哈希</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="层级">L@context.Level · @GetLevelLabel(context)</MudTd>
+                <MudTd DataLabel="VIN / S/N">@context.VinOrSerial</MudTd>
+                <MudTd DataLabel="零部件批次">@Blank(context.ComponentBatch)</MudTd>
+                <MudTd DataLabel="原材料批次">@Blank(context.MaterialBatch)</MudTd>
+                <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudTd>
+                <MudTd DataLabel="哈希">
+                    <MudChip T="string" Color="@(context.HashVerified ? Color.Success : Color.Error)" Variant="Variant.Outlined" Size="Size.Small">
+                        @(context.HashVerified ? "OK" : "NG")
+                    </MudChip>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Class="empty-copy">暂无追溯记录。</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private readonly List<TraceabilityLinkDto> _links = [];
+    private string _direction = "forward";
+    private string _query = string.Empty;
+    private string _message = string.Empty;
+    private bool _isError;
+    private bool _busy;
+    private bool _hashBroken;
+
+    private bool HasResults => _links.Count > 0;
+    private string QueryLabel => _direction switch
+    {
+        "component" => "零部件批次",
+        "material" => "原材料批次",
+        _ => "VIN / ESP 总成 S/N"
+    };
+    private string ResultSummary => HasResults ? $"{_query} · {(_hashBroken ? "存在哈希异常" : "哈希验证通过")}" : "正向/反向查询共用后端追溯索引";
+    private string ExportFileName => $"traceability-{DateTimeOffset.Now:yyyyMMddHHmmss}.csv";
+    private string CsvHref => HasResults
+        ? "data:text/csv;charset=utf-8,%EF%BB%BF" + Uri.EscapeDataString(BuildCsv())
+        : "#";
+
+    private async Task SearchAsync()
+    {
+        var query = _query.Trim();
+        if (query.Length == 0)
+        {
+            _message = $"{QueryLabel}不能为空";
+            _isError = true;
+            return;
+        }
+
+        try
+        {
+            _busy = true;
+            _message = string.Empty;
+            var data = _direction switch
+            {
+                "component" => await Api.GetReverseTraceAsync("Component", query),
+                "material" => await Api.GetReverseTraceAsync("Material", query),
+                _ => await Api.GetForwardTraceAsync(query)
+            };
+
+            _links.Clear();
+            _links.AddRange(data ?? []);
+            _hashBroken = _links.Any(l => !l.HashVerified);
+            _message = HasResults ? $"找到 {_links.Count} 条追溯记录" : "未找到追溯记录";
+            _isError = false;
+        }
+        catch (Exception ex)
+        {
+            _links.Clear();
+            _hashBroken = false;
+            _message = $"查询失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnQueryKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await SearchAsync();
+    }
+
+    private static string GetLevelLabel(TraceabilityLinkDto link) => link.Level switch
+    {
+        1 => "车辆 VIN",
+        2 => "ESP 总成",
+        3 => "零部件",
+        4 => "原材料",
+        _ => link.LevelName
+    };
+
+    private static string Blank(string value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string BuildCsv()
+    {
+        var csv = new StringBuilder();
+        csv.AppendLine("Level,LevelName,VinOrSerial,OrderId,ComponentBatch,MaterialBatch,CreatedAt,HashVerified,Hash");
+        foreach (var link in _links)
+        {
+            csv.Append(link.Level).Append(',')
+                .Append(Csv(GetLevelLabel(link))).Append(',')
+                .Append(Csv(link.VinOrSerial)).Append(',')
+                .Append(Csv(link.OrderId)).Append(',')
+                .Append(Csv(link.ComponentBatch)).Append(',')
+                .Append(Csv(link.MaterialBatch)).Append(',')
+                .Append(Csv(link.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"))).Append(',')
+                .Append(link.HashVerified ? "OK" : "NG").Append(',')
+                .Append(Csv(link.Hash))
+                .AppendLine();
+        }
+        return csv.ToString();
+    }
+
+    private static string Csv(string value)
+        => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
+}

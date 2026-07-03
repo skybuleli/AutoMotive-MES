@@ -81,6 +81,12 @@ public class MesApiClient
         return (resp.IsSuccessStatusCode, (int)resp.StatusCode);
     }
 
+    public Task<List<TraceabilityLinkDto>?> GetForwardTraceAsync(string vinOrSerial, CancellationToken ct = default)
+        => GetAsync<List<TraceabilityLinkDto>>($"api/v1/traceability/forward/{Uri.EscapeDataString(vinOrSerial)}", ct);
+
+    public Task<List<TraceabilityLinkDto>?> GetReverseTraceAsync(string batchType, string batch, CancellationToken ct = default)
+        => GetAsync<List<TraceabilityLinkDto>>($"api/v1/traceability/reverse/{Uri.EscapeDataString(batchType)}/{Uri.EscapeDataString(batch)}", ct);
+
     private async Task AttachTokenAsync(HttpRequestMessage req)
     {
         try

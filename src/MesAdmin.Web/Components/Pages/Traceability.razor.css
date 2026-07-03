@@ -1,0 +1,123 @@
+.traceability-page {
+    color: var(--mud-palette-text-primary);
+}
+
+.trace-toolbar {
+    background: rgba(30, 30, 46, 0.96);
+    border: 1px solid rgba(203, 166, 247, 0.16);
+    border-radius: 18px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+.section-kicker {
+    color: #cba6f7;
+    letter-spacing: 0.12em;
+}
+
+.section-copy,
+.empty-copy {
+    color: var(--mud-palette-text-secondary);
+}
+
+.module-card {
+    height: 100%;
+    background: rgba(30, 30, 46, 0.94);
+    border: 1px solid rgba(69, 71, 90, 0.9);
+    border-radius: 18px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+}
+
+.trace-list-card {
+    min-height: 520px;
+}
+
+.trace-chain {
+    display: grid;
+    gap: 0.9rem;
+}
+
+.trace-node {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: start;
+}
+
+.trace-level {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border: 1px solid rgba(203, 166, 247, 0.45);
+    border-radius: 50%;
+    background: rgba(203, 166, 247, 0.14);
+    color: #cba6f7;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.trace-node-body,
+.detail-item {
+    background: rgba(17, 17, 27, 0.52);
+    border: 1px solid rgba(69, 71, 90, 0.8);
+    border-radius: 12px;
+}
+
+.trace-node-body {
+    padding: 0.95rem;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 100%;
+    padding: 0.75rem 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.detail-item span {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.76rem;
+}
+
+.detail-item strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.trace-table {
+    overflow: hidden;
+    border: 1px solid rgba(69, 71, 90, 0.75);
+    border-radius: 12px;
+}
+
+.trace-table .mud-table-cell {
+    font-variant-numeric: tabular-nums;
+}
+
+.trace-export {
+    justify-content: center;
+    text-decoration: none;
+}
+
+.trace-export.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+@media (max-width: 960px) {
+    .trace-toolbar,
+    .module-card {
+        border-radius: 14px;
+    }
+
+    .trace-node {
+        grid-template-columns: 40px minmax(0, 1fr);
+    }
+
+    .trace-level {
+        width: 40px;
+        height: 40px;
+    }
+}
