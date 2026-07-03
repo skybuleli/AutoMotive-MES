@@ -2,7 +2,7 @@
 
 > **项目：** 博世 ESP® 制动系统 MES（汽车 Tier-1 供应商制造执行系统）
 > **来源：** PRD v2（`automotive-mes-prd-v2.html`）+ TAD v2（`automotive-mes-tad-v2.html`）+ AGENTS.md 宪法
-> **当前状态：** 规格已就绪，代码从零开始（0 行实现）
+> **当前状态：** 阶段 0 完成，阶段 1 进行中（M01 工单基本成型，M02/M04 待补齐）
 > **路线图：** PRD v2 的 28 周 4 阶段，本清单为细粒度可执行分解
 
 ---
@@ -79,16 +79,16 @@
 
 | ID | 状态 | 任务 | 优先级 | 工时 | 依赖 |
 |----|------|------|--------|------|------|
-| T1.1 | `[ ]` | `ProductionOrder` 领域模型 + MemoryPack + Ulid 主键 + 状态机（`Created→Released→InProgress→Completed→Closed`） | P0 | 2d | T0.7 |
-| T1.2 | `[ ]` | 工单 CRUD Repository + Application 层 `IMesDbContext` 接口 | P0 | 2d | T1.1 |
-| T1.3 | `[ ]` | 工单创建与校验（SAP Webhook 接收、产品编码 ESP-9.0/9.1 + BOM 版本 + 工艺路线版本校验、`Ulid.NewUlid()` + 工单号 `WO-YYYYMMDD-NNNN` 生成、版本不符拒单回写 SAP） | P0 | 3d | T1.2 |
+| T1.1 | `[x]` | `ProductionOrder` 领域模型 + MemoryPack + Ulid 主键 + 状态机（`Created→Released→InProgress→Completed→Closed`） | P0 | 2d | T0.7 |
+| T1.2 | `[x]` | 工单 CRUD Repository + Application 层 `IMesDbContext` 接口 | P0 | 2d | T1.1 |
+| T1.3 | `[~]` | 工单创建与校验（SAP Webhook 接收、产品编码 ESP-9.0/9.1 + BOM 版本 + 工艺路线版本校验、`Ulid.NewUlid()` + 工单号 `WO-YYYYMMDD-NNNN` 生成、版本不符拒单回写 SAP） | P0 | 3d | T1.2 |
 | T1.4 | `[ ]` | 物料齐套检查（BOM 展开、线边 + ERP 库存查询、ECU/HCU/电机批次是否足 500 件、缺料触发 JIT 拉动、齐套通过转 `Released`） | P0 | 3d | T1.3 |
-| T1.5 | `[ ]` | 首件检验流程（每班次/换型后强制、控制计划逐项检验、自动判定合格/不合格、不合格锁定工单触发 CAR） | P0 | 2d | T1.4 |
-| T1.6 | `[ ]` | **Cleipnir `ProductionOrderSaga` 骨架**：31 工序 × 7 站编排、`Cleipnir.ResilientFunctions.PostgreSQL` 状态持久化、Checkpoint、Effect 策略矩阵（站1 Effect 外/站2-5,7 AtLeastOnce/站6 AtMostOnce） | P0 | 3d | T1.2 |
-| T1.7 | `[ ]` | 工序执行监控（每工序记录操作员工号/设备号/开始结束时间/过程参数、异常触发 Andon、Saga 按工艺路线依次执行） | P0 | 3d | T1.6 |
-| T1.8 | `[ ]` | 完工确认（31 工序完成统计合格/不良数）+ 质量工程师审核放行 + 成品入库（追溯标签打印含二维码、编码规则、SAP 同步完工数量、转 `Closed`） | P0 | 3d | T1.7 |
-| T1.9 | `[ ]` | 工单管理 Web 页面（`MudTable<ProductionOrder>` 列表/详情、状态流转看板、ObservableCollections 增量绑定） | P0 | 3d | T1.8 |
-| T1.10 | `[ ]` | 工单 REST API（Avalonia 工位终端用、JSON 默认 + `Accept: application/x-memorypack` 二进制双协议） | P0 | 2d | T1.8 |
+| T1.5 | `[~]` | 首件检验流程（每班次/换型后强制、控制计划逐项检验、自动判定合格/不合格、不合格锁定工单触发 CAR） | P0 | 2d | T1.4 |
+| T1.6 | `[x]` | **Cleipnir `ProductionOrderSaga` 骨架**：31 工序 × 7 站编排、`Cleipnir.ResilientFunctions.PostgreSQL` 状态持久化、Checkpoint、Effect 策略矩阵（站1 Effect 外/站2-5,7 AtLeastOnce/站6 AtMostOnce） | P0 | 3d | T1.2 |
+| T1.7 | `[~]` | 工序执行监控（每工序记录操作员工号/设备号/开始结束时间/过程参数、异常触发 Andon、Saga 按工艺路线依次执行） | P0 | 3d | T1.6 |
+| T1.8 | `[~]` | 完工确认（31 工序完成统计合格/不良数）+ 质量工程师审核放行 + 成品入库（追溯标签打印含二维码、编码规则、SAP 同步完工数量、转 `Closed`） | P0 | 3d | T1.7 |
+| T1.9 | `[x]` | 工单管理 Web 页面（`MudTable<ProductionOrder>` 列表/详情、状态流转看板、ObservableCollections 增量绑定） | P0 | 3d | T1.8 |
+| T1.10 | `[x]` | 工单 REST API（Avalonia 工位终端用、JSON 默认 + `Accept: application/x-memorypack` 二进制双协议） | P0 | 2d | T1.8 |
 
 ### M02 物料管理 JIT/JIS（P0）
 
