@@ -29,6 +29,7 @@ public static class RealtimePipelineSetup
         var readIntervalMs = plcSection.GetValue("ReadIntervalMs", 10);
 
         // PLC 客户端 + 模拟传输（单例，共享 PipeReader）
+        services.AddSingleton(Equipment.DefaultEquipment);
         services.AddSingleton<OpcUaPlcClient>();
         services.AddSingleton<IPlcClient>(sp => sp.GetRequiredService<OpcUaPlcClient>());
 

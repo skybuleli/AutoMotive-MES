@@ -26,6 +26,7 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
     private CancellationTokenSource? _cts;
     private Task? _producerTask;
     private Task? _consumerTask;
+    private bool _stopped;
 
     /// <summary>PLC 数据流（R3 Observable），供 OeeReactivePipeline 订阅</summary>
     public Observable<PlcSnapshot> PlcStream => _plcStream;
@@ -116,8 +117,12 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        if (_stopped)
+            return;
+
+        _stopped = true;
         _cts?.Cancel();
-        _channel.Writer.TryComplete();
+        _channel?.Writer.TryComplete();
 
         if (_producerTask is not null)
         {
@@ -137,6 +142,7 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
         await StopAsync(CancellationToken.None);
         _plcStream.Dispose();
         _cts?.Dispose();
+        _cts = null;
     }
 }
 
