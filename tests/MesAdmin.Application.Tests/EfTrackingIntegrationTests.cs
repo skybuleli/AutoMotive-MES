@@ -115,10 +115,11 @@ public class DatabaseFixture : IDisposable
         services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
         Services = services.BuildServiceProvider();
 
-        // 确保 DB schema 存在
+        // 应用所有 migration（含新增 goods_receipts/material_batches 等）。
+        // 同步阻塞：fixture 初始化一次性操作，可接受。
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
-        db.Database.EnsureCreated();
+        db.Database.MigrateAsync().GetAwaiter().GetResult();
     }
 
     public void Dispose() => Services.Dispose();
