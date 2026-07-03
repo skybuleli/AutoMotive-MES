@@ -31,5 +31,9 @@ public interface ITraceabilityLinkRepository
     Task<List<TraceabilityLink>> GetByVinOrSerialAsync(string vinOrSerial, CancellationToken cancellationToken = default);
     Task<List<TraceabilityLink>> GetByComponentBatchAsync(string batch, CancellationToken cancellationToken = default);
     Task<List<TraceabilityLink>> GetByMaterialBatchAsync(string batch, CancellationToken cancellationToken = default);
+    Task<List<TraceabilityLink>> GetByOrderIdAsync(Ulid orderId, CancellationToken cancellationToken = default);
+    /// <summary>获取哈希链最后一条记录（用于写入时链接前驱）</summary>
+    Task<TraceabilityLink?> GetLastLinkAsync(CancellationToken cancellationToken = default);
     Task AddAsync(TraceabilityLink link, CancellationToken cancellationToken = default);
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

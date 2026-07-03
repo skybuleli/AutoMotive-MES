@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using MemoryPack;
 
 namespace MesAdmin.Domain.Models;
@@ -53,4 +55,53 @@ public partial class TraceabilityLink
     public string Hash { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>
+    /// 创建追溯链接并计算哈希链。
+    /// 哈希链：SHA-256(前一条记录哈希 + 本条记录内容)，保证追溯链不可篡改。
+    /// </summary>
+    /// <param name="previousHash">前一条记录的 Hash（链首为空字符串）</param>
+    public static TraceabilityLink Create(
+        Ulid orderId,
+        TraceabilityLevel level,
+        string vinOrSerial,
+        string componentBatch,
+        string materialBatch,
+        string previousHash,
+        DateTimeOffset createdAt)
+    {
+        if (string.IsNullOrWhiteSpace(vinOrSerial))
+            throw new ArgumentException("VIN/序列号不能为空", nameof(vinOrSerial));
+
+        var link = new TraceabilityLink
+        {
+            Id = Ulid.NewUlid(),
+            OrderId = orderId,
+            Level = level,
+            VinOrSerial = vinOrSerial.Trim(),
+            ComponentBatch = componentBatch ?? string.Empty,
+            MaterialBatch = materialBatch ?? string.Empty,
+            PreviousHash = previousHash ?? string.Empty,
+            CreatedAt = createdAt,
+        };
+        link.Hash = link.ComputeHash();
+        return link;
+    }
+
+    /// <summary>
+    /// 计算本条记录的哈希值。
+    /// 输入：PreviousHash + Id + OrderId + Level + VinOrSerial + ComponentBatch + MaterialBatch + CreatedAt。
+    /// 任何字段被篡改都会导致后续所有记录的 Hash 校验失败。
+    /// </summary>
+    public string ComputeHash()
+    {
+        var payload = $"{PreviousHash}|{Id}|{OrderId}|{(int)Level}|{VinOrSerial}|{ComponentBatch}|{MaterialBatch}|{CreatedAt:O}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// 验证哈希链完整性（本条记录内容是否被篡改）。
+    /// </summary>
+    public bool VerifyHash() => Hash == ComputeHash();
 }
