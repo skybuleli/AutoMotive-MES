@@ -137,15 +137,15 @@
 
 | ID | 状态 | 任务 | 优先级 | 工时 | 依赖 |
 |----|------|------|--------|------|------|
-| T2.11 | `[ ]` | 设备领域模型（`Equipment`、8 台核心设备清单、OEE 记录、维护计划、备件） | P1 | 2d | T1.1 |
-| T2.12 | `[ ]` | **`OpcUaPlcClient`**：每 500ms 读设备状态寄存器、`PipeReader`/`PipeWriter` 零拷贝网络 IO（禁止裸 `Stream.ReadAsync`）、`SearchValues<byte>` 帧头 `0x55 0xAA` SIMD 扫描、`ref struct PlcFrameReader`、`ArrayPool<byte>.Shared` 512B 缓冲池 | P0 | 3d | T2.11 |
-| T2.13 | `[ ]` | **`PlcDataAcquisitionPipeline`**：`BoundedChannel<PlcSnapshot>` 容量 10000 + `FullMode = Wait` 背压（禁止 `BlockingCollection`）、8 设备 100Hz 读取循环（`Task.Delay(10)`）、`ReadAllAsync` 喂 R3 管道 | P0 | 2d | T2.12 |
-| T2.14 | `[ ]` | MessagePipe `PlcDataChanged` 发布 + **R3 `OeeReactivePipeline`**（`Sample(5s)` 采样、算可用率/性能率/良品率、订阅推送） | P0 | 2d | T2.13 |
-| T2.15 | `[ ]` | **SignalR `DashboardHub`**：`OeeUpdated` 3s 推送、强制 MemoryPack 二进制（禁止 JSON）、8 设备 OEE 看板实时更新、`ChannelHealth` 10s 通道健康度 | P0 | 2d | T2.14 |
+| T2.11 | `[x]` | 设备领域模型（`Equipment`、8 台核心设备清单、OEE 记录、维护计划、备件） | P1 | 2d | T1.1 |
+| T2.12 | `[x]` | **`OpcUaPlcClient`**：每 500ms 读设备状态寄存器、`PipeReader`/`PipeWriter` 零拷贝网络 IO（禁止裸 `Stream.ReadAsync`）、`SearchValues<byte>` 帧头 `0x55 0xAA` SIMD 扫描、`ref struct PlcFrameReader`、`ArrayPool<byte>.Shared` 512B 缓冲池 | P0 | 3d | T2.11 |
+| T2.13 | `[x]` | **`PlcDataAcquisitionPipeline`**：`BoundedChannel<PlcSnapshot>` 容量 10000 + `FullMode = Wait` 背压（禁止 `BlockingCollection`）、8 设备 100Hz 读取循环（`Task.Delay(10)`）、`ReadAllAsync` 喂 R3 管道 | P0 | 2d | T2.12 |
+| T2.14 | `[x]` | MessagePipe `PlcDataChanged` 发布 + **R3 `OeeReactivePipeline`**（`ThrottleLast(5s)` 采样替代 R3 缺失的 Sample、算可用率/性能率/良品率、stackalloc 零分配计算、订阅推送） | P0 | 2d | T2.13 |
+| T2.15 | `[x]` | **SignalR `DashboardHub`**：`OeeUpdated` 推送、强制 MemoryPack 二进制（自定义 `IHubProtocol`，禁止 JSON）、8 设备 OEE 看板实时更新、`ChannelHealth` 10s 通道健康度 | P0 | 2d | T2.14 |
 | T2.16 | `[ ]` | 多协议驱动（OPC UA 拧紧机 Atlas Copco / Open Protocol、EtherNet/IP 液压台、Modbus TCP 刷写台、Profinet 压装机、OPC UA SMT 线） | P1 | 4d | T2.12 |
 | T2.17 | `[ ]` | 预防性维护（运行时间/次数触发维护工单、拧紧机每 10 万次标定、液压台每月密封件更换） | P1 | 2d | T2.15 |
 | T2.18 | `[ ]` | 备件管理（维护工单关联备件清单、库存检查、不足生成采购申请） | P2 | 2d | T2.17 |
-| T2.19 | `[ ]` | OEE 看板 Web 页面（8 设备 OEE 卡片 `glass-kpi-card`、`status-dot` 发光圆点绿/橙/红、ECharts 趋势、OEE 目标 85%~92%） | P1 | 3d | T2.15 |
+| T2.19 | `[~]` | OEE 看板 Web 页面（8 设备 OEE 卡片 `glass-kpi-card`、`status-dot` 发光圆点绿/橙/红、MudChart 基础趋势、OEE 目标 85%~92%；ECharts 趋势图留专项） | P1 | 3d | T2.15 |
 
 ### M06 Andon 报警（P1）
 

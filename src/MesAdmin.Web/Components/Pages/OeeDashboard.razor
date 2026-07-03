@@ -1,0 +1,148 @@
+@page "/oee"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@using MesAdmin.Domain.Models
+@inject OeeHubClient Hub
+@implements IAsyncDisposable
+
+<PageTitle>设备 OEE - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">M05 · Equipment OEE</MudText>
+                <MudText Typo="Typo.h4">设备综合效率</MudText>
+            </MudStack>
+            @if (Hub.Health is not null)
+            {
+                <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
+                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.caption" Class="section-copy">通道写入</MudText>
+                        <MudText Typo="Typo.subtitle2">@Hub.Health.Written.ToString("N0")</MudText>
+                    </MudStack>
+                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.caption" Class="section-copy">通道读取</MudText>
+                        <MudText Typo="Typo.subtitle2">@Hub.Health.Read.ToString("N0")</MudText>
+                    </MudStack>
+                    <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.caption" Class="section-copy">使用率</MudText>
+                        <MudText Typo="Typo.subtitle2" Color="@(Hub.Health.Utilization > 0.8 ? Color.Warning : Color.Success)">
+                            @(Hub.Health.Utilization.ToString("P1"))
+                        </MudText>
+                    </MudStack>
+                </MudStack>
+            }
+        </MudStack>
+    </MudPaper>
+
+    @if (!string.IsNullOrEmpty(_statusMessage))
+    {
+        <MudAlert Severity="@(_isConnected ? Severity.Success : Severity.Warning)" Variant="Variant.Filled" Dense>
+            @_statusMessage
+        </MudAlert>
+    }
+
+    @if (Hub.LatestOee.Count == 0)
+    {
+        <MudPaper Class="glass-kpi-card pa-8">
+            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="section-copy">等待设备数据采集...</MudText>
+                <MudText Typo="Typo.caption" Class="section-copy">PLC 管道启动后约 5s 开始推送 OEE</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <div class="oee-grid">
+            @foreach (var oee in Hub.LatestOee)
+            {
+                <MudPaper Class="glass-kpi-card">
+                    <MudStack Spacing="2">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                <span class="status-dot @GetStatusClass(oee)"></span>
+                                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@oee.EquipmentCode</MudText>
+                            </MudStack>
+                            <MudChip T="string" Color="@GetGradeColor(oee.Grade)" Size="Size.Small" Variant="Variant.Outlined">
+                                @oee.Grade
+                            </MudChip>
+                        </MudStack>
+
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.caption" Class="kpi-label">OEE</MudText>
+                            <MudText Typo="Typo.h3" Class="@($"kpi-value {GetGradeClass(oee.Grade)}")">
+                                @(oee.Oee.ToString("P1"))
+                            </MudText>
+                        </MudStack>
+
+                        <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Class="kpi-label">可用率</MudText>
+                                <MudText Typo="Typo.body2">@(oee.Availability.ToString("P0"))</MudText>
+                            </MudStack>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Class="kpi-label">性能率</MudText>
+                                <MudText Typo="Typo.body2">@(oee.Performance.ToString("P0"))</MudText>
+                            </MudStack>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Class="kpi-label">良品率</MudText>
+                                <MudText Typo="Typo.body2">@(oee.Quality.ToString("P0"))</MudText>
+                            </MudStack>
+                        </MudStack>
+
+                        <MudText Typo="Typo.caption" Class="kpi-sub">
+                            更新：@oee.Timestamp.ToLocalTime().ToString("HH:mm:ss")
+                        </MudText>
+                    </MudStack>
+                </MudPaper>
+            }
+        </div>
+    }
+</MudStack>
+
+@code {
+    private bool _isConnected;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Hub.StartAsync();
+            _isConnected = true;
+            _statusMessage = "SignalR 已连接，实时接收 OEE 数据";
+            StateHasChanged();
+        }
+    }
+
+    private static string GetStatusClass(OeeRecord oee)
+        => oee.Oee switch
+        {
+            >= 0.85 => "running",
+            >= 0.70 => "idle",
+            > 0 => "alarm",
+            _ => "offline",
+        };
+
+    private static Color GetGradeColor(OeeGrade grade)
+        => grade switch
+        {
+            OeeGrade.S => Color.Success,
+            OeeGrade.A => Color.Warning,
+            _ => Color.Error,
+        };
+
+    private static string GetGradeClass(OeeGrade grade)
+        => grade switch
+        {
+            OeeGrade.S => "oee-grade-s",
+            OeeGrade.A => "oee-grade-a",
+            _ => "oee-grade-b",
+        };
+
+    public async ValueTask DisposeAsync()
+        => await Hub.DisposeAsync();
+}

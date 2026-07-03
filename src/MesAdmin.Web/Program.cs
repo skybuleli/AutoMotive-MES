@@ -26,6 +26,9 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AuthenticationStateProvider, MesAuthenticationStateProvider>();
 builder.Services.AddCascadingAuthenticationState();
 
+// ── OEE SignalR Hub 客户端（T2.19，连接 Api 的 /hubs/dashboard）──
+builder.Services.AddSingleton<OeeHubClient>();
+
 builder.Services.AddHttpClient("MesApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Api:BaseUrl"] ?? "http://localhost:5040/");

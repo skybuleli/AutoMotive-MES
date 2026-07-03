@@ -5,6 +5,11 @@
     <ProjectReference Include="..\MesAdmin.Domain\MesAdmin.Domain.csproj" />
   </ItemGroup>
 
+  <!-- Infrastructure 托管 SignalR Hub / HostedService，需 ASP.NET Core 共享框架 -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Cleipnir.ResilientFunctions.PostgreSQL" Version="4.2.5" />
     <PackageReference Include="MasterMemory" Version="3.0.4" />

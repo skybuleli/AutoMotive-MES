@@ -5,8 +5,10 @@ using MesAdmin.Api.Infrastructure;
 using MesAdmin.Application.Behaviors;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Application.Sagas;
+using MesAdmin.Infrastructure;
 using MesAdmin.Infrastructure.Data;
 using MesAdmin.Infrastructure.Data.Repositories;
+using MesAdmin.Infrastructure.Hubs;
 using MesAdmin.Infrastructure.Logging;
 using MesAdmin.Infrastructure.Plc;
 using MesAdmin.Infrastructure.Workflows;
@@ -35,8 +37,11 @@ builder.Services.AddScoped<ISapRejectionRepository, SapRejectionRepository>();
 builder.Services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
 builder.Services.AddScoped<IMaterialBatchRepository, MaterialBatchRepository>();
 builder.Services.AddScoped<IMaterialBindingRepository, MaterialBindingRepository>();
-builder.Services.AddScoped<IPlcClient, StubPlcClient>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+// ── PLC + R3 OEE + SignalR 实时管道（T2.12-T2.15）──
+// IPlcClient 由 AddRealtimePipeline 内部注册为 OpcUaPlcClient（单例）
+builder.Services.AddRealtimePipeline(builder.Configuration);
 
 // ── Cleipnir Saga 注册（Store + Registry 单例；Action 内部创建 Scope）──
 builder.Services.AddCleipnirSagas(builder.Configuration);
@@ -76,5 +81,8 @@ app.UseFastEndpoints(config =>
 // ── Swagger UI（开发环境）──
 if (app.Environment.IsDevelopment())
     app.UseSwaggerGen();
+
+// ── SignalR DashboardHub 端点（MemoryPack 二进制协议，T2.15）──
+app.MapHub<DashboardHub>("/hubs/dashboard");
 
 app.Run();
