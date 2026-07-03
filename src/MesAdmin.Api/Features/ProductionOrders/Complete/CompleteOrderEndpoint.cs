@@ -14,8 +14,8 @@ public class CompleteOrderEndpoint : MesEndpoint<CompleteOrderRequest, Productio
     {
         Post("/{orderId}/complete");
         Group<ProductionOrderGroup>();
-        Roles(MesRoles.QualityEngineer);
-        Summary(s => s.Summary = "完工确认（质量工程师审核）");
+        Roles(MesRoles.ProductionManager, MesRoles.ShiftLeader, MesRoles.QualityEngineer);
+        Summary(s => s.Summary = "完工确认");
     }
 
     public override async Task HandleAsync(CompleteOrderRequest req, CancellationToken ct)

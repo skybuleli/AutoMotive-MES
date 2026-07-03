@@ -30,6 +30,22 @@ public class MesApiClient
         return await resp.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
     }
 
+    /// <summary>发送带 JWT 的 GET 请求，并读取列表总数响应头</summary>
+    public async Task<(T? Data, int? Total)> GetWithTotalAsync<T>(string path, CancellationToken ct = default)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, path);
+        await AttachTokenAsync(req);
+        var resp = await _http.SendAsync(req, ct);
+        resp.EnsureSuccessStatusCode();
+
+        var total = resp.Headers.TryGetValues("X-Total-Count", out var values)
+            && int.TryParse(values.FirstOrDefault(), out var parsed)
+                ? parsed
+                : (int?)null;
+        var data = await resp.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
+        return (data, total);
+    }
+
     /// <summary>发送带 JWT 的 POST 请求</summary>
     public async Task<(bool Ok, T? Data, int Status)> PostAsync<T>(string path, object body, CancellationToken ct = default)
     {

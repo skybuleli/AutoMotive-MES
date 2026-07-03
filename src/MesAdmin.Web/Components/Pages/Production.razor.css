@@ -2,24 +2,18 @@
     color: var(--mud-palette-text-primary);
 }
 
-.production-hero {
-    background:
-        radial-gradient(circle at top right, rgba(203, 166, 247, 0.22), transparent 32%),
-        linear-gradient(135deg, rgba(30, 30, 46, 0.98), rgba(24, 24, 37, 0.98));
+.production-toolbar {
+    background: rgba(30, 30, 46, 0.96);
     border: 1px solid rgba(203, 166, 247, 0.16);
-    border-radius: 24px;
+    border-radius: 18px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
 }
 
-.hero-grid {
-    align-items: center;
-}
-
-.hero-kicker {
+.section-kicker {
     color: #cba6f7;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.12em;
 }
 
-.hero-copy,
 .section-copy,
 .empty-copy,
 .detail-label {
@@ -30,18 +24,46 @@
     height: 100%;
     background: rgba(30, 30, 46, 0.94);
     border: 1px solid rgba(69, 71, 90, 0.9);
-    border-radius: 20px;
+    border-radius: 18px;
     box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
 }
 
-.summary-card {
-    background: rgba(17, 17, 27, 0.55);
-    border: 1px solid rgba(203, 166, 247, 0.14);
-    border-radius: 18px;
+.order-list-card {
+    min-height: 640px;
 }
 
 .filter-select {
-    min-width: 180px;
+    min-width: 156px;
+}
+
+.orders-table {
+    overflow: hidden;
+    border: 1px solid rgba(69, 71, 90, 0.75);
+    border-radius: 12px;
+}
+
+.orders-table .mud-table-head {
+    background: rgba(17, 17, 27, 0.78);
+}
+
+.orders-table .mud-table-cell {
+    font-variant-numeric: tabular-nums;
+}
+
+.order-number {
+    min-width: 0;
+    font-weight: 700;
+}
+
+.pager-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0.85rem;
+    background: rgba(17, 17, 27, 0.48);
+    border: 1px solid rgba(69, 71, 90, 0.72);
+    border-radius: 12px;
 }
 
 .detail-item {
@@ -49,10 +71,11 @@
     flex-direction: column;
     gap: 0.35rem;
     min-height: 100%;
-    padding: 1rem 1.1rem;
+    padding: 0.8rem 0.9rem;
     background: rgba(17, 17, 27, 0.52);
     border: 1px solid rgba(69, 71, 90, 0.8);
-    border-radius: 16px;
+    border-radius: 12px;
+    font-variant-numeric: tabular-nums;
 }
 
 .detail-label {
@@ -61,9 +84,27 @@
     letter-spacing: 0.08em;
 }
 
+.order-dialog-content {
+    min-width: min(760px, 82vw);
+}
+
+.order-dialog-actions {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
 @media (max-width: 960px) {
-    .production-hero,
+    .production-toolbar,
     .module-card {
-        border-radius: 18px;
+        border-radius: 14px;
+    }
+
+    .order-dialog-content {
+        min-width: 0;
+    }
+
+    .pager-strip {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }

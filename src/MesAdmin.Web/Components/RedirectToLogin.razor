@@ -5,6 +5,8 @@
     protected override void OnInitialized()
     {
         var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
-        Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+        if (string.IsNullOrWhiteSpace(returnUrl) || returnUrl == "login" || returnUrl.StartsWith("login?"))
+            returnUrl = "/";
+        Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
     }
 }

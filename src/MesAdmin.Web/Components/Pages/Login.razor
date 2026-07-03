@@ -22,6 +22,7 @@
                           Label="用户名"
                           Variant="Variant.Outlined"
                           FullWidth
+                          Immediate
                           Margin="Margin.Dense"
                           Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Person" />
@@ -30,6 +31,7 @@
                           Label="密码"
                           Variant="Variant.Outlined"
                           FullWidth
+                          Immediate
                           Margin="Margin.Dense"
                           InputType="InputType.Password"
                           Adornment="Adornment.Start"
@@ -83,9 +85,23 @@
             var ok = await Auth.LoginAsync(_username, _password);
             if (ok)
             {
-                var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
-                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(returnUrl.Contains('?') ? returnUrl.Substring(returnUrl.IndexOf('?')) : "");
-                var target = query.TryGetValue("returnUrl", out var v) ? v.ToString() : "/";
+                // 解析 returnUrl 查询参数，无效时回首页
+                var uri = Navigation.ToBaseRelativePath(Navigation.Uri);
+                var target = "/";
+                var queryIndex = uri.IndexOf('?');
+                if (queryIndex >= 0)
+                {
+                    var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Substring(queryIndex));
+                    if (query.TryGetValue("returnUrl", out var v) && !string.IsNullOrWhiteSpace(v))
+                    {
+                        var val = v.ToString();
+                        // 排除 login 自身和无效值
+                        if (val is not ("login" or "not-found" or "/login"))
+                            target = val.StartsWith('/') ? val : "/" + val;
+                    }
+                }
+                // forceLoad 整页加载：新 circuit 重建后从 ProtectedLocalStorage 读 token，
+                // 预渲染阶段不可用返回匿名，circuit 建立后自动重新读取认证状态
                 Navigation.NavigateTo(target, forceLoad: true);
             }
             else

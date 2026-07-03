@@ -17,9 +17,9 @@ public class ListOrdersEndpoint : MesEndpointWithoutRequest<List<ProductionOrder
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var status = Query<string?>("status");
-        var page = Query<int?>("page") ?? 1;
-        var size = Query<int?>("size") ?? 20;
+        var status = Query<string?>("status", isRequired: false);
+        var page = Query<int?>("page", isRequired: false) ?? 1;
+        var size = Query<int?>("size", isRequired: false) ?? 20;
 
         OrderStatus? filter = null;
         if (!string.IsNullOrWhiteSpace(status) && !status.Equals("all", StringComparison.OrdinalIgnoreCase))

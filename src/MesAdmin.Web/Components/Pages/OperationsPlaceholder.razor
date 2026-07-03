@@ -1,0 +1,40 @@
+@page "/material"
+@page "/traceability"
+@page "/spc"
+@page "/oee"
+@page "/andon"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject NavigationManager Navigation
+
+<PageTitle>@Title - AutoMES</PageTitle>
+
+<MudStack Spacing="3">
+    <MudText Typo="Typo.h4">@Title</MudText>
+    <MudPaper Class="pa-5">
+        <MudText Typo="Typo.body1">@Description</MudText>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private string Path => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+
+    private string Title => Path switch
+    {
+        "material" => "物料管理",
+        "traceability" => "全链路追溯",
+        "spc" => "SPC 质量",
+        "oee" => "设备 OEE",
+        "andon" => "Andon 报警",
+        _ => "功能页面"
+    };
+
+    private string Description => Path switch
+    {
+        "material" => "物料批次、扫码入库和线边库存页面已接入导航。",
+        "traceability" => "整机序列号、零部件批次和物料批次追溯页面已接入导航。",
+        "spc" => "关键质量参数和控制图页面已接入导航。",
+        "oee" => "设备综合效率、稼动率和停机分析页面已接入导航。",
+        "andon" => "报警触发、响应和闭环处理页面已接入导航。",
+        _ => "页面已接入导航。"
+    };
+}
