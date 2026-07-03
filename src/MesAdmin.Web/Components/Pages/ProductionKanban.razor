@@ -63,13 +63,30 @@
 @code {
     private List<KanbanColumn> _columns = [];
     private string? _loadError;
+    private bool _loadedOnce;
 
     private static readonly string[] Statuses = ["Created", "Released", "InProgress", "Completed", "Closed"];
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        try { await LoadAsync(); }
-        catch (Exception ex) { _loadError = $"加载失败：{ex.Message}"; }
+        if (!firstRender || _loadedOnce)
+            return;
+
+        _loadedOnce = true;
+
+        try
+        {
+            await LoadAsync();
+            StateHasChanged();
+        }
+        catch (HttpRequestException ex) when (RedirectToLoginOnUnauthorized(ex))
+        {
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"加载失败：{ex.Message}";
+            StateHasChanged();
+        }
     }
 
     private async Task LoadAsync()
@@ -90,6 +107,10 @@
                 var items = await Api.GetAsync<List<OrderSummary>>($"api/v1/orders?status={status}&page=1&size=50");
                 columns.Add(new KanbanColumn(label, badgeColor, items ?? []));
             }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw;
+            }
             catch
             {
                 columns.Add(new KanbanColumn(label, badgeColor, []));
@@ -102,12 +123,28 @@
 
     private async Task ReloadAsync()
     {
-        await LoadAsync();
-        StateHasChanged();
+        try
+        {
+            await LoadAsync();
+            StateHasChanged();
+        }
+        catch (HttpRequestException ex) when (RedirectToLoginOnUnauthorized(ex))
+        {
+        }
     }
 
     private void GoToDetail(string id)
         => Navigation.NavigateTo($"/production?orderId={id}");
+
+    private bool RedirectToLoginOnUnauthorized(HttpRequestException ex)
+    {
+        if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            return false;
+
+        var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+        return true;
+    }
 
     private sealed record KanbanColumn(string Label, Color BadgeColor, List<OrderSummary> Orders);
 }

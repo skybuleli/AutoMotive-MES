@@ -3,6 +3,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using MesAdmin.Web.Services
 @inject MesApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>生产工单 - AutoMES</PageTitle>
 
@@ -205,6 +206,7 @@
     private bool _isError;
     private bool _busy;
     private bool _detailDialogOpen;
+    private bool _loadedOnce;
     private int _page = 1;
     private int _totalOrders;
     private int _totalPages = 1;
@@ -214,10 +216,31 @@
     private bool CanComplete => _selectedDetail?.CanComplete ?? false;
     private bool CanClose => _selectedDetail?.CanClose ?? false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        try { await LoadPageAsync(); }
-        catch (Exception ex) { _loadError = $"加载失败：{ex.Message}"; }
+        if (!firstRender || _loadedOnce)
+            return;
+
+        _loadedOnce = true;
+
+        try
+        {
+            await LoadPageAsync();
+            StateHasChanged();
+        }
+        catch (HttpRequestException ex)
+        {
+            if (!await RedirectToLoginOnUnauthorizedAsync(ex))
+            {
+                _loadError = $"加载失败：{ex.Message}";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"加载失败：{ex.Message}";
+            StateHasChanged();
+        }
     }
 
     private async Task LoadPageAsync()
@@ -242,6 +265,11 @@
     private async Task ReloadAsync()
     {
         try { await LoadPageAsync(); StateHasChanged(); }
+        catch (HttpRequestException ex)
+        {
+            if (!await RedirectToLoginOnUnauthorizedAsync(ex))
+                _loadError = $"刷新失败：{ex.Message}";
+        }
         catch (Exception ex) { _loadError = $"刷新失败：{ex.Message}"; }
     }
 
@@ -277,6 +305,11 @@
         try
         {
             _selectedDetail = await Api.GetAsync<OrderDetail>($"api/v1/orders/{order.Id}");
+        }
+        catch (HttpRequestException ex)
+        {
+            if (!await RedirectToLoginOnUnauthorizedAsync(ex))
+                _selectedDetail = null;
         }
         catch { _selectedDetail = null; }
     }
@@ -343,8 +376,26 @@
     private async Task RunBusyAsync(Func<Task> action)
     {
         try { _busy = true; _message = string.Empty; await action(); }
+        catch (HttpRequestException ex)
+        {
+            if (!await RedirectToLoginOnUnauthorizedAsync(ex))
+            {
+                _message = ex.Message;
+                _isError = true;
+            }
+        }
         catch (Exception ex) { _message = ex.Message; _isError = true; }
         finally { _busy = false; }
+    }
+
+    private Task<bool> RedirectToLoginOnUnauthorizedAsync(HttpRequestException ex)
+    {
+        if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            return Task.FromResult(false);
+
+        var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+        return Task.FromResult(true);
     }
 
     private string GetRoutingName(string routingId)
