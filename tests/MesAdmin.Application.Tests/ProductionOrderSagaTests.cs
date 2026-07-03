@@ -31,12 +31,12 @@ public class ProductionOrderSagaTests
 
         await action.Invoke.Invoke(order.Id.ToString(), order.Id);
 
-        Assert.Equal(OrderStatus.Completed, order.Status);
-        Assert.Equal(order.PlannedQuantity, order.QualifiedQuantity);
+        Assert.Equal(OrderStatus.InProgress, order.Status);
+        Assert.Equal(0, order.QualifiedQuantity);
         Assert.Equal(0, order.DefectiveQuantity);
-        Assert.NotNull(order.CompletedAt);
+        Assert.Null(order.CompletedAt);
         // 跟踪查询模式：Saga 不再调用 Update()，直接 SaveChanges 检测变更
-        Assert.True(firstSaveCount >= 2);  // Release + Start + 完工至少 2 次 SaveChanges
+        Assert.True(firstSaveCount >= 1);  // 至少包含 Start 对工单状态推进的保存
         // 核心断言：重放时 Effect 幂等，SaveChanges 不应增加
         Assert.Equal(firstSaveCount, repo.SaveChangesCallCount);
     }

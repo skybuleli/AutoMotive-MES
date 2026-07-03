@@ -171,16 +171,8 @@ public class ProductionOrderSaga(
             await state.Save();
         }, ResiliencyLevel.AtLeastOnce);
 
-        // ── 工单完工：AtLeastOnce（重放时以状态机幂等保护）──
-        await workflow.Effect.Capture($"complete-order-{orderId}", async () =>
-        {
-            var finalOrder = await orderRepo.GetByIdTrackedAsync(orderId);
-            if (finalOrder?.Status != OrderStatus.InProgress)
-                return; // 幂等：已完工或已关闭则跳过
-
-            finalOrder.Complete(finalOrder.PlannedQuantity, 0, DateTimeOffset.UtcNow);
-            await orderRepo.SaveChangesAsync();
-        }, ResiliencyLevel.AtLeastOnce);
+        // 工单状态停留在 InProgress，等待 T1.8 人工完工确认接口提交良品/不良数量。
+        // Saga 负责工序编排，不绕过质量审核直接把整单置为 Completed。
     }
 
     // ═══════════════════════════════════════════
