@@ -33,6 +33,8 @@ builder.Services.AddScoped<IFirstArticleInspectionRepository, FirstArticleInspec
 builder.Services.AddScoped<ITraceabilityLinkRepository, TraceabilityLinkRepository>();
 builder.Services.AddScoped<ISapRejectionRepository, SapRejectionRepository>();
 builder.Services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
+builder.Services.AddScoped<IMaterialBatchRepository, MaterialBatchRepository>();
+builder.Services.AddScoped<IMaterialBindingRepository, MaterialBindingRepository>();
 builder.Services.AddScoped<IPlcClient, StubPlcClient>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 

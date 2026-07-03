@@ -3,6 +3,7 @@ using System;
 using MesAdmin.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MesAdmin.Infrastructure.Migrations
 {
     [DbContext(typeof(MesDbContext))]
-    partial class MesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260703105033_20260703_AddMaterials")]
+    partial class _20260703_AddMaterials
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

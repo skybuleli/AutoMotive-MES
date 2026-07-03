@@ -19,6 +19,8 @@ public class MesDbContext : DbContext
     public DbSet<Bom> Boms => Set<Bom>();
     public DbSet<SapRejectionRecord> SapRejectionRecords => Set<SapRejectionRecord>();
     public DbSet<GoodsReceipt> GoodsReceipts => Set<GoodsReceipt>();
+    public DbSet<MaterialBatch> MaterialBatches => Set<MaterialBatch>();
+    public DbSet<MaterialBinding> MaterialBindings => Set<MaterialBinding>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -168,6 +170,44 @@ public class MesDbContext : DbContext
             b.HasIndex(g => g.TraceabilityLabelCode).IsUnique();
             b.Property(g => g.ReceivedAt).HasColumnType("timestamptz");
             b.Property(g => g.SapSyncedAt).HasColumnType("timestamptz");
+        });
+
+        // ── material_batches 表（T1.12 来料扫码入库）──
+        modelBuilder.Entity<MaterialBatch>(b =>
+        {
+            b.ToTable("material_batches");
+            b.HasKey(b2 => b2.Id);
+            b.Property(b2 => b2.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(b2 => b2.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(b2 => b2.MaterialCode).HasDatabaseName("idx_material_code");
+            b.Property(b2 => b2.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(b2 => b2.BatchNumber).HasMaxLength(64).IsRequired();
+            b.HasIndex(b2 => b2.BatchNumber).IsUnique();
+            b.Property(b2 => b2.SupplierCode).HasMaxLength(32).IsRequired();
+            b.Property(b2 => b2.SupplierName).HasMaxLength(64).IsRequired();
+            b.Property(b2 => b2.Unit).HasMaxLength(16).IsRequired();
+            b.Property(b2 => b2.Status).HasConversion<string>().HasMaxLength(16);
+            b.HasIndex(b2 => b2.Status).HasDatabaseName("idx_material_status");
+            b.Property(b2 => b2.ProductionDate).HasColumnType("timestamptz");
+            b.Property(b2 => b2.ReceivedAt).HasColumnType("timestamptz");
+        });
+
+        // ── material_bindings 表（T1.15 投料批次绑定）──
+        modelBuilder.Entity<MaterialBinding>(b =>
+        {
+            b.ToTable("material_bindings");
+            b.HasKey(b2 => b2.Id);
+            b.Property(b2 => b2.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(b2 => b2.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(b2 => b2.OrderId).HasDatabaseName("idx_binding_order");
+            b.Property(b2 => b2.MaterialBatchId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(b2 => b2.MaterialBatchId).HasDatabaseName("idx_binding_batch");
+            b.Property(b2 => b2.MaterialCode).HasMaxLength(32).IsRequired();
+            b.Property(b2 => b2.BatchNumber).HasMaxLength(64).IsRequired();
+            b.Property(b2 => b2.ProductSerial).HasMaxLength(64).IsRequired();
+            b.HasIndex(b2 => b2.ProductSerial).HasDatabaseName("idx_binding_serial");
+            b.Property(b2 => b2.OperatorId).HasMaxLength(32).IsRequired();
+            b.Property(b2 => b2.BoundAt).HasColumnType("timestamptz");
         });
     }
 }
