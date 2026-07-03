@@ -31,6 +31,8 @@ builder.Services.AddScoped<IProductionOrderRepository, ProductionOrderRepository
 builder.Services.AddScoped<IWorkOrderOperationRepository, WorkOrderOperationRepository>();
 builder.Services.AddScoped<IFirstArticleInspectionRepository, FirstArticleInspectionRepository>();
 builder.Services.AddScoped<ITraceabilityLinkRepository, TraceabilityLinkRepository>();
+builder.Services.AddScoped<ISapRejectionRepository, SapRejectionRepository>();
+builder.Services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
 builder.Services.AddScoped<IPlcClient, StubPlcClient>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 

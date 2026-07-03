@@ -27,7 +27,16 @@ public class CompleteOrderEndpoint : MesEndpoint<CompleteOrderRequest, Productio
             ThrowIfAnyErrors();
         }
 
-        var order = await new CompleteOrderCommand(id, req.QualifiedQuantity, req.DefectiveQuantity).ExecuteAsync(ct);
+        // T1.8 质量审核人工号：从 JWT claims 读取（工号），回退到请求体
+        var reviewerId = req.ReviewerId;
+        if (string.IsNullOrWhiteSpace(reviewerId))
+        {
+            reviewerId = User.FindFirst("employee_id")?.Value
+                         ?? User.Identity?.Name
+                         ?? "UNKNOWN";
+        }
+
+        var order = await new CompleteOrderCommand(id, req.QualifiedQuantity, req.DefectiveQuantity, reviewerId).ExecuteAsync(ct);
         Response = OrderMapper.ToDetail(order);
         await SendDualAsync(ct);
     }
@@ -38,6 +47,8 @@ public partial class CompleteOrderRequest
 {
     public int QualifiedQuantity { get; set; }
     public int DefectiveQuantity { get; set; }
+    /// <summary>质量审核人工号（可选，缺省从 JWT 读取）</summary>
+    public string? ReviewerId { get; set; }
 }
 
 public class CompleteOrderValidator : Validator<CompleteOrderRequest>

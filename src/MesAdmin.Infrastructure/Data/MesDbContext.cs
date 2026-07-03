@@ -17,6 +17,8 @@ public class MesDbContext : DbContext
     public DbSet<WorkOrderOperation> WorkOrderOperations => Set<WorkOrderOperation>();
     public DbSet<FirstArticleInspection> FirstArticleInspections => Set<FirstArticleInspection>();
     public DbSet<Bom> Boms => Set<Bom>();
+    public DbSet<SapRejectionRecord> SapRejectionRecords => Set<SapRejectionRecord>();
+    public DbSet<GoodsReceipt> GoodsReceipts => Set<GoodsReceipt>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -130,6 +132,42 @@ public class MesDbContext : DbContext
             b.Property(l => l.CreatedAt).HasColumnType("timestamptz");
             // 唯一约束防重复绑定（Effect.AtLeastOnce 幂等保护）
             b.HasIndex(l => new { l.VinOrSerial, l.Level }).IsUnique();
+        });
+
+        // ── sap_rejection_records 表（T1.3 SAP 拒单回写）──
+        modelBuilder.Entity<SapRejectionRecord>(b =>
+        {
+            b.ToTable("sap_rejection_records");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(r => r.ExternalOrderNumber).HasMaxLength(64);
+            b.HasIndex(r => r.ExternalOrderNumber).HasDatabaseName("idx_sap_rejection_external");
+            b.Property(r => r.ProductCode).HasMaxLength(32);
+            b.Property(r => r.BomVersion).HasMaxLength(32);
+            b.Property(r => r.RoutingId).HasMaxLength(64);
+            b.Property(r => r.RejectionReason).HasMaxLength(512).IsRequired();
+            b.Property(r => r.WritebackStatus).HasConversion<string>().HasMaxLength(16);
+            b.HasIndex(r => r.WritebackStatus).HasDatabaseName("idx_sap_rejection_writeback");
+            b.Property(r => r.WritebackError).HasMaxLength(512);
+            b.Property(r => r.RejectedAt).HasColumnType("timestamptz");
+            b.Property(r => r.WritebackAt).HasColumnType("timestamptz");
+        });
+
+        // ── goods_receipts 表（T1.8 成品入库 + 追溯标签）──
+        modelBuilder.Entity<GoodsReceipt>(b =>
+        {
+            b.ToTable("goods_receipts");
+            b.HasKey(g => g.Id);
+            b.Property(g => g.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(g => g.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(g => g.OrderId).IsUnique(); // 一张工单只能入库一次
+            b.Property(g => g.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(g => g.ProductCode).HasMaxLength(32).IsRequired();
+            b.Property(g => g.ReviewerId).HasMaxLength(32).IsRequired();
+            b.Property(g => g.TraceabilityLabelCode).HasMaxLength(64).IsRequired();
+            b.HasIndex(g => g.TraceabilityLabelCode).IsUnique();
+            b.Property(g => g.ReceivedAt).HasColumnType("timestamptz");
+            b.Property(g => g.SapSyncedAt).HasColumnType("timestamptz");
         });
     }
 }

@@ -62,9 +62,10 @@ public class EfTrackingIntegrationTests : IClassFixture<DatabaseFixture>
         await orders.SaveChangesAsync(default);
 
         // 完工
-        var completeHandler = new CompleteOrderHandler(orders);
+        var goodsReceipts = scope.ServiceProvider.GetRequiredService<IGoodsReceiptRepository>();
+        var completeHandler = new CompleteOrderHandler(orders, goodsReceipts);
         var completed = await completeHandler.ExecuteAsync(
-            new CompleteOrderCommand(order.Id, 5, 0), default);
+            new CompleteOrderCommand(order.Id, 5, 0, "TEST-REVIEWER"), default);
         Assert.Equal(OrderStatus.Completed, completed.Status);
 
         // 关闭
@@ -111,6 +112,7 @@ public class DatabaseFixture : IDisposable
             opt.UseNpgsql("Host=localhost;Port=5432;Database=automes;Username=mes;Password=mes_dev_password"));
         services.AddScoped<IProductionOrderRepository, ProductionOrderRepository>();
         services.AddScoped<IWorkOrderOperationRepository, WorkOrderOperationRepository>();
+        services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
         Services = services.BuildServiceProvider();
 
         // 确保 DB schema 存在

@@ -5,12 +5,18 @@ using MesAdmin.Api.Features.ProductionOrders;
 using MesAdmin.Api.Features.ProductionOrders.GetById;
 using MesAdmin.Api.Infrastructure;
 using MesAdmin.Application.Features.ProductionOrders;
+using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
 
 namespace MesAdmin.Api.Features.SapWebhooks.ReceiveOrder;
 
 public class ReceiveOrderEndpoint : MesEndpoint<SapProductionOrderRequest, ProductionOrderSummaryResponse>
 {
+    private readonly ISapRejectionRepository _rejectionRepo;
+
+    public ReceiveOrderEndpoint(ISapRejectionRepository rejectionRepo)
+        => _rejectionRepo = rejectionRepo;
+
     public override void Configure()
     {
         Post("/production-orders");
@@ -29,6 +35,7 @@ public class ReceiveOrderEndpoint : MesEndpoint<SapProductionOrderRequest, Produ
         if (!Ulid.TryParse(req.RoutingId, out var routingId))
         {
             Logger.LogWarning("SAP 工单拒单：工艺路线 ID {RoutingId} 无效", req.RoutingId);
+            await RecordRejectionAsync(req, $"工艺路线 ID 无效：{req.RoutingId}", ct);
             AddError(r => r.RoutingId, $"工艺路线 ID 无效：{req.RoutingId}");
             ThrowIfAnyErrors();
         }
@@ -51,8 +58,35 @@ public class ReceiveOrderEndpoint : MesEndpoint<SapProductionOrderRequest, Produ
         catch (ArgumentException ex)
         {
             Logger.LogWarning(ex, "SAP 工单创建失败：参数校验不通过");
+            // T1.3 拒单回写：记录拒单原因，待异步回写 SAP
+            await RecordRejectionAsync(req, ex.Message, ct);
             AddError(ex.Message);
             ThrowIfAnyErrors();
+        }
+    }
+
+    /// <summary>
+    /// T1.3 拒单回写：将拒单记录持久化，标记为待回写 SAP。
+    /// 后续由后台作业（T3.16 SAP Webhook 拒单回写）轮询 WritebackStatus=Pending 的记录回写 SAP。
+    /// </summary>
+    private async Task RecordRejectionAsync(SapProductionOrderRequest req, string reason, CancellationToken ct)
+    {
+        try
+        {
+            var record = SapRejectionRecord.Create(
+                req.ExternalOrderNumber,
+                req.ProductCode,
+                req.BomVersion,
+                req.RoutingId,
+                req.PlannedQuantity,
+                reason);
+            await _rejectionRepo.AddAsync(record, ct);
+            await _rejectionRepo.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            // 拒单记录写入失败不应阻断 400 响应，仅记录日志
+            Logger.LogError(ex, "SAP 拒单记录持久化失败（外部工单号：{ExternalOrderNumber}）", req.ExternalOrderNumber);
         }
     }
 }
