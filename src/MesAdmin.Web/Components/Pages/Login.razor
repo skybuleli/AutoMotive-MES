@@ -1,4 +1,5 @@
 @page "/login"
+@layout Layout.LoginLayout
 @attribute [StreamRendering]
 @using MesAdmin.Web.Services
 @inject AuthService Auth
@@ -6,7 +7,7 @@
 
 <PageTitle>登录 - AutoMES</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
+<MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center">
     <MudPaper Elevation="4" Class="pa-8 rounded-xl" Style="width: 100%; max-width: 420px;">
         <MudStack Spacing="4" AlignItems="AlignItems.Center">
             <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
@@ -100,9 +101,7 @@
                             target = val.StartsWith('/') ? val : "/" + val;
                     }
                 }
-                // forceLoad 整页加载：新 circuit 重建后从 ProtectedLocalStorage 读 token，
-                // 预渲染阶段不可用返回匿名，circuit 建立后自动重新读取认证状态
-                Navigation.NavigateTo(target, forceLoad: true);
+                Navigation.NavigateTo(target);
             }
             else
             {

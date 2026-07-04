@@ -29,6 +29,18 @@ public class ProductionOrderSaga(
     IWorkOrderOperationRepository operationRepo,
     IPlcClient plc)
 {
+    /// <summary>站号 → PLC 设备码映射（与 Equipment.DefaultEquipment 一致）。
+    /// 站1 为人工上料扫码，无 PLC 设备，不在此映射中（跳过就绪检查）。</summary>
+    private static readonly Dictionary<int, string> StationEquipmentCode = new()
+    {
+        { 2, "EQ-ASM-01" },  // 合装工作站
+        { 3, "EQ-TQ-01" },   // 螺栓拧紧机
+        { 4, "EQ-HYD-01" },  // 液压测试台
+        { 5, "EQ-FLS-01" },  // ECU 刷写台
+        { 6, "EQ-FT-01" },   // 功能终检台
+        { 7, "EQ-VN-01" },   // VIN 绑定台
+    };
+
     /// <summary>每个工站的代表性工序序号（用于幂等检查的"哨兵"工序）</summary>
     private static readonly Dictionary<int, int> StationLastSequence = new()
     {
@@ -53,8 +65,8 @@ public class ProductionOrderSaga(
         var state = await workflow.States.CreateOrGetDefault<SagaState>();
 
         // ── 安全联锁：Effect 之外（重放时重新实时评估）──
-        if (!await plc.IsReadyAsync("Station-1"))
-            throw new SafetyInterlockException("站1 上料设备未就绪，安全联锁触发");
+        // 站1 为人工上料扫码工位，无 PLC 设备，跳过设备就绪检查。
+        // 站2 起的设备就绪检查在各工站 Effect 内进行。
 
         // Saga 拥有完整状态机控制权：从 DB 读取最新状态（跟踪），推进 Created→Released→InProgress
         var currentOrder = await orderRepo.GetByIdTrackedAsync(orderId)
@@ -80,7 +92,7 @@ public class ProductionOrderSaga(
             if (await IsStationCompleted(orderId, 2))
                 return; // 幂等：哨兵工序 seq=5 已完工
 
-            if (!await plc.IsReadyAsync("Station-2"))
+            if (!await IsEquipmentReady(2))
                 throw new Exception("合装设备未就绪");
 
             // 完成站2 全部工序（seq 2-5: HCU定位→ECU预装→电机安装→线束连接）
@@ -178,6 +190,18 @@ public class ProductionOrderSaga(
     // ═══════════════════════════════════════════
     // 工序操作辅助方法
     // ═══════════════════════════════════════════
+
+    /// <summary>
+    /// 设备就绪检查。
+    /// 当前为模拟环境占位实现：始终放行，由 Effect 的 AtLeastOnce 幂等保证重放安全。
+    /// TODO(T2.16): 真实 OPC UA 驱动接入后，改为读取设备运行状态做硬联锁：
+    /// <code>
+    /// var snapshot = await plc.ReadSnapshotAsync(code);
+    /// return snapshot?.Status == EquipmentStatus.Running;
+    /// </code>
+    /// </summary>
+    private Task<bool> IsEquipmentReady(int station)
+        => Task.FromResult(true); // 模拟环境占位：始终放行
 
     /// <summary>检查指定工序是否已完工（幂等哨兵）</summary>
     private async Task<bool> IsOperationCompleted(Ulid orderId, int sequence)

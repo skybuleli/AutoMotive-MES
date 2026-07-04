@@ -11,18 +11,23 @@ namespace MesAdmin.Web.Services;
 public class MesAuthenticationStateProvider(ProtectedLocalStorage localStorage) : AuthenticationStateProvider
 {
     private const string TokenKey = "mes_auth_token";
+    private const string JwtRoleClaim = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
     private static readonly ClaimsPrincipal Anonymous = new(new ClaimsIdentity());
+    private ClaimsPrincipal? _currentUser;
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
+        if (_currentUser is not null)
+            return new AuthenticationState(_currentUser);
+
         try
         {
             var tokenResult = await localStorage.GetAsync<string>(TokenKey);
             if (!tokenResult.Success || string.IsNullOrWhiteSpace(tokenResult.Value))
                 return new AuthenticationState(Anonymous);
 
-            var identity = ParseToken(tokenResult.Value);
-            return new AuthenticationState(new ClaimsPrincipal(identity));
+            _currentUser = new ClaimsPrincipal(ParseToken(tokenResult.Value));
+            return new AuthenticationState(_currentUser);
         }
         catch (InvalidOperationException)
         {
@@ -31,8 +36,17 @@ public class MesAuthenticationStateProvider(ProtectedLocalStorage localStorage) 
         }
     }
 
-    public void NotifyAuthenticationStateChanged()
-        => base.NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
+    public void MarkAuthenticated(string token)
+    {
+        _currentUser = new ClaimsPrincipal(ParseToken(token));
+        base.NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_currentUser)));
+    }
+
+    public void MarkLoggedOut()
+    {
+        _currentUser = Anonymous;
+        base.NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(Anonymous)));
+    }
 
     private static ClaimsIdentity ParseToken(string token)
     {
@@ -52,6 +66,8 @@ public class MesAuthenticationStateProvider(ProtectedLocalStorage localStorage) 
                 claims.Add(new Claim(ClaimTypes.Name, name.GetString()!));
             if (doc.RootElement.TryGetProperty("role", out var role))
                 claims.Add(new Claim(ClaimTypes.Role, role.GetString()!));
+            if (doc.RootElement.TryGetProperty(JwtRoleClaim, out var mappedRole))
+                claims.Add(new Claim(ClaimTypes.Role, mappedRole.GetString()!));
             if (doc.RootElement.TryGetProperty("roles", out var roles) && roles.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
                 foreach (var r in roles.EnumerateArray())

@@ -12,7 +12,7 @@ public class CloseOrderEndpoint : MesEndpointWithoutRequest<ProductionOrderDetai
     {
         Post("/{orderId}/close");
         Group<ProductionOrderGroup>();
-        Roles(MesRoles.QualityEngineer);
+        Roles(MesRoles.ProductionManager, MesRoles.ShiftLeader, MesRoles.QualityEngineer);
         Summary(s => s.Summary = "关闭工单");
     }
 

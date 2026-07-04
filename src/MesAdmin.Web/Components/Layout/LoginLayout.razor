@@ -1,0 +1,12 @@
+@inherits LayoutComponentBase
+
+@* 登录专用布局：无 AppBar / Drawer，全屏居中。
+   MudBlazor 全局 Provider 必须保留，否则 MudTextField 等组件无法正常工作。 *@
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="login-layout">
+    @Body
+</div>

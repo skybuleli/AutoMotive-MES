@@ -28,14 +28,14 @@ public class AuthService(
             return false;
 
         await localStorage.SetAsync(TokenKey, result.Token);
-        ((MesAuthenticationStateProvider)authStateProvider).NotifyAuthenticationStateChanged();
+        ((MesAuthenticationStateProvider)authStateProvider).MarkAuthenticated(result.Token);
         return true;
     }
 
     public async Task LogoutAsync()
     {
         await localStorage.DeleteAsync(TokenKey);
-        ((MesAuthenticationStateProvider)authStateProvider).NotifyAuthenticationStateChanged();
+        ((MesAuthenticationStateProvider)authStateProvider).MarkLoggedOut();
     }
 
     public async Task<string?> GetTokenAsync()

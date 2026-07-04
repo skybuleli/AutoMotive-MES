@@ -24,6 +24,17 @@ a {
         #11111B;
 }
 
+.login-layout {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 30% 20%, rgba(203, 166, 247, 0.10), transparent 40%),
+        radial-gradient(circle at 70% 80%, rgba(143, 106, 175, 0.08), transparent 35%),
+        #11111B;
+}
+
 .mes-drawer {
     border-right: 1px solid rgba(69, 71, 90, 0.75);
 }

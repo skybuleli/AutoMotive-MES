@@ -1,5 +1,6 @@
 using MesAdmin.Web.Components;
 using MesAdmin.Web.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using MesAdmin.Infrastructure.Logging;
@@ -15,7 +16,27 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 
 // ── JWT 认证 + HttpClient（Web 调用 API 获取 Token，本地验证）──
+// Web 端复用 AddMesJwtAuthentication，但覆盖 OnChallenge：
+// 未认证访问受保护页面时重定向到 /login，而非返回 401 空白页。
 builder.Services.AddMesJwtAuthentication(builder.Configuration);
+builder.Services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.Events = new JwtBearerEvents
+    {
+        OnChallenge = context =>
+        {
+            // 只对浏览器页面导航重定向；API 调用（带 Accept: application/json）仍返回 401
+            var acceptHeader = context.Request.Headers.Accept.ToString();
+            if (!context.Response.HasStarted && !acceptHeader.Contains("application/json"))
+            {
+                var returnUrl = context.Request.Path + context.Request.QueryString;
+                context.Response.Redirect($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
+                context.HandleResponse();
+            }
+            return Task.CompletedTask;
+        }
+    };
+});
 
 // ── Blazor Server 浏览器存储 ──
 builder.Services.AddScoped<ProtectedLocalStorage>();
