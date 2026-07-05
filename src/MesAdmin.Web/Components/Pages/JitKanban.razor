@@ -1,0 +1,421 @@
+@page "/jit-kanban"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IDisposable
+@using System.Net.Http.Json
+@using MesAdmin.Web.Services
+@inject IHttpClientFactory HttpFactory
+@inject AuthService Auth
+
+<PageTitle>JIT 看板拉动 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T1.14 · JIT Kanban</MudText>
+                <MudText Typo="Typo.h4">JIT 看板拉动</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">空料箱扫码 → 电子看板 → 仓库 PDA → 送达确认</MudText>
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                    待处理 @(_pending?.Count ?? 0)
+                </MudChip>
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                               OnClick="() => LoadDataAsync()" Size="Size.Small" />
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (_errorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>@_errorMessage</MudAlert>
+    }
+
+    @if (_isLoading && _pending is null)
+    {
+        <MudPaper Class="glass-kpi-card pa-8">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="section-copy">加载 JIT 拉动信号...</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else if (_pending is not null)
+    {
+        @* ── 待处理信号看板 ── *@
+        <MudText Typo="Typo.subtitle1" Class="section-kicker" Style="margin-top:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.PendingActions" Size="Size.Small" /> 待处理拉动
+        </MudText>
+
+        @if (_pending.Count == 0)
+        {
+            <MudPaper Class="glass-kpi-card pa-8">
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                    <MudText Typo="Typo.body1">暂无待处理 JIT 拉动信号</MudText>
+                    <MudText Typo="Typo.body2" Class="section-copy">所有物料库存充足，线边库存正常</MudText>
+                </MudStack>
+            </MudPaper>
+        }
+        else
+        {
+            <div class="inventory-grid">
+                @foreach (var signal in _pending)
+                {
+                    var elapsed = (DateTimeOffset.UtcNow - signal.CreatedAt);
+                    var isUrgent = elapsed.TotalMinutes > 10;
+
+                    <MudPaper Class="@($"glass-kpi-card {(isUrgent ? "andon-pulse" : "")}")">
+                        <MudStack Spacing="2">
+                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small"
+                                             Color="@(isUrgent ? Color.Error : Color.Warning)" />
+                                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@signal.MaterialCode</MudText>
+                                </MudStack>
+                                <MudChip T="string" Color="@(isUrgent ? Color.Error : Color.Warning)"
+                                         Size="Size.Small" Variant="Variant.Filled">
+                                    @(elapsed.TotalMinutes.ToString("F0")) 分钟
+                                </MudChip>
+                            </MudStack>
+
+                            <MudText Typo="Typo.body2">@signal.MaterialName</MudText>
+
+                            <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.caption" Class="kpi-label">需求数量</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Warning" Style="font-weight:600;">
+                                        @signal.ShortageQuantity.ToString("F0")
+                                        <MudText Typo="Typo.caption" Style="display:inline;color:#9399B2;">@signal.Unit</MudText>
+                                    </MudText>
+                                </MudStack>
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.caption" Class="kpi-label">目标工位</MudText>
+                                    <MudText Typo="Typo.body2">@signal.TargetStation</MudText>
+                                </MudStack>
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.caption" Class="kpi-label">工单</MudText>
+                                    <MudText Typo="Typo.body2">@signal.OrderNumber</MudText>
+                                </MudStack>
+                            </MudStack>
+
+                            <MudStack Row Spacing="2" Justify="Justify.FlexEnd">
+                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                          OnClick="() => OpenDeliveryDialog(signal)">
+                                    <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" /> 送达确认
+                                </MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
+                                          OnClick="() => OpenCancelDialog(signal)">
+                                    取消
+                                </MudButton>
+                            </MudStack>
+
+                            <MudText Typo="Typo.caption" Class="kpi-sub">
+                                创建：@signal.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")
+                                @if (isUrgent) { <span style="color:var(--mud-palette-error);"> ⚠ 超时</span> }
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+                }
+            </div>
+        }
+
+        @* ── 手动创建信号 ── *@
+        <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
+            <MudStack Spacing="2">
+                <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /> 手动创建 JIT 拉动
+                </MudText>
+                <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudTextField @bind-Value="_newSignal.MaterialCode" Label="物料编码"
+                                  Variant="Variant.Outlined" Dense For="@(() => _newSignal.MaterialCode)"
+                                  Style="min-width:160px;" />
+                    <MudTextField @bind-Value="_newSignal.MaterialName" Label="物料名称"
+                                  Variant="Variant.Outlined" Dense Style="min-width:160px;" />
+                    <MudTextField @bind-Value="_newSignal.QuantityStr" Label="数量"
+                                  Variant="Variant.Outlined" Dense Style="width:80px;" />
+                    <MudTextField @bind-Value="_newSignal.Unit" Label="单位"
+                                  Variant="Variant.Outlined" Dense Style="width:60px;" />
+                    <MudTextField @bind-Value="_newSignal.TargetStation" Label="目标工位"
+                                  Variant="Variant.Outlined" Dense Style="min-width:120px;" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                              Disabled="@_isCreating" OnClick="() => CreateSignalAsync()">
+                        <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" /> 发送拉动
+                    </MudButton>
+                </MudStack>
+                @if (!string.IsNullOrEmpty(_createError))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Error">@_createError</MudText>
+                }
+            </MudStack>
+        </MudPaper>
+
+        @* ── 已送达记录 ── *@
+        @if (_history?.Items.Count > 0)
+        {
+            <MudText Typo="Typo.subtitle1" Class="section-kicker" Style="margin-top:8px;">
+                <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" /> 最近送达记录
+            </MudText>
+            <MudPaper Class="glass-kpi-card pa-4">
+                <MudTable Items="@_history.Items" Dense Hover Class="mb-4">
+                    <ColGroup>
+                        <col style="width: 140px" />
+                        <col style="width: 120px" />
+                        <col style="width: 80px" />
+                        <col style="width: 100px" />
+                        <col style="width: 80px" />
+                        <col style="width: 110px" />
+                        <col />
+                    </ColGroup>
+                    <HeaderContent>
+                        <MudTh>物料编码</MudTh>
+                        <MudTh>物料名称</MudTh>
+                        <MudTh>数量</MudTh>
+                        <MudTh>目标工位</MudTh>
+                        <MudTh>状态</MudTh>
+                        <MudTh>送达确认</MudTh>
+                        <MudTh>时间</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="物料编码">@context.MaterialCode</MudTd>
+                        <MudTd DataLabel="物料名称">@context.MaterialName</MudTd>
+                        <MudTd DataLabel="数量">@context.ShortageQuantity.ToString("F0") @context.Unit</MudTd>
+                        <MudTd DataLabel="目标工位">@context.TargetStation</MudTd>
+                        <MudTd DataLabel="状态">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(context.Status=="Delivered"?Color.Success:context.Status=="Cancelled"?Color.Error:Color.Warning)"
+                                     Variant="Variant.Outlined">@context.Status</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="送达确认">@context.DeliveredBy</MudTd>
+                        <MudTd DataLabel="时间">
+                            @(context.DeliveredAt?.ToLocalTime().ToString("HH:mm:ss") ?? context.CreatedAt.ToLocalTime().ToString("HH:mm:ss"))
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+    }
+</MudStack>
+
+@* ── 送达确认对话框 ── *@
+<MudDialog @bind-Visible="_deliveryDialogVisible">
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle1">送达确认</MudText>
+            <MudText Typo="Typo.body2">物料：@(_selectedSignal?.MaterialCode) @(_selectedSignal?.MaterialName)</MudText>
+            <MudText Typo="Typo.body2">数量：@(_selectedSignal?.ShortageQuantity.ToString("F0")) @(_selectedSignal?.Unit)</MudText>
+            <MudText Typo="Typo.body2">目标工位：@(_selectedSignal?.TargetStation)</MudText>
+            <MudTextField @bind-Value="_deliveryOperator" Label="确认操作员工号"
+                          Variant="Variant.Outlined" Dense />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _deliveryDialogVisible = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="string.IsNullOrWhiteSpace(_deliveryOperator)"
+                   OnClick="() => ConfirmDeliveryAsync()">
+            <MudIcon Icon="@Icons.Material.Filled.Verified" /> 确认送达
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ── 取消对话框 ── *@
+<MudDialog @bind-Visible="_cancelDialogVisible">
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudText Typo="Typo.subtitle1">取消拉动信号</MudText>
+            <MudText Typo="Typo.body2">物料：@(_selectedSignal?.MaterialCode) @(_selectedSignal?.MaterialName)</MudText>
+            <MudTextField @bind-Value="_cancelReason" Label="取消原因"
+                          Variant="Variant.Outlined" Dense Typo="Typo.body2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _cancelDialogVisible = false">返回</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error"
+                   Disabled="string.IsNullOrWhiteSpace(_cancelReason)"
+                   OnClick="() => ConfirmCancelAsync()">
+            确认取消
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<JitSignalItem>? _pending;
+    private JitHistoryData? _history;
+    private JitSignalItem? _selectedSignal;
+    private bool _isLoading, _isCreating, _deliveryDialogVisible, _cancelDialogVisible;
+    private string? _errorMessage, _createError;
+    private string _deliveryOperator = string.Empty;
+    private string _cancelReason = string.Empty;
+    private readonly NewSignalModel _newSignal = new();
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+        _timer = new Timer(async _ => await InvokeAsync(LoadDataAsync), null, 15000, 15000);
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            _pending = await client.GetFromJsonAsync<List<JitSignalItem>>("api/v1/jit-kanban/pending");
+            _history = await client.GetFromJsonAsync<JitHistoryData>("api/v1/jit-kanban/history?page=1&size=10");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"加载失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenDeliveryDialog(JitSignalItem signal)
+    {
+        _selectedSignal = signal;
+        _deliveryOperator = string.Empty;
+        _deliveryDialogVisible = true;
+    }
+
+    private async Task ConfirmDeliveryAsync()
+    {
+        if (_selectedSignal is null || string.IsNullOrWhiteSpace(_deliveryOperator)) return;
+
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.PostAsJsonAsync(
+                $"api/v1/jit-kanban/{_selectedSignal.Id}/deliver",
+                new { DeliveredBy = _deliveryOperator });
+
+            resp.EnsureSuccessStatusCode();
+            _deliveryDialogVisible = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"送达确认失败：{ex.Message}";
+        }
+    }
+
+    private void OpenCancelDialog(JitSignalItem signal)
+    {
+        _selectedSignal = signal;
+        _cancelReason = string.Empty;
+        _cancelDialogVisible = true;
+    }
+
+    private async Task ConfirmCancelAsync()
+    {
+        if (_selectedSignal is null || string.IsNullOrWhiteSpace(_cancelReason)) return;
+
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.PostAsJsonAsync(
+                $"api/v1/jit-kanban/{_selectedSignal.Id}/cancel",
+                new { Reason = _cancelReason });
+
+            resp.EnsureSuccessStatusCode();
+            _cancelDialogVisible = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"取消失败：{ex.Message}";
+        }
+    }
+
+    private async Task CreateSignalAsync()
+    {
+        _createError = null;
+        if (string.IsNullOrWhiteSpace(_newSignal.MaterialCode))
+        {
+            _createError = "物料编码不能为空";
+            return;
+        }
+
+        if (!double.TryParse(_newSignal.QuantityStr, out var qty) || qty <= 0)
+        {
+            _createError = "数量必须大于 0";
+            return;
+        }
+
+        _isCreating = true;
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.PostAsJsonAsync("api/v1/jit-kanban/create", new
+            {
+                MaterialCode = _newSignal.MaterialCode,
+                MaterialName = _newSignal.MaterialName,
+                ShortageQuantity = qty,
+                Unit = string.IsNullOrWhiteSpace(_newSignal.Unit) ? "PCS" : _newSignal.Unit,
+                TargetStation = _newSignal.TargetStation,
+                CreatedBy = "Web"
+            });
+
+            resp.EnsureSuccessStatusCode();
+            _newSignal.Clear();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _createError = $"创建失败：{ex.Message}";
+        }
+        finally
+        {
+            _isCreating = false;
+        }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+
+    // ── DTO ──
+
+    public record JitSignalItem(
+        string Id, string MaterialCode, string MaterialName,
+        double ShortageQuantity, string Unit, string TargetStation,
+        string OrderNumber, string Status,
+        DateTimeOffset CreatedAt, DateTimeOffset? DeliveredAt,
+        string? DeliveredBy, string? Remarks);
+
+    public record JitHistoryData(List<JitSignalItem> Items, int Total);
+
+    public class NewSignalModel
+    {
+        public string MaterialCode { get; set; } = string.Empty;
+        public string MaterialName { get; set; } = string.Empty;
+        public string QuantityStr { get; set; } = "500";
+        public string Unit { get; set; } = "PCS";
+        public string? TargetStation { get; set; } = "STN-02";
+        public void Clear() { MaterialCode = ""; MaterialName = ""; QuantityStr = "500"; Unit = "PCS"; TargetStation = "STN-02"; }
+    }
+}

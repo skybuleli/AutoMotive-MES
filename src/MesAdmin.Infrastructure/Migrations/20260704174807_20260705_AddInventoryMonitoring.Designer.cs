@@ -3,6 +3,7 @@ using System;
 using MesAdmin.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MesAdmin.Infrastructure.Migrations
 {
     [DbContext(typeof(MesDbContext))]
-    partial class MesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260704174807_20260705_AddInventoryMonitoring")]
+    partial class _20260705_AddInventoryMonitoring
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -52,76 +55,6 @@ namespace MesAdmin.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("boms", (string)null);
-                });
-
-            modelBuilder.Entity("MesAdmin.Domain.Models.ConsumptionVarianceReport", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("ConsumedQuantity")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("Direction")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<bool>("IsResolved")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("MaterialCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("MaterialName")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OrderNumber")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Resolution")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<DateTimeOffset?>("ResolvedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("ResolvedBy")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<double>("StandardQuantity")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<double>("VariancePercent")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("VarianceQuantity")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OrderId")
-                        .HasDatabaseName("idx_variance_order");
-
-                    b.ToTable("consumption_variance_reports", (string)null);
                 });
 
             modelBuilder.Entity("MesAdmin.Domain.Models.FirstArticleInspection", b =>
@@ -482,66 +415,6 @@ namespace MesAdmin.Infrastructure.Migrations
                     b.ToTable("material_bindings", (string)null);
                 });
 
-            modelBuilder.Entity("MesAdmin.Domain.Models.MaterialConsumption", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<double>("ActualBoundQuantity")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("ConsumedQuantity")
-                        .HasColumnType("double precision");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<bool>("IsCritical")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("MaterialCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("MaterialName")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OrderNumber")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<double>("StandardQuantity")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.Property<double>("VariancePercent")
-                        .HasColumnType("double precision");
-
-                    b.Property<double>("VarianceQuantity")
-                        .HasColumnType("double precision");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MaterialCode")
-                        .HasDatabaseName("idx_consumption_material");
-
-                    b.HasIndex("OrderId")
-                        .HasDatabaseName("idx_consumption_order");
-
-                    b.ToTable("material_consumptions", (string)null);
-                });
-
             modelBuilder.Entity("MesAdmin.Domain.Models.MaterialInventorySetting", b =>
                 {
                     b.Property<Guid>("Id")
@@ -692,68 +565,6 @@ namespace MesAdmin.Infrastructure.Migrations
                         .HasDatabaseName("idx_orders_status");
 
                     b.ToTable("production_orders", (string)null);
-                });
-
-            modelBuilder.Entity("MesAdmin.Domain.Models.SapInventorySyncRecord", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("MaterialCode")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("MovementType")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("character varying(8)");
-
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OrderNumber")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<double>("Quantity")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("SapDocumentNumber")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<bool>("SapSynced")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("SyncError")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<DateTimeOffset?>("SyncedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("Unit")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MaterialCode")
-                        .HasDatabaseName("idx_sap_inv_sync_material");
-
-                    b.HasIndex("OrderId")
-                        .HasDatabaseName("idx_sap_inv_sync_order");
-
-                    b.HasIndex("SapSynced")
-                        .HasDatabaseName("idx_sap_inv_sync_status");
-
-                    b.ToTable("sap_inventory_sync_records", (string)null);
                 });
 
             modelBuilder.Entity("MesAdmin.Domain.Models.SapRejectionRecord", b =>

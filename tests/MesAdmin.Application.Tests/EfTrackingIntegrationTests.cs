@@ -5,14 +5,32 @@ using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
 using MesAdmin.Infrastructure.Data;
 using MesAdmin.Infrastructure.Data.Repositories;
+using Microsoft.Extensions.Logging;
 
 namespace MesAdmin.Application.Tests;
+
+/// <summary>
+/// 数据库集成测试集合定义。确保所有需要 PostgreSQL 的测试类按顺序执行，
+/// 避免并行创建工单导致的 OrderNumber 唯一约束冲突。
+/// </summary>
+[CollectionDefinition("DatabaseIntegration")]
+public class DatabaseIntegrationTestCollection : ICollectionFixture<DatabaseFixture> { }
+
+/// <summary>用于测试的最小化 NullLogger 实现。</summary>
+internal sealed class NullLogger<T> : ILogger<T>
+{
+    public static readonly NullLogger<T> Instance = new();
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+    public bool IsEnabled(LogLevel logLevel) => false;
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) { }
+}
 
 /// <summary>
 /// 集成测试：用真实 PostgreSQL + MesDbContext 复现 EF Core 跟踪冲突。
 /// 验证"创建→放行→开工"完整流程不报 "already being tracked" 异常。
 /// </summary>
-public class EfTrackingIntegrationTests : IClassFixture<DatabaseFixture>
+[Collection("DatabaseIntegration")]
+public class EfTrackingIntegrationTests
 {
     private readonly DatabaseFixture _fixture;
 
@@ -63,7 +81,7 @@ public class EfTrackingIntegrationTests : IClassFixture<DatabaseFixture>
 
         // 完工
         var goodsReceipts = scope.ServiceProvider.GetRequiredService<IGoodsReceiptRepository>();
-        var completeHandler = new CompleteOrderHandler(orders, goodsReceipts);
+        var completeHandler = new CompleteOrderHandler(orders, goodsReceipts, NullLogger<CompleteOrderHandler>.Instance);
         var completed = await completeHandler.ExecuteAsync(
             new CompleteOrderCommand(order.Id, 5, 0, "TEST-REVIEWER"), default);
         Assert.Equal(OrderStatus.Completed, completed.Status);
@@ -101,7 +119,7 @@ public class EfTrackingIntegrationTests : IClassFixture<DatabaseFixture>
 /// 数据库测试夹具：共享一个 ServiceProvider，连接到开发环境 PostgreSQL。
 /// 每个测试方法用独立 scope（独立 DbContext），模拟真实 HTTP 请求。
 /// </summary>
-public class DatabaseFixture : IDisposable
+public class DatabaseFixture : IAsyncLifetime
 {
     public ServiceProvider Services { get; }
 
@@ -110,17 +128,41 @@ public class DatabaseFixture : IDisposable
         var services = new ServiceCollection();
         services.AddDbContext<MesDbContext>(opt =>
             opt.UseNpgsql("Host=localhost;Port=5432;Database=automes;Username=mes;Password=mes_dev_password"));
+
+        // 仓储注册：全生命周期（T1.x - T1.17）
         services.AddScoped<IProductionOrderRepository, ProductionOrderRepository>();
         services.AddScoped<IWorkOrderOperationRepository, WorkOrderOperationRepository>();
         services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
-        Services = services.BuildServiceProvider();
+        services.AddScoped<IMaterialBatchRepository, MaterialBatchRepository>();
+        services.AddScoped<IMaterialBindingRepository, MaterialBindingRepository>();
+        services.AddScoped<IBomRepository, BomRepository>();
+        services.AddScoped<IJitPullSignalRepository, JitPullSignalRepository>();
+        services.AddScoped<IMaterialConsumptionRepository, MaterialConsumptionRepository>();
+        services.AddScoped<IConsumptionVarianceRepository, ConsumptionVarianceRepository>();
+        services.AddScoped<ISapInventorySyncRecordRepository, SapInventorySyncRecordRepository>();
 
-        // 应用所有 migration（含新增 goods_receipts/material_batches 等）。
-        // 同步阻塞：fixture 初始化一次性操作，可接受。
-        using var scope = Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
-        db.Database.MigrateAsync().GetAwaiter().GetResult();
+        // 无日志 Provider（测试中 ILogger<T> 可正常解析，输出丢弃）
+        services.AddLogging(b => b.ClearProviders());
+
+        Services = services.BuildServiceProvider();
     }
 
-    public void Dispose() => Services.Dispose();
+    public async Task InitializeAsync()
+    {
+        // 应用所有 migration
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
+        await db.Database.MigrateAsync();
+
+        // 种子 BOM + 物料库存数据（幂等：已存在则跳过）
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        var logger = loggerFactory.CreateLogger("DatabaseFixture");
+        await MesDataSeeder.SeedAsync(Services, logger);
+    }
+
+    public Task DisposeAsync()
+    {
+        Services.Dispose();
+        return Task.CompletedTask;
+    }
 }

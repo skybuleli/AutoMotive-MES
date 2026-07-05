@@ -21,6 +21,12 @@ public class MesDbContext : DbContext
     public DbSet<GoodsReceipt> GoodsReceipts => Set<GoodsReceipt>();
     public DbSet<MaterialBatch> MaterialBatches => Set<MaterialBatch>();
     public DbSet<MaterialBinding> MaterialBindings => Set<MaterialBinding>();
+    public DbSet<JitPullSignal> JitPullSignals => Set<JitPullSignal>();
+    public DbSet<MaterialInventorySetting> MaterialInventorySettings => Set<MaterialInventorySetting>();
+    public DbSet<InventoryAlert> InventoryAlerts => Set<InventoryAlert>();
+    public DbSet<MaterialConsumption> MaterialConsumptions => Set<MaterialConsumption>();
+    public DbSet<ConsumptionVarianceReport> ConsumptionVarianceReports => Set<ConsumptionVarianceReport>();
+    public DbSet<SapInventorySyncRecord> SapInventorySyncRecords => Set<SapInventorySyncRecord>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -208,6 +214,119 @@ public class MesDbContext : DbContext
             b.HasIndex(b2 => b2.ProductSerial).HasDatabaseName("idx_binding_serial");
             b.Property(b2 => b2.OperatorId).HasMaxLength(32).IsRequired();
             b.Property(b2 => b2.BoundAt).HasColumnType("timestamptz");
+        });
+
+        // ── material_inventory_settings 表（T1.13 线边库存阈值配置）──
+        modelBuilder.Entity<MaterialInventorySetting>(b =>
+        {
+            b.ToTable("material_inventory_settings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(s => s.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(s => s.MaterialCode).HasDatabaseName("idx_inv_setting_material");
+            b.Property(s => s.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(s => s.StationId).HasMaxLength(32);
+            b.HasIndex(s => s.StationId).HasDatabaseName("idx_inv_setting_station");
+            b.Property(s => s.Unit).HasMaxLength(16).IsRequired();
+            b.Property(s => s.UpdatedBy).HasMaxLength(32);
+            b.Property(s => s.CreatedAt).HasColumnType("timestamptz");
+            b.Property(s => s.UpdatedAt).HasColumnType("timestamptz");
+        });
+
+        // ── inventory_alerts 表（T1.13 库存预警记录）──
+        modelBuilder.Entity<InventoryAlert>(b =>
+        {
+            b.ToTable("inventory_alerts");
+            b.HasKey(a => a.Id);
+            b.Property(a => a.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(a => a.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(a => a.MaterialCode).HasDatabaseName("idx_inv_alert_material");
+            b.Property(a => a.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(a => a.StationId).HasMaxLength(32);
+            b.Property(a => a.AlertLevel).HasConversion<string>().HasMaxLength(16);
+            b.HasIndex(a => a.AlertLevel).HasDatabaseName("idx_inv_alert_level");
+            b.Property(a => a.ResolvedBy).HasMaxLength(32);
+            b.Property(a => a.Resolution).HasMaxLength(256);
+            b.Property(a => a.JitPullSignalId).HasConversion<UlidToGuidConverter>();
+            b.Property(a => a.CreatedAt).HasColumnType("timestamptz");
+            b.Property(a => a.ResolvedAt).HasColumnType("timestamptz");
+        });
+
+        // ── material_consumptions 表（T1.17 物料消耗反冲）──
+        modelBuilder.Entity<MaterialConsumption>(b =>
+        {
+            b.ToTable("material_consumptions");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(c => c.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(c => c.OrderId).HasDatabaseName("idx_consumption_order");
+            b.Property(c => c.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(c => c.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(c => c.MaterialCode).HasDatabaseName("idx_consumption_material");
+            b.Property(c => c.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(c => c.Unit).HasMaxLength(16).IsRequired();
+            b.Property(c => c.CreatedAt).HasColumnType("timestamptz");
+        });
+
+        // ── consumption_variance_reports 表（T1.17 消耗差异报告）──
+        modelBuilder.Entity<ConsumptionVarianceReport>(b =>
+        {
+            b.ToTable("consumption_variance_reports");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(r => r.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(r => r.OrderId).HasDatabaseName("idx_variance_order");
+            b.Property(r => r.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(r => r.MaterialCode).HasMaxLength(32).IsRequired();
+            b.Property(r => r.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(r => r.Direction).HasMaxLength(8).IsRequired();
+            b.Property(r => r.Unit).HasMaxLength(16).IsRequired();
+            b.Property(r => r.ResolvedBy).HasMaxLength(32);
+            b.Property(r => r.Resolution).HasMaxLength(512);
+            b.Property(r => r.CreatedAt).HasColumnType("timestamptz");
+            b.Property(r => r.ResolvedAt).HasColumnType("timestamptz");
+        });
+
+        // ── sap_inventory_sync_records 表（T1.17 → T3.14 SAP 同步）──
+        modelBuilder.Entity<SapInventorySyncRecord>(b =>
+        {
+            b.ToTable("sap_inventory_sync_records");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(r => r.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(r => r.OrderId).HasDatabaseName("idx_sap_inv_sync_order");
+            b.Property(r => r.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(r => r.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(r => r.MaterialCode).HasDatabaseName("idx_sap_inv_sync_material");
+            b.Property(r => r.MovementType).HasMaxLength(8).IsRequired();
+            b.Property(r => r.Unit).HasMaxLength(16).IsRequired();
+            b.Property(r => r.SapDocumentNumber).HasMaxLength(64);
+            b.Property(r => r.SyncError).HasMaxLength(512);
+            b.HasIndex(r => r.SapSynced).HasDatabaseName("idx_sap_inv_sync_status");
+            b.Property(r => r.SyncedAt).HasColumnType("timestamptz");
+            b.Property(r => r.CreatedAt).HasColumnType("timestamptz");
+        });
+
+        // ── jit_pull_signals 表（T1.4 齐套缺料 JIT 拉动）──
+        modelBuilder.Entity<JitPullSignal>(b =>
+        {
+            b.ToTable("jit_pull_signals");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(s => s.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(s => s.OrderId).HasDatabaseName("idx_jit_pull_order");
+            b.Property(s => s.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(s => s.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(s => s.MaterialCode).HasDatabaseName("idx_jit_pull_material");
+            b.Property(s => s.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(s => s.Unit).HasMaxLength(16).IsRequired();
+            b.Property(s => s.Status).HasConversion<string>().HasMaxLength(16);
+            b.HasIndex(s => s.Status).HasDatabaseName("idx_jit_pull_status");
+            b.Property(s => s.TargetStation).HasMaxLength(32);
+            b.Property(s => s.DeliveredBy).HasMaxLength(32);
+            b.Property(s => s.Remarks).HasMaxLength(256);
+            b.Property(s => s.CreatedAt).HasColumnType("timestamptz");
+            b.Property(s => s.DeliveredAt).HasColumnType("timestamptz");
         });
     }
 }

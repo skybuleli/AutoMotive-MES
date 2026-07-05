@@ -1,0 +1,398 @@
+@page "/start-production"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IDisposable
+@using System.Net.Http.Json
+@using MesAdmin.Web.Services
+@inject IHttpClientFactory HttpFactory
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<PageTitle>开工管理 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T1.2 · Start Production</MudText>
+                <MudText Typo="Typo.h4">开工管理</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">
+                    齐套通过 ⭢ 开工 ⭢ Saga 31 工序编排 ⭢ 完工
+                </MudText>
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">
+                    待开工 @(_releasedOrders?.Count ?? 0)
+                </MudChip>
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                    执行中 @(_inProgressOrders?.Count ?? 0)
+                </MudChip>
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                               OnClick="() => LoadAsync()" Size="Size.Small" />
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (_errorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>@_errorMessage</MudAlert>
+    }
+
+    @if (_successMessage is not null)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Filled" Dense>@_successMessage</MudAlert>
+    }
+
+    @if (_isLoading && _releasedOrders is null)
+    {
+        <MudPaper Class="glass-kpi-card pa-8">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="section-copy">加载工单列表...</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        @* ── 待开工工单（Released） ── *@
+        <MudPaper Class="glass-kpi-card pa-4">
+            <MudStack Spacing="3">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.subtitle1" Class="section-kicker">
+                        <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" /> 待开工
+                    </MudText>
+                    @if (_releasedOrders?.Count > 0)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                  Disabled="@_busy" OnClick="StartAllAsync">
+                            <MudIcon Icon="@Icons.Material.Filled.PlaylistPlay" Size="Size.Small" /> 全部开工
+                        </MudButton>
+                    }
+                </MudStack>
+
+                @if (_releasedOrders is null || _releasedOrders.Count == 0)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                        <MudText Typo="Typo.body2" Class="section-copy">暂无待开工的工单，所有 Released 工单已开工或不存在。</MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="kit-check">
+                            前往齐套检查
+                        </MudButton>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudTable Items="@_releasedOrders" Dense Hover Breakpoint="Breakpoint.Sm">
+                        <ColGroup>
+                            <col style="width: 140px" />
+                            <col style="width: 100px" />
+                            <col style="width: 80px" />
+                            <col style="width: 80px" />
+                            <col style="width: 120px" />
+                            <col />
+                        </ColGroup>
+                        <HeaderContent>
+                            <MudTh>工单号</MudTh>
+                            <MudTh>产品</MudTh>
+                            <MudTh>计划</MudTh>
+                            <MudTh>BOM 版本</MudTh>
+                            <MudTh>创建时间</MudTh>
+                            <MudTh>操作</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="工单号">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-info);">
+                                    @context.OrderNumber
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="产品">@context.ProductCode</MudTd>
+                            <MudTd DataLabel="计划">@context.PlannedQuantity</MudTd>
+                            <MudTd DataLabel="BOM">@context.BomVersion</MudTd>
+                            <MudTd DataLabel="创建时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                            <MudTd DataLabel="操作">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                          Disabled="@IsStarting(context.Id)"
+                                          OnClick="() => StartOrderAsync(context)">
+                                    @if (IsStarting(context.Id))
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Class="mr-1" />
+                                    }
+                                    <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" /> 开工
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudStack>
+        </MudPaper>
+
+        @* ── 执行中工单（InProgress） ── *@
+        @if (_inProgressOrders is not null && _inProgressOrders.Count > 0)
+        {
+            <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.subtitle1" Class="section-kicker">
+                        <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" Size="Size.Small" /> 执行中
+                    </MudText>
+
+                    @foreach (var order in _inProgressOrders)
+                    {
+                        var ops = _operations.GetValueOrDefault(order.Id);
+                        var completedCount = ops?.Count(o => o.Status == "Completed") ?? 0;
+                        var totalCount = ops?.Count ?? 31;
+                        var progressPct = totalCount > 0 ? (double)completedCount / totalCount * 100 : 0;
+
+                        <MudPaper Class="pa-4" Style="background: rgba(30, 30, 46, 0.6); border-radius: 12px; margin-bottom: 8px;">
+                            <MudStack Spacing="2">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.subtitle2" Style="font-weight:600;">
+                                            @order.OrderNumber
+                                        </MudText>
+                                        <MudText Typo="Typo.body2" Class="section-copy">
+                                            @order.ProductCode · 计划 @order.PlannedQuantity
+                                        </MudText>
+                                    </MudStack>
+                                    <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                                        @completedCount / @totalCount 工序
+                                    </MudChip>
+                                </MudStack>
+
+                                <MudProgressLinear Value="@progressPct" Color="Color.Primary"
+                                                   Class="rounded-lg" Style="height: 6px;" />
+                                <MudText Typo="Typo.caption" Class="kpi-sub">
+                                    进度 @progressPct.ToString("F1")% · 已完工 @completedCount 道工序
+                                </MudText>
+
+                                @* 工序进度条（按工站分组） *@
+                                @if (ops is not null && ops.Count > 0)
+                                {
+                                    <div class="operation-timeline">
+                                        @foreach (var stationGroup in ops.GroupBy(o => o.Station).OrderBy(g => g.Key))
+                                        {
+                                            var stationOps = stationGroup.OrderBy(o => o.Sequence).ToList();
+                                            var stationDone = stationOps.Count(o => o.Status == "Completed");
+                                            var stationTotal = stationOps.Count;
+
+                                            <div class="station-row">
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined"
+                                                         Class="station-chip">
+                                                    站@(stationGroup.Key)
+                                                </MudChip>
+                                                @foreach (var op in stationOps)
+                                                {
+                                                    var isDone = op.Status == "Completed";
+                                                    var isRunning = op.Status == "InProgress";
+                                                    var isFailed = op.Status == "Failed";
+                                                    var dotColor = isDone ? "#4ade80" : isFailed ? "#ef4444" : isRunning ? "#fbbf24" : "#45475A";
+                                                    var title = $"{op.Sequence}. {op.OperationName}";
+
+                                                    <span class="op-dot" style="background:@dotColor; box-shadow: 0 0 4px @dotColor;"
+                                                          title="@title" @onclick="() => ShowOperationDetail(op)"></span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </MudStack>
+                        </MudPaper>
+                    }
+                </MudStack>
+            </MudPaper>
+        }
+    }
+</MudStack>
+
+@* ── 工序详情对话框 ── *@
+<MudDialog @bind-Visible="_opDetailVisible" ContentClass="kit-check-dialog-content">
+    <TitleContent>
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h6">工序详情</MudText>
+            @if (_selectedOp is not null)
+            {
+                <MudChip T="string" Size="Size.Small"
+                         Color="@GetOpStatusColor(_selectedOp.Status)"
+                         Variant="Variant.Filled">
+                    @_selectedOp.Status
+                </MudChip>
+            }
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedOp is not null)
+        {
+            <MudStack Spacing="2">
+                <MudGrid Spacing="2">
+                    <MudItem xs="6"><div class="detail-item"><span class="detail-label">工序编码</span><strong>@_selectedOp.OperationCode</strong></div></MudItem>
+                    <MudItem xs="6"><div class="detail-item"><span class="detail-label">工序名称</span><strong>@_selectedOp.OperationName</strong></div></MudItem>
+                    <MudItem xs="4"><div class="detail-item"><span class="detail-label">序号</span><strong>@_selectedOp.Sequence</strong></div></MudItem>
+                    <MudItem xs="4"><div class="detail-item"><span class="detail-label">工站</span><strong>@_selectedOp.Station</strong></div></MudItem>
+                    <MudItem xs="4"><div class="detail-item"><span class="detail-label">状态</span><strong>@_selectedOp.Status</strong></div></MudItem>
+                    <MudItem xs="6"><div class="detail-item"><span class="detail-label">操作人</span><strong>@(string.IsNullOrEmpty(_selectedOp.OperatorId) ? "-" : _selectedOp.OperatorId)</strong></div></MudItem>
+                    <MudItem xs="6"><div class="detail-item"><span class="detail-label">设备</span><strong>@(string.IsNullOrEmpty(_selectedOp.EquipmentId) ? "-" : _selectedOp.EquipmentId)</strong></div></MudItem>
+                    <MudItem xs="6"><div class="detail-item"><span class="detail-label">开始时间</span><strong>@(_selectedOp.StartAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</strong></div></MudItem>
+                    <MudItem xs="6"><div class="detail-item"><span class="detail-label">结束时间</span><strong>@(_selectedOp.EndAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</strong></div></MudItem>
+                </MudGrid>
+                @if (!string.IsNullOrEmpty(_selectedOp.FailureReason))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>
+                        <MudText Typo="Typo.body2">失败原因：@_selectedOp.FailureReason</MudText>
+                    </MudAlert>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _opDetailVisible = false">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<OrderSummary>? _releasedOrders;
+    private List<OrderSummary>? _inProgressOrders;
+    private Dictionary<string, List<OperationDto>> _operations = new();
+    private bool _isLoading, _busy;
+    private string? _errorMessage, _successMessage;
+    private string? _startingOrderId;
+    private OperationDto? _selectedOp;
+    private bool _opDetailVisible;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _timer = new Timer(async _ => await InvokeAsync(LoadAsync), null, 10000, 10000);
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _successMessage = null;
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // 并行加载 Released + InProgress 工单
+            var releasedTask = client.GetFromJsonAsync<List<OrderSummary>>(
+                "api/v1/orders?status=Released&page=1&size=50");
+            var inProgressTask = client.GetFromJsonAsync<List<OrderSummary>>(
+                "api/v1/orders?status=InProgress&page=1&size=50");
+            await Task.WhenAll(releasedTask, inProgressTask);
+
+            _releasedOrders = releasedTask.Result ?? [];
+            _inProgressOrders = inProgressTask.Result ?? [];
+
+            // 加载每个 InProgress 工单的操作记录
+            _operations = new Dictionary<string, List<OperationDto>>();
+            foreach (var order in _inProgressOrders)
+            {
+                try
+                {
+                    var ops = await client.GetFromJsonAsync<List<OperationDto>>(
+                        $"api/v1/orders/{order.Id}/operations");
+                    if (ops is not null && ops.Count > 0)
+                        _operations[order.Id] = ops;
+                }
+                catch
+                {
+                    // 单个工单操作加载失败不阻塞整体
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"加载工单失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task StartOrderAsync(OrderSummary order)
+    {
+        _startingOrderId = order.Id;
+        _successMessage = null;
+        _errorMessage = null;
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            _busy = true;
+            var resp = await client.PostAsJsonAsync(
+                $"api/v1/orders/{order.Id}/start", new { });
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                _errorMessage = $"开工失败 (HTTP {(int)resp.StatusCode})：{body}";
+                return;
+            }
+
+            _successMessage = $"工单 {order.OrderNumber} 已开工，Saga 正在执行 31 工序编排...";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"开工异常：{ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+            _startingOrderId = null;
+        }
+    }
+
+    /// <summary>全部开工：逐个触发已放行工单。</summary>
+    private async Task StartAllAsync()
+    {
+        if (_releasedOrders is null || _releasedOrders.Count == 0) return;
+        _successMessage = $"正在分批开工 {_releasedOrders.Count} 个工单...";
+        _errorMessage = null;
+
+        var failed = 0;
+        foreach (var order in _releasedOrders.ToList())
+        {
+            try
+            {
+                await StartOrderAsync(order);
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        if (failed > 0)
+            _errorMessage = $"{failed} 个工单开工失败";
+        else
+            _successMessage = $"全部 {_releasedOrders.Count} 个工单已开工";
+    }
+
+    private void ShowOperationDetail(OperationDto op)
+    {
+        _selectedOp = op;
+        _opDetailVisible = true;
+    }
+
+    private bool IsStarting(string orderId) => _startingOrderId == orderId;
+
+    private static Color GetOpStatusColor(string status) => status switch
+    {
+        "Completed" => Color.Success,
+        "Failed" => Color.Error,
+        "InProgress" => Color.Warning,
+        _ => Color.Default
+    };
+
+    public void Dispose() => _timer?.Dispose();
+}

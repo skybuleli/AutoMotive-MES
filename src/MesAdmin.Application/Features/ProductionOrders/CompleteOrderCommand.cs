@@ -2,13 +2,15 @@ using FastEndpoints;
 using MemoryPack;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
+using Microsoft.Extensions.Logging;
+using ZLogger;
 
 namespace MesAdmin.Application.Features.ProductionOrders;
 
 /// <summary>
-/// 完工确认命令（T1.8）。
+/// 完工确认命令（T1.8 + T1.17 物料消耗反冲触发）。
 /// 提交合格/不良数量，质量工程师审核放行，生成成品入库单 + 追溯标签码，
-/// 并标记待同步 SAP 完工数量（实际 SAP 同步由 T3.14 后台作业执行）。
+/// 完工后自动触发 T1.17 物料消耗反冲（BOM 扣减库存 + 差异检查 + SAP 同步记录）。
 /// </summary>
 [MemoryPackable]
 public sealed partial record CompleteOrderCommand(
@@ -19,7 +21,8 @@ public sealed partial record CompleteOrderCommand(
 
 internal sealed class CompleteOrderHandler(
     IProductionOrderRepository orders,
-    IGoodsReceiptRepository goodsReceipts) : ICommandHandler<CompleteOrderCommand, ProductionOrder>
+    IGoodsReceiptRepository goodsReceipts,
+    ILogger<CompleteOrderHandler> logger) : ICommandHandler<CompleteOrderCommand, ProductionOrder>
 {
     public async Task<ProductionOrder> ExecuteAsync(CompleteOrderCommand cmd, CancellationToken ct)
     {
@@ -29,27 +32,41 @@ internal sealed class CompleteOrderHandler(
         // 幂等：已存在入库单则跳过入库单创建（防止重复完工）
         var existingReceipt = await goodsReceipts.GetByOrderIdAsync(cmd.OrderId, ct);
         if (existingReceipt is not null)
-            return order; // 已完工且已入库，幂等返回
+            return order;
 
-        // 1. 状态机推进：InProgress → Completed（领域内校验数量上限）
+        // 1. 状态机推进：InProgress → Completed
         order.Complete(cmd.QualifiedQuantity, cmd.DefectiveQuantity, DateTimeOffset.UtcNow);
         await orders.SaveChangesAsync(ct);
 
         // 2. T1.8 质量审核放行 + 成品入库 + 追溯标签码生成
-        //    追溯标签码编码规则在 GoodsReceipt.Create 内实现（ESP9-YYYYMMDD-NNNN）
         var receipt = GoodsReceipt.Create(
-            order.Id,
-            order.OrderNumber,
-            order.ProductCode,
-            cmd.QualifiedQuantity,
-            cmd.ReviewerId,
-            DateTimeOffset.UtcNow);
+            order.Id, order.OrderNumber, order.ProductCode,
+            cmd.QualifiedQuantity, cmd.ReviewerId, DateTimeOffset.UtcNow);
         await goodsReceipts.AddAsync(receipt, ct);
         await goodsReceipts.SaveChangesAsync(ct);
 
-        // 3. SAP 完工数量同步：标记为待同步（SapSynced=false），
-        //    实际 SAP RFC/BAPI 调用由 T3.14 后台作业轮询 SapSynced=false 的入库单执行。
-        //    此处不直接调用 SAP，避免工单完工流程被外部系统可用性阻塞。
+        // 3. T1.17 物料消耗反冲（工单完工后自动触发）
+        // 根据 BOM 标准用量扣减线边库存，差异 > 2% 生成异常报告，创建 SAP 同步记录
+        try
+        {
+            var backflushResult = await new BackflushMaterialsCommand(cmd.OrderId).ExecuteAsync(ct);
+            if (backflushResult.VarianceCount > 0)
+            {
+                logger.ZLogWarning(
+                    $"完工反冲完成：工单 {order.OrderNumber} 有 {backflushResult.VarianceCount} 项差异超阈值，" +
+                    $"SAP 待同步 {backflushResult.SapSyncCount} 条");
+            }
+            else
+            {
+                logger.ZLogInformation(
+                    $"完工反冲完成：工单 {order.OrderNumber} 消耗 {backflushResult.ConsumedCount} 种物料，无差异");
+            }
+        }
+        catch (Exception ex) when (ex is not KeyNotFoundException)
+        {
+            // 反冲失败不阻塞完工流程，记录日志供后续处理
+            logger.ZLogWarning(ex, $"完工反冲异常（不阻塞完工）：工单 {order.OrderNumber}");
+        }
 
         return order;
     }

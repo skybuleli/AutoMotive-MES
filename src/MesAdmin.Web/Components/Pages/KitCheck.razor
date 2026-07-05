@@ -1,0 +1,415 @@
+@page "/kit-check"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IDisposable
+@using System.Net.Http.Json
+@using MesAdmin.Web.Services
+@inject IHttpClientFactory HttpFactory
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<PageTitle>齐套检查 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T1.4 · Kit Check</MudText>
+                <MudText Typo="Typo.h4">齐套检查</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">BOM 展开 → 库存查询 → 缺料自动 JIT 拉动 → 齐套通过转 Released</MudText>
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                    待检查 @(_orders?.Count ?? 0)
+                </MudChip>
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                               OnClick="() => LoadOrdersAsync()" Size="Size.Small" />
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (_errorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>@_errorMessage</MudAlert>
+    }
+
+    @if (_successMessage is not null)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Filled" Dense>@_successMessage</MudAlert>
+    }
+
+    @if (_isLoading && _orders is null)
+    {
+        <MudPaper Class="glass-kpi-card pa-8">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="section-copy">加载工单列表...</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else if (_orders is not null && _orders.Count == 0)
+    {
+        <MudPaper Class="glass-kpi-card pa-8">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                <MudText Typo="Typo.body1">暂无待齐套检查的工单</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">所有已创建工单已完成齐套检查并放行，或当前无 Created 状态的工单。</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="production">
+                    前往创建工单
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+    else if (_orders is not null)
+    {
+        @* ── 待检查工单列表 ── *@
+        <MudPaper Class="glass-kpi-card pa-4">
+            <MudTable Items="@_orders" Dense Hover Breakpoint="Breakpoint.Sm" Class="kit-check-table">
+                <ColGroup>
+                    <col style="width: 140px" />
+                    <col style="width: 100px" />
+                    <col style="width: 80px" />
+                    <col style="width: 80px" />
+                    <col style="width: 120px" />
+                    <col style="width: 100px" />
+                </ColGroup>
+                <HeaderContent>
+                    <MudTh>工单号</MudTh>
+                    <MudTh>产品</MudTh>
+                    <MudTh>BOM 版本</MudTh>
+                    <MudTh>计划数量</MudTh>
+                    <MudTh>创建时间</MudTh>
+                    <MudTh>操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="工单号">
+                        <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-primary);">
+                            @context.OrderNumber
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="产品">@context.ProductCode</MudTd>
+                    <MudTd DataLabel="BOM">@context.BomVersion</MudTd>
+                    <MudTd DataLabel="计划">@context.PlannedQuantity</MudTd>
+                    <MudTd DataLabel="创建时间">
+                        @context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")
+                    </MudTd>
+                    <MudTd DataLabel="操作">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                  Disabled="@IsCheckingThis(context.Id)"
+                                  OnClick="() => RunKitCheckAsync(context)">
+                            @if (IsCheckingThis(context.Id))
+                            {
+                                <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Class="mr-1" />
+                            }
+                            <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /> 齐套检查
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+        @* ── 快速统计 ── *@
+        <MudPaper Class="glass-kpi-card pa-4">
+            <MudStack Row Spacing="4" Justify="Justify.SpaceAround" Wrap="Wrap.Wrap">
+                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@_orders.Count</MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">待检查工单</MudText>
+                </MudStack>
+                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h4" Color="Color.Success">@_passedToday</MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">今日通过</MudText>
+                </MudStack>
+                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h4" Color="Color.Warning">@_failedToday</MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">今日缺料</MudText>
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+    }
+</MudStack>
+
+@* ── 齐套检查结果对话框 ── *@
+<MudDialog @bind-Visible="_resultDialogVisible" ContentClass="kit-check-dialog-content" MaxWidth="MaxWidth.Medium" FullWidth="true">
+    <TitleContent>
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.overline" Class="section-kicker">Kit Check Result</MudText>
+                <MudText Typo="Typo.h6">@_resultOrderNumber 齐套检查</MudText>
+            </MudStack>
+            @if (_result is not null)
+            {
+                <MudChip T="string" Color="@(_result.IsPassed ? Color.Success : Color.Error)" Size="Size.Small" Variant="Variant.Filled">
+                    @(_result.IsPassed ? "✅ 齐套通过" : "❌ 齐套未通过")
+                </MudChip>
+            }
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (_isChecking)
+        {
+            <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-8">
+                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="section-copy">正在执行齐套检查（BOM 展开 → 库存查询 → 缺料检查）...</MudText>
+            </MudStack>
+        }
+        else if (_result is not null && _result.IsPassed)
+        {
+            <MudPaper Class="pa-6" Style="background: rgba(76, 175, 80, 0.08); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 12px;">
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Large" Color="Color.Success" />
+                    <MudText Typo="Typo.h5" Color="Color.Success" Style="font-weight:600;">齐套检查通过</MudText>
+                    <MudText Typo="Typo.body2" Class="section-copy">
+                        工单 @_resultOrderNumber 所有关键物料库存充足，已自动转为 Released 状态，可进行开工操作。
+                    </MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success"
+                              OnClick="NavigateToProduction">
+                        前往工单管理
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+        else if (_result is not null && !_result.IsPassed)
+        {
+            <MudPaper Class="pa-4" Style="border-radius: 12px;">
+                <MudStack Spacing="3">
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                        <MudText Typo="Typo.body2">
+                            工单 @_resultOrderNumber 存在 @_result.Items.Count(i => i.ShortageQuantity > 0.001) 种物料短缺，
+                            已自动生成 JIT 拉动信号推送仓库。请等待物料送达后再重新执行齐套检查。
+                        </MudText>
+                    </MudAlert>
+
+                    <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Small" /> 缺料明细
+                    </MudText>
+
+                    <MudTable Items="@_result.Items.Where(i => i.ShortageQuantity > 0.001).ToList()"
+                              Dense Hover Breakpoint="Breakpoint.Sm">
+                        <ColGroup>
+                            <col style="width: 120px" />
+                            <col style="width: 80px" />
+                            <col style="width: 80px" />
+                            <col style="width: 80px" />
+                            <col style="width: 60px" />
+                            <col style="width: 50px" />
+                            <col />
+                        </ColGroup>
+                        <HeaderContent>
+                            <MudTh>物料编码</MudTh>
+                            <MudTh>需求</MudTh>
+                            <MudTh>可用</MudTh>
+                            <MudTh>短缺</MudTh>
+                            <MudTh>单位</MudTh>
+                            <MudTh>关键</MudTh>
+                            <MudTh>物料名称</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="物料编码">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-warning);">
+                                    @context.MaterialCode
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="需求">@context.RequiredQuantity.ToString("F0")</MudTd>
+                            <MudTd DataLabel="可用" Style="color:var(--mud-palette-error);">
+                                @context.AvailableQuantity.ToString("F0")
+                            </MudTd>
+                            <MudTd DataLabel="短缺" Style="color:var(--mud-palette-error);font-weight:600;">
+                                @context.ShortageQuantity.ToString("F0")
+                            </MudTd>
+                            <MudTd DataLabel="单位">@context.Unit</MudTd>
+                            <MudTd DataLabel="关键">
+                                @if (context.IsCritical)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">关键</MudChip>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="物料名称">@context.MaterialName</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    @* 关键物料总览 *@
+                    <MudText Typo="Typo.subtitle2" Class="section-kicker" Style="margin-top:8px;">
+                        <MudIcon Icon="@Icons.Material.Filled.ListAlt" Size="Size.Small" /> 全部物料清单
+                    </MudText>
+                    <MudTable Items="@_result.Items" Dense Hover Breakpoint="Breakpoint.Sm">
+                        <ColGroup>
+                            <col style="width: 120px" />
+                            <col style="width: 80px" />
+                            <col style="width: 80px" />
+                            <col style="width: 80px" />
+                            <col style="width: 60px" />
+                            <col style="width: 50px" />
+                            <col />
+                        </ColGroup>
+                        <HeaderContent>
+                            <MudTh>物料编码</MudTh>
+                            <MudTh>需求</MudTh>
+                            <MudTh>可用</MudTh>
+                            <MudTh>短缺</MudTh>
+                            <MudTh>单位</MudTh>
+                            <MudTh>关键</MudTh>
+                            <MudTh>物料名称</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="物料编码">
+                                <MudText Typo="Typo.body2" Style="@(context.ShortageQuantity > 0.001 ? "font-weight:600;color:var(--mud-palette-warning);" : "")">
+                                    @context.MaterialCode
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="需求">@context.RequiredQuantity.ToString("F0")</MudTd>
+                            <MudTd DataLabel="可用">@context.AvailableQuantity.ToString("F0")</MudTd>
+                            <MudTd DataLabel="短缺" Style="@(context.ShortageQuantity > 0.001 ? "color:var(--mud-palette-error);font-weight:600;" : "")">
+                                @context.ShortageQuantity.ToString("F0")
+                            </MudTd>
+                            <MudTd DataLabel="单位">@context.Unit</MudTd>
+                            <MudTd DataLabel="关键">
+                                @if (context.IsCritical)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">关键</MudChip>
+                                }
+                            </MudTd>
+                            <MudTd DataLabel="物料名称">@context.MaterialName</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+
+                    <MudStack Row Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                  OnClick="NavigateToJitKanban">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" /> 查看 JIT 看板
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                  OnClick="() => RunKitCheckAsync(_resultOrder)">
+                            <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" /> 重新检查
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        }
+        else if (_resultError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Filled">@_resultError</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="CloseResultDialog">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<OrderSummary>? _orders;
+    private bool _isLoading;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private int _passedToday;
+    private int _failedToday;
+    private Timer? _timer;
+
+    // 检查状态
+    private string? _checkingOrderId;
+    private bool _isChecking;
+    private bool _resultDialogVisible;
+    private KitCheckResponse? _result;
+    private OrderSummary? _resultOrder;
+    private string _resultOrderNumber = string.Empty;
+    private string? _resultError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrdersAsync();
+        _timer = new Timer(async _ => await InvokeAsync(LoadOrdersAsync), null, 15000, 15000);
+    }
+
+    private async Task LoadOrdersAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        _successMessage = null;
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            _orders = await client.GetFromJsonAsync<List<OrderSummary>>(
+                "api/v1/orders?status=Created&page=1&size=100");
+            _errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"加载工单列表失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task RunKitCheckAsync(OrderSummary order)
+    {
+        _checkingOrderId = order.Id;
+        _resultOrder = order;
+        _resultOrderNumber = order.OrderNumber;
+        _isChecking = true;
+        _result = null;
+        _resultError = null;
+        _resultDialogVisible = true;
+
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.PostAsJsonAsync(
+                $"api/v1/orders/{order.Id}/kit-check", new { });
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                _resultError = $"齐套检查失败 (HTTP {(int)resp.StatusCode})：{body}";
+                _isChecking = false;
+                return;
+            }
+
+            _result = await resp.Content.ReadFromJsonAsync<KitCheckResponse>();
+
+            if (_result is not null)
+            {
+                if (_result.IsPassed)
+                    _passedToday++;
+                else
+                    _failedToday++;
+            }
+
+            // 刷新工单列表（已放行的工单会从 Created 列表中消失）
+            await LoadOrdersAsync();
+        }
+        catch (Exception ex)
+        {
+            _resultError = $"齐套检查异常：{ex.Message}";
+        }
+        finally
+        {
+            _isChecking = false;
+            _checkingOrderId = null;
+        }
+    }
+
+    private void CloseResultDialog()
+    {
+        _resultDialogVisible = false;
+        _result = null;
+        _resultError = null;
+    }
+
+    private bool IsCheckingThis(string orderId) => _checkingOrderId == orderId;
+
+    private void NavigateToProduction() => Navigation.NavigateTo("production");
+    private void NavigateToJitKanban() => Navigation.NavigateTo("jit-kanban");
+
+    public void Dispose() => _timer?.Dispose();
+}

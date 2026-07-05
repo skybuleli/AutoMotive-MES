@@ -87,6 +87,10 @@ public class MesApiClient
     public Task<List<TraceabilityLinkDto>?> GetReverseTraceAsync(string batchType, string batch, CancellationToken ct = default)
         => GetAsync<List<TraceabilityLinkDto>>($"api/v1/traceability/reverse/{Uri.EscapeDataString(batchType)}/{Uri.EscapeDataString(batch)}", ct);
 
+    /// <summary>T1.4 齐套检查：对指定工单执行 BOM 展开→库存检查→缺料 JIT 拉动。</summary>
+    public Task<(bool Ok, KitCheckResponse? Data, int Status)> KitCheckAsync(string orderId, CancellationToken ct = default)
+        => PostAsync<KitCheckResponse>($"api/v1/orders/{orderId}/kit-check", new { }, ct);
+
     private async Task AttachTokenAsync(HttpRequestMessage req)
     {
         try

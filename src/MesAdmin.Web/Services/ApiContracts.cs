@@ -35,6 +35,22 @@ public record TraceabilityLinkDto(
     DateTimeOffset CreatedAt,
     bool HashVerified);
 
+/// <summary>T1.4 齐套检查响应 DTO。</summary>
+public record KitCheckResponse(
+    bool IsPassed,
+    List<KitCheckItemResponse> Items,
+    List<string> JitPullSignalIds);
+
+/// <summary>T1.4 齐套检查单项结果 DTO。</summary>
+public record KitCheckItemResponse(
+    string MaterialCode,
+    string MaterialName,
+    double RequiredQuantity,
+    double AvailableQuantity,
+    double ShortageQuantity,
+    string Unit,
+    bool IsCritical);
+
 /// <summary>工单状态枚举字符串（与 API 端 OrderStatus.ToString() 一致）</summary>
 public static class OrderStatusNames
 {

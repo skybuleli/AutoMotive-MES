@@ -4,11 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using MesAdmin.Api.Infrastructure;
 using MesAdmin.Application.Behaviors;
 using MesAdmin.Application.Interfaces;
+using MesAdmin.Application.Features.Inventory;
 using MesAdmin.Application.Sagas;
 using MesAdmin.Infrastructure;
 using MesAdmin.Infrastructure.Data;
 using MesAdmin.Infrastructure.Data.Repositories;
 using MesAdmin.Infrastructure.Hubs;
+using MesAdmin.Infrastructure.Data;
 using MesAdmin.Infrastructure.Logging;
 using MesAdmin.Infrastructure.Plc;
 using MesAdmin.Infrastructure.Workflows;
@@ -37,6 +39,14 @@ builder.Services.AddScoped<ISapRejectionRepository, SapRejectionRepository>();
 builder.Services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
 builder.Services.AddScoped<IMaterialBatchRepository, MaterialBatchRepository>();
 builder.Services.AddScoped<IMaterialBindingRepository, MaterialBindingRepository>();
+builder.Services.AddScoped<IJitPullSignalRepository, JitPullSignalRepository>();
+builder.Services.AddScoped<IBomRepository, BomRepository>();
+builder.Services.AddScoped<IMaterialInventorySettingRepository, MaterialInventorySettingRepository>();
+builder.Services.AddScoped<IInventoryAlertRepository, InventoryAlertRepository>();
+builder.Services.AddScoped<IMaterialConsumptionRepository, MaterialConsumptionRepository>();
+builder.Services.AddScoped<IConsumptionVarianceRepository, ConsumptionVarianceRepository>();
+builder.Services.AddScoped<ISapInventorySyncRecordRepository, SapInventorySyncRecordRepository>();
+builder.Services.AddHostedService<InventoryMonitoringService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ── PLC + R3 OEE + SignalR 实时管道（T2.12-T2.15）──
@@ -56,11 +66,15 @@ builder.Logging.AddZLogger();
 
 var app = builder.Build();
 
-// ── 启动时自动应用 EF Core Migration（无需手动 dotnet ef database update）──
+// ── 启动时自动应用 EF Core Migration + 种子数据（幂等）──
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
     await db.Database.MigrateAsync();
+
+    // T1.4/T1.13 种子数据：ESP BOM、库存阈值、初始库存
+    // 仅首次启动时写入，已存在数据则跳过（幂等）
+    await MesDataSeeder.SeedAsync(app.Services, app.Services.GetRequiredService<ILogger<Program>>());
 }
 
 // ── 中间件管道 ──

@@ -1,0 +1,450 @@
+@page "/dashboard"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IDisposable
+@using System.Net.Http.Json
+@using MesAdmin.Web.Services
+@using MesAdmin.Domain.Models
+@inject IHttpClientFactory HttpFactory
+@inject AuthService Auth
+@inject NavigationManager Navigation
+@inject OeeHubClient Hub
+
+<PageTitle>生产看板 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    @* ── 顶部 KPI 条 ── *@
+    <MudGrid Spacing="2">
+        <MudItem xs="6" md="3">
+            <MudPaper Class="glass-kpi-card pa-4" Style="border-top:3px solid var(--mud-palette-primary);">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Class="kpi-label">OEE</MudText>
+                    <MudText Typo="Typo.h4" Class="@GetAvgOeeClass()" Style="font-weight:700;">
+                        @AvgOee.ToString("P1")
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">综合设备效率</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="glass-kpi-card pa-4" Style="border-top:3px solid var(--mud-palette-primary);">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Class="kpi-label">在产工单</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary" Style="font-weight:700;">
+                        @(_summary?.InProgressCount ?? 0)
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">执行中 / @((_summary?.CreatedCount ?? 0) + (_summary?.ReleasedCount ?? 0)) 待处理</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="glass-kpi-card pa-4" Style="@KpiBorderStyle(3)">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Class="kpi-label">报警</MudText>
+                    <MudText Typo="Typo.h4" Color="@(_summary?.RedAlerts > 0 ? Color.Error : Color.Success)" Style="font-weight:700;">
+                        @(_summary?.ActiveAlerts ?? 0)
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">
+                        @(_summary?.RedAlerts ?? 0) 红色 / @(_summary?.YellowAlerts ?? 0) 黄色
+                    </MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudPaper Class="glass-kpi-card pa-4" Style="border-top:3px solid var(--mud-palette-success);">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Class="kpi-label">设备数</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Success" Style="font-weight:700;">
+                        @Hub.LatestOee.Count
+                    </MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">在线设备</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* 信号连接状态 *@
+    @if (!_hubConnected)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense>
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudProgressCircular Size="Size.Small" Color="Color.Warning" />
+                <MudText Typo="Typo.body2">等待 SignalR 连接，OEE 数据将在连接后实时更新...</MudText>
+            </MudStack>
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="3">
+        @* 左列：设备 OEE 看板 *@
+        <MudItem xs="12" md="8">
+            <MudPaper Class="glass-kpi-card pa-4">
+                <MudStack Spacing="3">
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.subtitle1" Class="section-kicker">
+                                <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" Size="Size.Small" /> 设备 OEE
+                            </MudText>
+                            <MudText Typo="Typo.caption" Class="kpi-sub">SignalR 实时推送 · @(Hub.Health is not null ? $"通道使用率 {Hub.Health.Utilization:P1}" : "等待数据")</MudText>
+                        </MudStack>
+                        <MudStack Row Spacing="1">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">S ≥85%</MudChip>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">A 70-85%</MudChip>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">B &lt;70%</MudChip>
+                        </MudStack>
+                    </MudStack>
+
+                    @if (Hub.LatestOee.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">等待设备数据采集...</MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <div class="oee-grid">
+                            @foreach (var oee in Hub.LatestOee)
+                            {
+                                <MudPaper Class="glass-kpi-card pa-3" Style="min-width:0;">
+                                    <MudStack Spacing="1">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                                <span class="status-dot @GetStatusClass(oee)"></span>
+                                                <MudText Typo="Typo.body2" Style="font-weight:600;">@oee.EquipmentCode</MudText>
+                                            </MudStack>
+                                            <MudChip T="string" Color="@GetGradeColor(oee.Grade)" Size="Size.Small" Variant="Variant.Outlined">
+                                                @oee.Grade
+                                            </MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.h5" Class="@GetGradeClass(oee.Grade)" Style="font-weight:700;">
+                                            @(oee.Oee.ToString("P1"))
+                                        </MudText>
+
+                                        <MudStack Row Spacing="2" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.caption" Class="kpi-sub">可用 @(oee.Availability.ToString("P0"))</MudText>
+                                            <MudText Typo="Typo.caption" Class="kpi-sub">性能 @(oee.Performance.ToString("P0"))</MudText>
+                                            <MudText Typo="Typo.caption" Class="kpi-sub">质量 @(oee.Quality.ToString("P0"))</MudText>
+                                        </MudStack>
+
+                                        @* 环境过程值 *@
+                                        <MudText Typo="Typo.caption" Class="kpi-sub" Style="font-size:11px;">
+                                            更新 @oee.Timestamp.ToLocalTime().ToString("HH:mm:ss")
+                                        </MudText>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        @* 右列：工单状态 + 预警 + 环境数据 *@
+        <MudItem xs="12" md="4">
+            <MudStack Spacing="3">
+                @* 工单状态概览 *@
+                <MudPaper Class="glass-kpi-card pa-4">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                            <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Small" /> 工单状态
+                        </MudText>
+
+                        <MudStack Spacing="1">
+                            <MudStack Row Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">已创建</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">@(_summary?.CreatedCount ?? 0)</MudChip>
+                            </MudStack>
+                            <MudProgressLinear Value="@GetOrderPercent(_summary?.CreatedCount)" Color="Color.Default" Class="rounded-lg" Style="height:4px;" />
+                            <MudStack Row Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">已放行</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">@(_summary?.ReleasedCount ?? 0)</MudChip>
+                            </MudStack>
+                            <MudProgressLinear Value="@GetOrderPercent(_summary?.ReleasedCount)" Color="Color.Info" Class="rounded-lg" Style="height:4px;" />
+                            <MudStack Row Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;">执行中</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">@(_summary?.InProgressCount ?? 0)</MudChip>
+                            </MudStack>
+                            <MudProgressLinear Value="@GetOrderPercent(_summary?.InProgressCount)" Color="Color.Primary" Class="rounded-lg" Style="height:4px;" />
+                            <MudStack Row Justify="Justify.SpaceBetween">
+                                <MudText Typo="Typo.body2">已完工</MudText>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@(_summary?.CompletedCount ?? 0)</MudChip>
+                            </MudStack>
+                            <MudProgressLinear Value="@GetOrderPercent(_summary?.CompletedCount)" Color="Color.Success" Class="rounded-lg" Style="height:4px;" />
+                        </MudStack>
+
+                        <MudStack Row Justify="Justify.FlexEnd" Spacing="1" Class="mt-2">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Href="production">查看全部</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Href="kit-check">齐套检查</MudButton>
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+
+                @* 预警看板 *@
+                <MudPaper Class="glass-kpi-card pa-4">
+                    <MudStack Spacing="2">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                                <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Size="Size.Small" /> 预警看板
+                            </MudText>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Href="jit-kanban">JIT 看板</MudButton>
+                        </MudStack>
+
+                        @if ((_summary?.RedAlerts ?? 0) > 0)
+                        {
+                            <MudPaper Class="pa-3" Style="background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.body2" Style="color:var(--mud-palette-error);font-weight:600;">
+                                            <MudIcon Icon="@Icons.Material.Filled.Dangerous" Size="Size.Small" /> 红色报警
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="kpi-sub">@_summary!.RedAlerts 项物料低于最低库存</MudText>
+                                    </MudStack>
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">@_summary.RedAlerts</MudChip>
+                                </MudStack>
+                            </MudPaper>
+                        }
+
+                        @if ((_summary?.YellowAlerts ?? 0) > 0)
+                        {
+                            <MudPaper Class="pa-3" Style="background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); border-radius: 8px;">
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.body2" Style="color:var(--mud-palette-warning);font-weight:600;">
+                                            <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" /> 黄色预警
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Class="kpi-sub">@_summary!.YellowAlerts 项物料低于安全库存</MudText>
+                                    </MudStack>
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">@_summary.YellowAlerts</MudChip>
+                                </MudStack>
+                            </MudPaper>
+                        }
+
+                        @if ((_summary?.ActiveAlerts ?? 0) == 0)
+                        {
+                            <MudStack AlignItems="AlignItems.Center" Spacing="1" Class="pa-2">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                                <MudText Typo="Typo.body2" Class="section-copy">当前无预警，库存正常</MudText>
+                            </MudStack>
+                        }
+                    </MudStack>
+                </MudPaper>
+
+                @* 环境数据（设备过程值） *@
+                <MudPaper Class="glass-kpi-card pa-4">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                            <MudIcon Icon="@Icons.Material.Filled.Thermostat" Size="Size.Small" /> 过程数据
+                        </MudText>
+
+                        @if (_envData.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="section-copy">等待设备数据采集...</MudText>
+                        }
+                        else
+                        {
+                            @foreach (var env in _envData)
+                            {
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.caption" Class="kpi-label">@env.EquipmentCode</MudText>
+                                        <MudText Typo="Typo.caption" Class="kpi-sub">@env.Tag</MudText>
+                                    </MudStack>
+                                    <MudStack Spacing="0" AlignItems="AlignItems.End">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600;">@env.Value.ToString("F1")</MudText>
+                                        <MudText Typo="Typo.caption" Class="kpi-sub">@env.Unit</MudText>
+                                    </MudStack>
+                                </MudStack>
+                                <MudProgressLinear Value="@env.Percent" Color="@env.Color" Class="rounded-lg" Style="height:3px;" />
+                            }
+                        }
+                    </MudStack>
+                </MudPaper>
+
+                @* 通道健康度 *@
+                @if (Hub.Health is not null)
+                {
+                    <MudPaper Class="glass-kpi-card pa-3">
+                        <MudStack Spacing="1">
+                            <MudText Typo="Typo.caption" Class="section-kicker">通道健康度</MudText>
+                            <MudStack Row Spacing="3" Justify="Justify.SpaceBetween">
+                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.caption" Class="kpi-label">写入</MudText>
+                                    <MudText Typo="Typo.body2">@Hub.Health.Written.ToString("N0")</MudText>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.caption" Class="kpi-label">读取</MudText>
+                                    <MudText Typo="Typo.body2">@Hub.Health.Read.ToString("N0")</MudText>
+                                </MudStack>
+                                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.caption" Class="kpi-label">使用率</MudText>
+                                    <MudText Typo="Typo.body2" Color="@(Hub.Health.Utilization > 0.8 ? Color.Warning : Color.Success)">
+                                        @(Hub.Health.Utilization.ToString("P1"))
+                                    </MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudStack>
+                    </MudPaper>
+                }
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+
+    @* 快速操作 *@
+    <MudPaper Class="glass-kpi-card pa-4">
+        <MudText Typo="Typo.subtitle2" Class="section-kicker" Style="margin-bottom:8px;">
+            <MudIcon Icon="@Icons.Material.Filled.FlashOn" Size="Size.Small" /> 快速操作
+        </MudText>
+        <MudStack Row Spacing="2" Wrap="Wrap.Wrap">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddCircle" Href="production">新建工单</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.FactCheck" Href="kit-check">齐套检查</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.PlayArrow" Href="start-production">开工管理</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Inventory2" Href="inventory">线边库存</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.LocalShipping" Href="jit-kanban">JIT 看板</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Analytics" Href="oee">OEE 详情</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudText Typo="Typo.caption" Class="section-copy" Style="text-align:center;">
+        下次刷新：@_countdown s · @(Hub.Health is not null ? $"{Hub.Health.EquipmentCount} 设备" : "")
+    </MudText>
+</MudStack>
+
+@code {
+    private DashboardSummaryDto? _summary;
+    private bool _hubConnected;
+    private bool _loadedOnce;
+    private int _countdown;
+    private Timer? _timer;
+    private readonly List<EnvDataItem> _envData = [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _loadedOnce)
+            return;
+
+        _loadedOnce = true;
+        await Hub.StartAsync();
+        _hubConnected = true;
+        await LoadSummaryAsync();
+        StateHasChanged();
+
+        _countdown = 15;
+        _timer = new Timer(async _ =>
+        {
+            _countdown--;
+            if (_countdown <= 0)
+            {
+                _countdown = 15;
+                await LoadSummaryAsync();
+            }
+            UpdateEnvData();
+            await InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            _summary = await client.GetFromJsonAsync<DashboardSummaryDto>("api/v1/dashboard/summary");
+        }
+        catch
+        {
+            // 静默重试
+        }
+    }
+
+    private void UpdateEnvData()
+    {
+        _envData.Clear();
+        foreach (var oee in Hub.LatestOee)
+        {
+            // 模拟环境/过程值：根据设备类型映射
+            var (tag, unit, maxVal, isHighBad) = oee.EquipmentCode switch
+            {
+                "EQ-TQ-01" or "EQ-TQ-02" => ("扭矩", "Nm", 30.0, true),
+                "EQ-HYD-01" => ("液压", "bar", 200.0, true),
+                "EQ-FLS-01" => ("CAN 延迟", "ms", 50.0, true),
+                "EQ-ASM-01" or "EQ-ASM-02" => ("装配力", "kN", 50.0, true),
+                "EQ-FT-01" => ("泄漏率", "ml/min", 5.0, true),
+                "EQ-VN-01" => ("温度", "°C", 45.0, false),
+                _ => ("过程值", "", 100.0, true),
+            };
+
+            var rawValue = oee.Oee * maxVal * (0.8 + Random.Shared.NextDouble() * 0.4);
+            var pct = Math.Clamp(rawValue / maxVal * 100, 0, 100);
+            var color = isHighBad
+                ? (pct > 85 ? Color.Error : pct > 70 ? Color.Warning : Color.Success)
+                : (pct > 85 ? Color.Warning : Color.Success);
+
+            _envData.Add(new EnvDataItem(oee.EquipmentCode, tag, Math.Round(rawValue, 1), unit, pct, color));
+        }
+    }
+
+    private double AvgOee
+    {
+        get
+        {
+            if (Hub.LatestOee.Count == 0) return 0;
+            return Hub.LatestOee.Average(o => o.Oee);
+        }
+    }
+
+    private int TotalOrders => (_summary?.CreatedCount ?? 0) + (_summary?.ReleasedCount ?? 0)
+        + (_summary?.InProgressCount ?? 0) + (_summary?.CompletedCount ?? 0) + (_summary?.ClosedCount ?? 0);
+
+    private double GetOrderPercent(int? count) => TotalOrders > 0 ? (count ?? 0) * 100.0 / TotalOrders : 0;
+
+    private string GetAvgOeeClass() => AvgOee switch
+    {
+        >= 0.85 => "oee-grade-s",
+        >= 0.70 => "oee-grade-a",
+        _ => "oee-grade-b",
+    };
+
+    private static string GetStatusClass(OeeRecord oee) => oee.Oee switch
+    {
+        >= 0.85 => "running",
+        >= 0.70 => "idle",
+        > 0 => "alarm",
+        _ => "offline",
+    };
+
+    private static Color GetGradeColor(OeeGrade grade) => grade switch
+    {
+        OeeGrade.S => Color.Success,
+        OeeGrade.A => Color.Warning,
+        _ => Color.Error,
+    };
+
+    private static string GetGradeClass(OeeGrade grade) => grade switch
+    {
+        OeeGrade.S => "oee-grade-s",
+        OeeGrade.A => "oee-grade-a",
+        _ => "oee-grade-b",
+    };
+
+    public void Dispose() => _timer?.Dispose();
+
+    private string KpiBorderStyle(int borderPx)
+        => $"border-top:{borderPx}px solid {(_summary?.RedAlerts > 0 ? "var(--mud-palette-error)" : "var(--mud-palette-success)")};";
+
+    // ── DTO ──
+
+    public record DashboardSummaryDto(
+        int CreatedCount, int ReleasedCount, int InProgressCount,
+        int CompletedCount, int ClosedCount,
+        int ActiveAlerts, int RedAlerts, int YellowAlerts,
+        int TodayQualified, int TodayDefective);
+
+    public record EnvDataItem(
+        string EquipmentCode, string Tag, double Value,
+        string Unit, double Percent, Color Color);
+}

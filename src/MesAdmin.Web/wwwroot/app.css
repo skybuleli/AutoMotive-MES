@@ -55,6 +55,87 @@ a {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
 }
 
+/* ── 响应式卡片网格 ── */
+.oee-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+/* ── 齐套检查 ── */
+.kit-check-table {
+    border-radius: 12px;
+}
+
+.kit-check-dialog-content {
+    max-height: 75vh;
+    overflow-y: auto;
+}
+
+.kit-check-passed {
+    background: rgba(76, 175, 80, 0.08);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+    border-radius: 12px;
+}
+
+/* ── 开工管理 ── */
+.operation-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.station-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.station-chip {
+    min-width: 44px;
+    flex-shrink: 0;
+}
+
+.op-dot {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.op-dot:hover {
+    transform: scale(1.5);
+    box-shadow: 0 0 12px rgba(203, 166, 247, 0.6) !important;
+}
+
+/* ── 生产看板 Fusion Dashboard ── */
+.dashboard-section {
+    background: transparent;
+}
+
+.env-progress {
+    height: 3px;
+    border-radius: 4px;
+}
+
+.env-item {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(69, 71, 90, 0.3);
+}
+
+.env-item:last-child {
+    border-bottom: none;
+}
+
 /* ── Andon 脉冲 ── */
 .andon-pulse {
     animation: andonPulse 2s ease-in-out infinite;
