@@ -129,16 +129,16 @@
                 </MudText>
                 <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                     <MudTextField @bind-Value="_newSignal.MaterialCode" Label="物料编码"
-                                  Variant="Variant.Outlined" Dense For="@(() => _newSignal.MaterialCode)"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" For="@(() => _newSignal.MaterialCode)"
                                   Style="min-width:160px;" />
                     <MudTextField @bind-Value="_newSignal.MaterialName" Label="物料名称"
-                                  Variant="Variant.Outlined" Dense Style="min-width:160px;" />
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:160px;" />
                     <MudTextField @bind-Value="_newSignal.QuantityStr" Label="数量"
-                                  Variant="Variant.Outlined" Dense Style="width:80px;" />
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:80px;" />
                     <MudTextField @bind-Value="_newSignal.Unit" Label="单位"
-                                  Variant="Variant.Outlined" Dense Style="width:60px;" />
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:60px;" />
                     <MudTextField @bind-Value="_newSignal.TargetStation" Label="目标工位"
-                                  Variant="Variant.Outlined" Dense Style="min-width:120px;" />
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:120px;" />
                     <MudButton Variant="Variant.Filled" Color="Color.Primary"
                               Disabled="@_isCreating" OnClick="() => CreateSignalAsync()">
                         <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" /> 发送拉动
@@ -207,7 +207,7 @@
             <MudText Typo="Typo.body2">数量：@(_selectedSignal?.ShortageQuantity.ToString("F0")) @(_selectedSignal?.Unit)</MudText>
             <MudText Typo="Typo.body2">目标工位：@(_selectedSignal?.TargetStation)</MudText>
             <MudTextField @bind-Value="_deliveryOperator" Label="确认操作员工号"
-                          Variant="Variant.Outlined" Dense />
+                          Variant="Variant.Outlined" Margin="Margin.Dense" />
         </MudStack>
     </DialogContent>
     <DialogActions>
@@ -227,7 +227,7 @@
             <MudText Typo="Typo.subtitle1">取消拉动信号</MudText>
             <MudText Typo="Typo.body2">物料：@(_selectedSignal?.MaterialCode) @(_selectedSignal?.MaterialName)</MudText>
             <MudTextField @bind-Value="_cancelReason" Label="取消原因"
-                          Variant="Variant.Outlined" Dense Typo="Typo.body2" />
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Typo="Typo.body2" />
         </MudStack>
     </DialogContent>
     <DialogActions>

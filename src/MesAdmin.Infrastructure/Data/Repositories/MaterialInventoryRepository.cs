@@ -65,10 +65,16 @@ public class InventoryAlertRepository(MesDbContext db) : IInventoryAlertReposito
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync(ct);
 
-    public Task<InventoryAlert?> GetLatestByMaterialAsync(string materialCode, CancellationToken ct = default)
+    public Task<InventoryAlert?> GetLatestByMaterialAsync(string materialCode, string? stationId, CancellationToken ct = default)
         => db.InventoryAlerts
             .AsNoTracking()
-            .Where(a => a.MaterialCode == materialCode)
+            .Where(a => a.MaterialCode == materialCode && a.StationId == stationId)
+            .OrderByDescending(a => a.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+    public Task<InventoryAlert?> GetLatestByMaterialTrackedAsync(string materialCode, string? stationId, CancellationToken ct = default)
+        => db.InventoryAlerts
+            .Where(a => a.MaterialCode == materialCode && a.StationId == stationId)
             .OrderByDescending(a => a.CreatedAt)
             .FirstOrDefaultAsync(ct);
 

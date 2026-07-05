@@ -41,7 +41,7 @@
 
             @if (!string.IsNullOrWhiteSpace(_error))
             {
-                <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense FullWidth>
+                <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>
                     @_error
                 </MudAlert>
             }
@@ -63,7 +63,7 @@
                 }
             </MudButton>
 
-            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense FullWidth>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense>
                 演示账号：manager / leader / qe / ee / warehouse / sqe（密码任意）
             </MudAlert>
         </MudStack>

@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MesAdmin.Domain.Tests", "te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MesAdmin.Application.Tests", "tests\MesAdmin.Application.Tests\MesAdmin.Application.Tests.csproj", "{8470A162-96B6-40E4-BFA0-D77601FF9504}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MesAdmin.Generators", "src\MesAdmin.Generators\MesAdmin.Generators.csproj", "{FAE51849-784E-4C56-A467-6CAD04724E9E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -115,6 +117,18 @@ Global
 		{8470A162-96B6-40E4-BFA0-D77601FF9504}.Release|x64.Build.0 = Release|Any CPU
 		{8470A162-96B6-40E4-BFA0-D77601FF9504}.Release|x86.ActiveCfg = Release|Any CPU
 		{8470A162-96B6-40E4-BFA0-D77601FF9504}.Release|x86.Build.0 = Release|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Debug|x64.Build.0 = Debug|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Debug|x86.Build.0 = Debug|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Release|x64.ActiveCfg = Release|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Release|x64.Build.0 = Release|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Release|x86.ActiveCfg = Release|Any CPU
+		{FAE51849-784E-4C56-A467-6CAD04724E9E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -127,5 +141,6 @@ Global
 		{B14A04F4-C924-44E4-BA3C-900F44FBCEA6} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{91F76E47-4B2B-4AFB-8046-38F4DA67E795} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{8470A162-96B6-40E4-BFA0-D77601FF9504} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{FAE51849-784E-4C56-A467-6CAD04724E9E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

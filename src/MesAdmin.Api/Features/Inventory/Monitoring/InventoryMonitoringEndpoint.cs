@@ -35,14 +35,16 @@ public class InventoryMonitoringEndpoint : MesEndpointWithoutRequest<InventoryMo
 
         // 3. 获取所有未处理的预警
         var activeAlerts = await alertRepo.GetActiveAsync(ct);
-        var alertMap = activeAlerts.ToDictionary(a => a.MaterialCode, a => a);
+        var alertKeys = activeAlerts
+            .Select(a => (a.MaterialCode, StationId: a.StationId ?? ""))
+            .ToHashSet();
 
         // 4. 构建响应
         var items = settings.Select(s =>
         {
             var currentQty = quantities.GetValueOrDefault(s.MaterialCode, 0);
             var alertLevel = s.GetAlertLevel(currentQty);
-            var hasActiveAlert = alertMap.ContainsKey(s.MaterialCode);
+            var hasActiveAlert = alertKeys.Contains((s.MaterialCode, s.StationId ?? ""));
 
             return new InventoryItemStatus(
                 s.MaterialCode,

@@ -260,6 +260,7 @@ public class MesDbContext : DbContext
             b.Property(c => c.Id).HasConversion<UlidToGuidConverter>();
             b.Property(c => c.OrderId).HasConversion<UlidToGuidConverter>();
             b.HasIndex(c => c.OrderId).HasDatabaseName("idx_consumption_order");
+            b.HasIndex(c => new { c.OrderId, c.MaterialCode }).IsUnique().HasDatabaseName("ux_consumption_order_material");
             b.Property(c => c.OrderNumber).HasMaxLength(32).IsRequired();
             b.Property(c => c.MaterialCode).HasMaxLength(32).IsRequired();
             b.HasIndex(c => c.MaterialCode).HasDatabaseName("idx_consumption_material");
@@ -341,8 +342,7 @@ public class UlidToGuidConverter : ValueConverter<Ulid, Guid>
     public UlidToGuidConverter()
         : base(
             ulid => ulid.ToGuid(),
-            guid => new Ulid(guid),
-            convertsNulls: false)
+            guid => new Ulid(guid))
     {
     }
 }

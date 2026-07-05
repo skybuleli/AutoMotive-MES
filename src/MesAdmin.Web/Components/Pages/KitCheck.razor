@@ -129,7 +129,7 @@
 </MudStack>
 
 @* ── 齐套检查结果对话框 ── *@
-<MudDialog @bind-Visible="_resultDialogVisible" ContentClass="kit-check-dialog-content" MaxWidth="MaxWidth.Medium" FullWidth="true">
+<MudDialog @bind-Visible="_resultDialogVisible" ContentClass="kit-check-dialog-content">
     <TitleContent>
         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2">
             <MudStack Spacing="0">
@@ -278,7 +278,7 @@
                             <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Size="Size.Small" /> 查看 JIT 看板
                         </MudButton>
                         <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                                  OnClick="() => RunKitCheckAsync(_resultOrder)">
+                                  OnClick="() => RunKitCheckAsync(_resultOrder!)">
                             <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" /> 重新检查
                         </MudButton>
                     </MudStack>

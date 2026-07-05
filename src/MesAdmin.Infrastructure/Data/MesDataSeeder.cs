@@ -27,8 +27,8 @@ public static class MesDataSeeder
         var batchRepo = scope.ServiceProvider.GetRequiredService<IMaterialBatchRepository>();
 
         // ── 1. 种子 BOM 数据 ──────────────────────────────────
-        var existingBom = db.Boms.FirstOrDefault(b => b.ProductCode == "ESP-9.0" && b.Version == Esp90BomVersion);
-        if (existingBom is null)
+        var hasBom = db.Boms.Any(b => b.ProductCode == "ESP-9.0" && b.Version == Esp90BomVersion);
+        if (!hasBom)
         {
             logger.ZLogInformation($"种子数据：创建 ESP-9.0 BOM（{GetEsp90BomItems().Count} 种物料）");
             var bom90 = Bom.Create(Ulid.NewUlid(), "ESP-9.0", Esp90BomVersion, DateTimeOffset.UtcNow);
@@ -50,8 +50,8 @@ public static class MesDataSeeder
         }
 
         // ── 2. 种子库存阈值 ────────────────────────────────────
-        var existingSetting = db.MaterialInventorySettings.FirstOrDefault();
-        if (existingSetting is null)
+        var hasSetting = db.MaterialInventorySettings.Any();
+        if (!hasSetting)
         {
             logger.ZLogInformation($"种子数据：创建物料库存阈值配置（{GetDefaultThresholds().Count} 种）");
             foreach (var setting in GetDefaultThresholds())
@@ -66,8 +66,8 @@ public static class MesDataSeeder
         }
 
         // ── 3. 种子初始物料库存（使齐套检查真实生效）───────────
-        var existingBatch = db.MaterialBatches.FirstOrDefault();
-        if (existingBatch is null)
+        var hasBatch = db.MaterialBatches.Any();
+        if (!hasBatch)
         {
             logger.ZLogInformation($"种子数据：创建初始物料批次库存（{GetSampleBatches().Count} 批）");
             foreach (var batch in GetSampleBatches())

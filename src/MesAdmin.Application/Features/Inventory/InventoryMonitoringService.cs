@@ -69,7 +69,7 @@ public sealed class InventoryMonitoringService(
             var currentQty = quantities.GetValueOrDefault(setting.MaterialCode, 0);
 
             // 查上一次生成的预警，避免重复预警
-            var latestAlert = await alertRepo.GetLatestByMaterialAsync(setting.MaterialCode, ct);
+            var latestAlert = await alertRepo.GetLatestByMaterialTrackedAsync(setting.MaterialCode, setting.StationId, ct);
 
             var alertLevel = setting.GetAlertLevel(currentQty);
 
@@ -78,6 +78,8 @@ public sealed class InventoryMonitoringService(
             {
                 if (latestAlert is not null && !latestAlert.IsResolved)
                 {
+                    latestAlert.Resolve("SYSTEM", "库存恢复正常");
+                    await alertRepo.SaveChangesAsync(ct);
                     logger.ZLogInformation(
                         $"库存恢复正常：{setting.MaterialCode} {setting.MaterialName} 当前量 {currentQty:F0} 高于安全库存 {setting.SafetyStock:F0}");
                 }

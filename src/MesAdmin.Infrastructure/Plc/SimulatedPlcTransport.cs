@@ -38,11 +38,11 @@ public static class PlcFrameWriter
         var runTimeMs = snapshot.RunTimeMs;
         var processValue = snapshot.ProcessValue;
 
-        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.CycleCountOffset, 8), ref cycleCount);
-        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.GoodCountOffset, 8), ref goodCount);
-        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.DefectCountOffset, 8), ref defectCount);
-        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.RunTimeOffset, 8), ref runTimeMs);
-        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.ProcessValueOffset, 8), ref processValue);
+        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.CycleCountOffset, 8), in cycleCount);
+        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.GoodCountOffset, 8), in goodCount);
+        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.DefectCountOffset, 8), in defectCount);
+        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.RunTimeOffset, 8), in runTimeMs);
+        MemoryMarshal.Write(destination.Slice(PlcFrameProtocol.ProcessValueOffset, 8), in processValue);
 
         // 过程标签 16 字节 ASCII
         WriteAscii(destination.Slice(PlcFrameProtocol.ProcessTagOffset, 16), snapshot.ProcessTag);
@@ -158,17 +158,19 @@ public sealed class SimulatedPlcTransport : IAsyncDisposable
 
     public async Task StopAsync()
     {
-        _cts?.Cancel();
+        var cts = _cts;
+        _cts = null;
+        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
         await _pipe.Writer.CompleteAsync();
         if (_generateTask is not null)
         {
             try { await _generateTask; } catch { /* 取消异常忽略 */ }
         }
+        cts?.Dispose();
     }
 
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
-        _cts?.Dispose();
     }
 }

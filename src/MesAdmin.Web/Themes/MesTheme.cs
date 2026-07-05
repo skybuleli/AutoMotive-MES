@@ -13,8 +13,8 @@ public static class MesTheme
     /// <summary>暗色主题（默认，车间大屏用）</summary>
     public static readonly MudTheme DarkTheme = new()
     {
-        PaletteLight = LightPalette,
-        PaletteDark = DarkPalette,
+        PaletteLight = LightPalette!,
+        PaletteDark = DarkPalette!,
         LayoutProperties = new LayoutProperties
         {
             DefaultBorderRadius = "12px",

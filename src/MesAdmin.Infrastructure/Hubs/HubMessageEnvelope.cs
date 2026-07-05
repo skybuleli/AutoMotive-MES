@@ -13,16 +13,16 @@ public partial class HubMessageEnvelope
     public int MessageType { get; set; }
 
     /// <summary>目标方法名（Invocation）</summary>
-    public string Target { get; set; } = string.Empty;
+    public string? Target { get; set; }
 
     /// <summary>调用 Id（StreamItem/Completion）</summary>
-    public string InvocationId { get; set; } = string.Empty;
+    public string? InvocationId { get; set; }
 
     /// <summary>MemoryPack 序列化的参数数组</summary>
-    public byte[] Arguments { get; set; } = [];
+    public byte[]? Arguments { get; set; }
 
     /// <summary>错误信息（Completion/Close）</summary>
-    public string Error { get; set; } = string.Empty;
+    public string? Error { get; set; }
 
     /// <summary>是否有返回值（Completion）</summary>
     public bool HasResult { get; set; }

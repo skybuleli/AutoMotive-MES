@@ -113,6 +113,33 @@ public class EfTrackingIntegrationTests
         var verify = await orders.GetByIdAsync(order.Id, default);
         Assert.Equal(OrderStatus.Released, verify!.Status);
     }
+
+    [Fact]
+    public async Task InventoryAlertRepository_ShouldScopeLatestAlertByStation()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
+        var alerts = new InventoryAlertRepository(db);
+
+        var stn02 = InventoryAlert.Create(
+            "ECU-ESP9-001", "ECU 电子控制单元 V3", 120, 750, 250,
+            InventoryAlertLevel.Red, "STN-02");
+        var stn04 = InventoryAlert.Create(
+            "ECU-ESP9-001", "ECU 电子控制单元 V3", 180, 750, 250,
+            InventoryAlertLevel.Yellow, "STN-04");
+
+        await alerts.AddAsync(stn02, default);
+        await alerts.AddAsync(stn04, default);
+        await alerts.SaveChangesAsync(default);
+
+        var latestStn02 = await alerts.GetLatestByMaterialAsync("ECU-ESP9-001", "STN-02", default);
+        var latestStn04 = await alerts.GetLatestByMaterialAsync("ECU-ESP9-001", "STN-04", default);
+
+        Assert.Equal(stn02.Id, latestStn02!.Id);
+        Assert.Equal(InventoryAlertLevel.Red, latestStn02.AlertLevel);
+        Assert.Equal(stn04.Id, latestStn04!.Id);
+        Assert.Equal(InventoryAlertLevel.Yellow, latestStn04.AlertLevel);
+    }
 }
 
 /// <summary>
@@ -127,7 +154,7 @@ public class DatabaseFixture : IAsyncLifetime
     {
         var services = new ServiceCollection();
         services.AddDbContext<MesDbContext>(opt =>
-            opt.UseNpgsql("Host=localhost;Port=5432;Database=automes;Username=mes;Password=mes_dev_password"));
+            opt.UseNpgsql("Host=localhost;Port=5432;Database=automes_test;Username=mes;Password=mes_dev_password"));
 
         // 仓储注册：全生命周期（T1.x - T1.17）
         services.AddScoped<IProductionOrderRepository, ProductionOrderRepository>();
@@ -152,6 +179,7 @@ public class DatabaseFixture : IAsyncLifetime
         // 应用所有 migration
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
+        await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();
 
         // 种子 BOM + 物料库存数据（幂等：已存在则跳过）

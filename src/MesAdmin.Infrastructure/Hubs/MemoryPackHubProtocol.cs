@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using MemoryPack;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.SignalR;
@@ -21,7 +22,7 @@ public class MemoryPackHubProtocol : IHubProtocol
 
     public bool IsVersionSupported(int version) => version == 1;
 
-    public bool TryParseMessage(ref ReadOnlySequence<byte> input, IInvocationBinder binder, out HubMessage? message)
+    public bool TryParseMessage(ref ReadOnlySequence<byte> input, IInvocationBinder binder, [NotNullWhen(true)] out HubMessage? message)
     {
         try
         {

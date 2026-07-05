@@ -539,6 +539,10 @@ namespace MesAdmin.Infrastructure.Migrations
                     b.HasIndex("OrderId")
                         .HasDatabaseName("idx_consumption_order");
 
+                    b.HasIndex("OrderId", "MaterialCode")
+                        .IsUnique()
+                        .HasDatabaseName("ux_consumption_order_material");
+
                     b.ToTable("material_consumptions", (string)null);
                 });
 

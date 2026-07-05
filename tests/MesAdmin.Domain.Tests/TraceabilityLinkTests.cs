@@ -71,8 +71,8 @@ public class TraceabilityLinkTests
                 Ulid.NewUlid(),
                 TraceabilityLevel.Vehicle,
                 vinOrSerial: "",
-                componentBatch: null,
-                materialBatch: null,
+                componentBatch: null!,
+                materialBatch: null!,
                 previousHash: "",
                 createdAt: DateTimeOffset.UtcNow));
     }

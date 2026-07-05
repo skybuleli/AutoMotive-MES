@@ -23,7 +23,7 @@ public sealed partial record BackflushResult(
     int SapSyncCount,
     List<string> Warnings);
 
-internal sealed class BackflushMaterialsHandler(
+public sealed class BackflushMaterialsHandler(
     IProductionOrderRepository orders,
     IBomRepository boms,
     IMaterialBatchRepository batches,

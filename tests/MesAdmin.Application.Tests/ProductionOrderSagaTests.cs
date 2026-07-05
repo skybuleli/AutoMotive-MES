@@ -353,13 +353,12 @@ public class ProductionOrderSagaTests
 
         var repo = new SagaOrderRepo(order);
         var opRepo = new SagaOpRepo();
-        var plc = new FakePlcClient();
         var store = new InMemoryFunctionStore();
 
         foreach (var (seq, station, code, name) in ProductionRoutings.Default)
             opRepo.StoredOps[seq] = WorkOrderOperation.Create(order.Id, seq, station, code, name);
 
-        var saga = new ProductionOrderSaga(repo, opRepo, plc);
+        var saga = new ProductionOrderSaga(repo, opRepo);
         return (order, repo, opRepo, saga, store);
     }
 

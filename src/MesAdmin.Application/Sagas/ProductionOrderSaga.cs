@@ -26,8 +26,7 @@ namespace MesAdmin.Application.Sagas;
 /// </summary>
 public class ProductionOrderSaga(
     IProductionOrderRepository orderRepo,
-    IWorkOrderOperationRepository operationRepo,
-    IPlcClient plc)
+    IWorkOrderOperationRepository operationRepo)
 {
     /// <summary>站号 → PLC 设备码映射（与 Equipment.DefaultEquipment 一致）。
     /// 站1 为人工上料扫码，无 PLC 设备，不在此映射中（跳过就绪检查）。</summary>

@@ -3,14 +3,14 @@ using FastEndpoints.Swagger;
 using Microsoft.EntityFrameworkCore;
 using MesAdmin.Api.Infrastructure;
 using MesAdmin.Application.Behaviors;
+using MesAdmin.Application.DependencyInjection;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Application.Features.Inventory;
 using MesAdmin.Application.Sagas;
 using MesAdmin.Infrastructure;
 using MesAdmin.Infrastructure.Data;
-using MesAdmin.Infrastructure.Data.Repositories;
+using MesAdmin.Infrastructure.DependencyInjection;
 using MesAdmin.Infrastructure.Hubs;
-using MesAdmin.Infrastructure.Data;
 using MesAdmin.Infrastructure.Logging;
 using MesAdmin.Infrastructure.Plc;
 using MesAdmin.Infrastructure.Workflows;
@@ -18,9 +18,16 @@ using MesAdmin.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseDefaultServiceProvider((context, options) =>
+{
+    options.ValidateScopes = context.HostingEnvironment.IsDevelopment();
+    options.ValidateOnBuild = context.HostingEnvironment.IsDevelopment();
+});
+
 // ── FastEndpoints（REPR 模式 + 命令/事件总线）──
 builder.Services.AddFastEndpoints();
 builder.Services.AddMessaging();   // 启用命令总线 + 事件总线（handler 自动发现）
+builder.Services.AddMesGeneratedServices();
 builder.Services.AddCommandMiddleware(c =>
 {
     c.Register(typeof(LoggingCommandMiddleware<,>));     // 最外层：日志
@@ -31,23 +38,8 @@ builder.Services.SwaggerDocument();
 builder.Services.AddDbContext<MesDbContext>(opt =>
     opt.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSQL")));
 
-builder.Services.AddScoped<IProductionOrderRepository, ProductionOrderRepository>();
-builder.Services.AddScoped<IWorkOrderOperationRepository, WorkOrderOperationRepository>();
-builder.Services.AddScoped<IFirstArticleInspectionRepository, FirstArticleInspectionRepository>();
-builder.Services.AddScoped<ITraceabilityLinkRepository, TraceabilityLinkRepository>();
-builder.Services.AddScoped<ISapRejectionRepository, SapRejectionRepository>();
-builder.Services.AddScoped<IGoodsReceiptRepository, GoodsReceiptRepository>();
-builder.Services.AddScoped<IMaterialBatchRepository, MaterialBatchRepository>();
-builder.Services.AddScoped<IMaterialBindingRepository, MaterialBindingRepository>();
-builder.Services.AddScoped<IJitPullSignalRepository, JitPullSignalRepository>();
-builder.Services.AddScoped<IBomRepository, BomRepository>();
-builder.Services.AddScoped<IMaterialInventorySettingRepository, MaterialInventorySettingRepository>();
-builder.Services.AddScoped<IInventoryAlertRepository, InventoryAlertRepository>();
-builder.Services.AddScoped<IMaterialConsumptionRepository, MaterialConsumptionRepository>();
-builder.Services.AddScoped<IConsumptionVarianceRepository, ConsumptionVarianceRepository>();
-builder.Services.AddScoped<ISapInventorySyncRecordRepository, SapInventorySyncRecordRepository>();
+builder.Services.AddMesGeneratedInfrastructureServices();
 builder.Services.AddHostedService<InventoryMonitoringService>();
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // ── PLC + R3 OEE + SignalR 实时管道（T2.12-T2.15）──
 // IPlcClient 由 AddRealtimePipeline 内部注册为 OpcUaPlcClient（单例）

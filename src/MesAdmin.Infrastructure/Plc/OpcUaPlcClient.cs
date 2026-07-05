@@ -143,7 +143,14 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
     {
         lock (_lock)
         {
-            return _latest.TryGetValue(equipmentCode, out snapshot);
+            if (_latest.TryGetValue(equipmentCode, out var latest))
+            {
+                snapshot = latest;
+                return true;
+            }
+
+            snapshot = null!;
+            return false;
         }
     }
 
@@ -158,12 +165,14 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _cts?.Cancel();
+        var cts = _cts;
+        _cts = null;
+        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
         await _transport.DisposeAsync();
         if (_readLoopTask is not null)
         {
             try { await _readLoopTask; } catch { /* 取消异常忽略 */ }
         }
-        _cts?.Dispose();
+        cts?.Dispose();
     }
 }

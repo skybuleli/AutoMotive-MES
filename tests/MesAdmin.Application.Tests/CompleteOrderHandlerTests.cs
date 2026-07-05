@@ -7,9 +7,7 @@ namespace MesAdmin.Application.Tests;
 
 /// <summary>
 /// CompleteOrderHandler 单元测试（T1.8 完工确认 + T1.17 反冲触发）。
-/// 验证状态机推进、成品入库单生成、反冲调用（失败不阻塞）、数量约束、幂等跳过。
-/// ⚠ 反冲通过 FastEndpoints ICommand.ExecuteAsync() 分发，测试环境无 DI 注册时
-///    ExecuteAsync 会抛出异常被 handler catch 住（不阻塞完工），这是预期的隔离行为。
+/// 验证状态机推进、成品入库单生成、数量约束、幂等跳过。
 /// </summary>
 public class CompleteOrderHandlerTests
 {
@@ -166,7 +164,7 @@ public class CompleteOrderHandlerTests
         Assert.Equal(0, result.DefectiveQuantity);
         Assert.NotNull(result.CompletedAt);
 
-        Assert.Equal(100, repos.Receipts.AddedReceipt.ReceivedQuantity);
+        Assert.Equal(100, repos.Receipts.AddedReceipt!.ReceivedQuantity);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -187,7 +185,7 @@ public class CompleteOrderHandlerTests
         Assert.Equal(100, result.DefectiveQuantity);
 
         // 合格数为 0，入库数量也为 0
-        Assert.Equal(0, repos.Receipts.AddedReceipt.ReceivedQuantity);
+        Assert.Equal(0, repos.Receipts.AddedReceipt!.ReceivedQuantity);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -206,7 +204,7 @@ public class CompleteOrderHandlerTests
         Assert.Equal(OrderStatus.Completed, result.Status);
         Assert.Equal(0, result.QualifiedQuantity);
         Assert.Equal(0, result.DefectiveQuantity);
-        Assert.Equal(0, repos.Receipts.AddedReceipt.ReceivedQuantity);
+        Assert.Equal(0, repos.Receipts.AddedReceipt!.ReceivedQuantity);
     }
 
     // ═══════════════════════════════════════════════════════════

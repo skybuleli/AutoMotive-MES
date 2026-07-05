@@ -24,7 +24,8 @@ public interface IInventoryAlertRepository
     Task<InventoryAlert?> GetByIdAsync(Ulid id, CancellationToken cancellationToken = default);
     Task<List<InventoryAlert>> GetActiveAsync(CancellationToken cancellationToken = default);
     Task<List<InventoryAlert>> GetByMaterialCodeAsync(string materialCode, CancellationToken cancellationToken = default);
-    Task<InventoryAlert?> GetLatestByMaterialAsync(string materialCode, CancellationToken cancellationToken = default);
+    Task<InventoryAlert?> GetLatestByMaterialAsync(string materialCode, string? stationId, CancellationToken cancellationToken = default);
+    Task<InventoryAlert?> GetLatestByMaterialTrackedAsync(string materialCode, string? stationId, CancellationToken cancellationToken = default);
     Task AddAsync(InventoryAlert alert, CancellationToken cancellationToken = default);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     Task<int> CountActiveAsync(CancellationToken cancellationToken = default);

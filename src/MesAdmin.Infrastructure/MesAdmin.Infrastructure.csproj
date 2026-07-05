@@ -3,6 +3,9 @@
   <ItemGroup>
     <ProjectReference Include="..\MesAdmin.Application\MesAdmin.Application.csproj" />
     <ProjectReference Include="..\MesAdmin.Domain\MesAdmin.Domain.csproj" />
+    <ProjectReference Include="..\MesAdmin.Generators\MesAdmin.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <!-- Infrastructure 托管 SignalR Hub / HostedService，需 ASP.NET Core 共享框架 -->

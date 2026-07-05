@@ -31,30 +31,15 @@ internal sealed class DashboardSummaryHandler(
 {
     public async Task<DashboardSummary> ExecuteAsync(DashboardSummaryQuery query, CancellationToken ct)
     {
-        // 并行查询各状态工单计数
-        var createdTask = orders.CountAsync(OrderStatus.Created, ct);
-        var releasedTask = orders.CountAsync(OrderStatus.Released, ct);
-        var inProgressTask = orders.CountAsync(OrderStatus.InProgress, ct);
-        var completedTask = orders.CountAsync(OrderStatus.Completed, ct);
-        var closedTask = orders.CountAsync(OrderStatus.Closed, ct);
-
-        // 预警计数
-        var activeAlertsTask = alerts.CountActiveAsync(ct);
-        var redAlertsTask = alerts.CountByLevelAsync(InventoryAlertLevel.Red, ct);
-        var yellowAlertsTask = alerts.CountByLevelAsync(InventoryAlertLevel.Yellow, ct);
-
-        await Task.WhenAll(createdTask, releasedTask, inProgressTask, completedTask, closedTask,
-            activeAlertsTask, redAlertsTask, yellowAlertsTask);
-
         return new DashboardSummary(
-            createdTask.Result,
-            releasedTask.Result,
-            inProgressTask.Result,
-            completedTask.Result,
-            closedTask.Result,
-            activeAlertsTask.Result,
-            redAlertsTask.Result,
-            yellowAlertsTask.Result,
+            await orders.CountAsync(OrderStatus.Created, ct),
+            await orders.CountAsync(OrderStatus.Released, ct),
+            await orders.CountAsync(OrderStatus.InProgress, ct),
+            await orders.CountAsync(OrderStatus.Completed, ct),
+            await orders.CountAsync(OrderStatus.Closed, ct),
+            await alerts.CountActiveAsync(ct),
+            await alerts.CountByLevelAsync(InventoryAlertLevel.Red, ct),
+            await alerts.CountByLevelAsync(InventoryAlertLevel.Yellow, ct),
             TodayQualified: 0,   // 简化：暂不实现当日统计
             TodayDefective: 0);
     }
