@@ -1,4 +1,5 @@
 using System.Buffers;
+using MesAdmin.Application.Observability;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
 using Microsoft.Extensions.Logging;
@@ -7,57 +8,117 @@ using ZLogger;
 namespace MesAdmin.Infrastructure.Plc;
 
 /// <summary>
-/// OPC UA PLC 客户端（T2.12）。
-/// 当前实现基于模拟传输层（SimulatedPlcTransport），用 PipeReader 零拷贝读取 0x55 0xAA 帧。
-/// 帧解析使用 ref struct PlcFrameReader + SearchValues SIMD 扫描（AGENTS.md 4.3 零分配铁律）。
-/// T2.16 多协议驱动时，仅需替换 SimulatedPlcTransport 为真实 OPC UA / Modbus 驱动，帧协议与解析层不变。
+/// OPC UA PLC 客户端（T2.12/T2.16）。
+/// 通过 IPlcTransport 读取 Pipe 数据，用 PlcFrameReader 零分配解析帧。
+/// 传输层可以是：Simulated（开发）/ OPC UA / Modbus TCP / EtherNet/IP / Profinet。
+/// 帧协议与解析层保持不变，仅替换传输层实现（策略模式）。
 /// </summary>
 public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
 {
-    private readonly SimulatedPlcTransport _transport;
+    private readonly PlcDriverFactory _driverFactory;
     private readonly ILogger<OpcUaPlcClient> _logger;
     private readonly Dictionary<string, PlcSnapshot> _latest = new();
     private readonly object _lock = new();
-    private Task? _readLoopTask;
+    private readonly HashSet<string> _realEquipmentCodes = new(StringComparer.Ordinal);
     private CancellationTokenSource? _cts;
 
-    public OpcUaPlcClient(IReadOnlyList<Equipment> equipment, ILogger<OpcUaPlcClient> logger)
+    /// <summary>所有传输层的最新快照</summary>
+    public IReadOnlyDictionary<string, PlcSnapshot> LatestSnapshots
     {
-        _transport = new SimulatedPlcTransport(equipment);
+        get { lock (_lock) return new Dictionary<string, PlcSnapshot>(_latest); }
+    }
+
+    public OpcUaPlcClient(
+        PlcDriverFactory driverFactory,
+        ILogger<OpcUaPlcClient> logger)
+    {
+        _driverFactory = driverFactory;
         _logger = logger;
+
+        // 预计算真实协议传输层覆盖的设备编码（用于阻止 Simulated 覆盖真实数据）
+        foreach (var transport in _driverFactory.GetAllTransports())
+        {
+            if (transport is not SimulatedPlcTransport)
+            {
+                foreach (var code in transport.SupportedEquipmentCodes)
+                    _realEquipmentCodes.Add(code);
+            }
+        }
     }
 
     public Task StartAsync(CancellationToken ct = default)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        _readLoopTask = Task.Run(() => ReadLoopAsync(_cts.Token), _cts.Token);
-        return _transport.StartAsync(ct);
+
+        foreach (var transport in _driverFactory.GetAllTransports())
+        {
+            try
+            {
+                _ = transport.StartAsync(_cts.Token);
+
+                // Simulated 传输层：仅处理未被真实协议覆盖的设备编码
+                if (transport is SimulatedPlcTransport && _realEquipmentCodes.Count > 0)
+                {
+                    _ = ReadLoopAsync(transport, _cts.Token, isSimulated: true);
+                    _logger.ZLogInformation($"已启动 {transport.TransportName} 读取循环（降级兜底，排除 {_realEquipmentCodes.Count} 台真实设备）");
+                }
+                else
+                {
+                    _ = ReadLoopAsync(transport, _cts.Token, isSimulated: false);
+                    _logger.ZLogInformation($"已启动 {transport.TransportName} 读取循环");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.ZLogError($"启动 {transport.TransportName} 失败：{ex.Message}");
+            }
+        }
+
+        var realCount = _driverFactory.GetAllTransports().Count(t => t is not SimulatedPlcTransport);
+        _logger.ZLogInformation($"OpcUaPlcClient 启动完成：{realCount} 个真实传输层 + 模拟降级");
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// PipeReader 零拷贝读取循环（AGENTS.md 4.3：禁止裸 Stream.ReadAsync）。
-    /// 用 SearchValues 定位帧头 → PlcFrameReader 解析 → 缓存最新快照。
+    /// 从指定传输层的 PipeReader 读取字节流，SearchValues 定位帧头 → PlcFrameReader 解析。
     /// </summary>
-    private async Task ReadLoopAsync(CancellationToken ct)
+    /// <param name="isSimulated">是否为 Simulated 传输层。为 true 时跳过已被真实协议覆盖的设备编码。</param>
+    private async Task ReadLoopAsync(IPlcTransport transport, CancellationToken ct, bool isSimulated = false)
     {
-        var reader = _transport.Reader;
+        var reader = transport.Reader;
         while (!ct.IsCancellationRequested)
         {
-            var result = await reader.ReadAsync(ct);
-            var buffer = result.Buffer;
-
-            // 用 SearchValues 扫描帧头，逐帧解析
-            while (TryReadFrame(ref buffer, out var snapshot))
+            try
             {
-                lock (_lock)
+                var result = await reader.ReadAsync(ct);
+                var buffer = result.Buffer;
+
+                // 用 SearchValues 扫描帧头，逐帧解析
+                while (TryReadFrame(ref buffer, out var snapshot))
                 {
-                    _latest[snapshot.EquipmentCode] = snapshot;
+                    // Simulated 传输层：跳过已被真实协议覆盖的设备（避免数据竞争）
+                    if (isSimulated && _realEquipmentCodes.Contains(snapshot.EquipmentCode))
+                        continue;
+
+                    lock (_lock)
+                    {
+                        _latest[snapshot.EquipmentCode] = snapshot;
+                    }
                 }
+
+                reader.AdvanceTo(buffer.Start, buffer.End);
+
+                if (result.IsCompleted) break;
             }
-
-            reader.AdvanceTo(buffer.Start, buffer.End);
-
-            if (result.IsCompleted) break;
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                AutoMesMetrics.RecordPlcReadLoopError(transport.TransportName);
+                _logger.ZLogError($"{transport.TransportName} 读取循环异常：{ex.Message}");
+                // 短暂延迟后重试，避免空转
+                try { await Task.Delay(1000, ct); } catch { break; }
+            }
         }
     }
 
@@ -89,6 +150,7 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
 
         if (!frameReader.TryParse(out snapshot))
         {
+            AutoMesMetrics.RecordPlcFrameParseError();
             // 帧头匹配但帧尾不匹配，跳过帧头继续扫描
             buffer = buffer.Slice(headerIndex + 2);
             return false;
@@ -106,7 +168,6 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
         {
             if (_latest.TryGetValue(address, out var snapshot))
             {
-                // tag 匹配快照字段
                 object value = tag switch
                 {
                     "Status" => snapshot.Status,
@@ -120,14 +181,16 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
                 return Task.FromResult(value);
             }
         }
-        return Task.FromResult<object>(0);
+
+        // 缓存未命中 → 通过传输层直接读取
+        var transport = _driverFactory.GetTransport(address);
+        return transport.ReadRegisterAsync(address, tag, ct);
     }
 
-    public Task WriteAsync(string address, string tag, object value, CancellationToken ct = default)
+    public async Task WriteAsync(string address, string tag, object value, CancellationToken ct = default)
     {
-        // 模拟写入（真实 OPC UA 驱动在此调用 OpcUaSession.WriteNode）
-        _logger.ZLogInformation($"PLC 写入 {address}.{tag} = {value}");
-        return Task.CompletedTask;
+        var transport = _driverFactory.GetTransport(address);
+        await transport.WriteRegisterAsync(address, tag, value, ct);
     }
 
     public Task<bool> IsReadyAsync(string plcAddress, CancellationToken ct = default)
@@ -148,7 +211,6 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
                 snapshot = latest;
                 return true;
             }
-
             snapshot = null!;
             return false;
         }
@@ -168,11 +230,10 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
         var cts = _cts;
         _cts = null;
         try { cts?.Cancel(); } catch (ObjectDisposedException) { }
-        await _transport.DisposeAsync();
-        if (_readLoopTask is not null)
+        if (cts is not null)
         {
-            try { await _readLoopTask; } catch { /* 取消异常忽略 */ }
+            try { await Task.Delay(100); } catch { }
+            cts.Dispose();
         }
-        cts?.Dispose();
     }
 }

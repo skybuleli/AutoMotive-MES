@@ -39,8 +39,10 @@ public class FullLifecycleE2ETest
         var varianceRepo = sp.GetRequiredService<IConsumptionVarianceRepository>();
         var sapSyncRepo = sp.GetRequiredService<ISapInventorySyncRecordRepository>();
 
+        var routingRepo = sp.GetRequiredService<IRoutingRepository>();
+
         // ── Step 1: 创建工单 (T1.1) ──
-        var createHandler = new CreateOrderHandler(orderRepo, opRepo);
+        var createHandler = new CreateOrderHandler(orderRepo, opRepo, routingRepo);
         var order = await createHandler.ExecuteAsync(
             new CreateOrderCommand("ESP-9.0", MesDataSeeder.Esp90BomVersion, Ulid.NewUlid(), 100, (short)1),
             default);
@@ -176,7 +178,8 @@ public class FullLifecycleE2ETest
         // 创建一个使用 ESP-9.1 BOM 的工单
         // ESP-9.1 BOM 含关键物料 ECU-ESP9-002（ECU V4 增强型），
         // 但种子数据中没有该物料的库存批次 → 齐套检查应失败
-        var createHandler = new CreateOrderHandler(orderRepo, opRepo);
+        var routingRepo = sp.GetRequiredService<IRoutingRepository>();
+        var createHandler = new CreateOrderHandler(orderRepo, opRepo, routingRepo);
         var order = await createHandler.ExecuteAsync(
             new CreateOrderCommand("ESP-9.1", MesDataSeeder.Esp91BomVersion, Ulid.NewUlid(), 100, (short)1),
             default);

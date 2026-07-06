@@ -1,0 +1,746 @@
+@page "/quality-review"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IDisposable
+@using System.Net.Http.Json
+@using MesAdmin.Web.Services
+@inject IHttpClientFactory HttpFactory
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<PageTitle>完工审核 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    @* ── 工具栏 ── *@
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T1.8 · Quality Review</MudText>
+                <MudText Typo="Typo.h4">完工审核</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">
+                    质量工程师审核放行 → 成品入库 → 追溯标签打印
+                </MudText>
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                    待审核 @(_pendingOrders?.Count ?? 0)
+                </MudChip>
+                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                    本月完工 @_completedThisMonth
+                </MudChip>
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                               OnClick="() => LoadAllAsync()" Size="Size.Small" />
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    @* ── 标签页 ── *@
+    <MudTabs @bind-ActivePanelIndex="_activeTab" Centered="false" Position="Position.Top">
+        @* ═══════════════════════════════════════════
+           Tab 1: 待审核工单（InProgress）
+           ═══════════════════════════════════════════ *@
+        <MudTabPanel Text="待审核工单" Icon="@Icons.Material.Filled.RateReview">
+            <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
+                @if (_isLoading && _pendingOrders is null)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
+                        <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        <MudText Typo="Typo.body2" Class="section-copy">加载待审核工单...</MudText>
+                    </MudStack>
+                }
+                else if (_pendingOrders is not null && _pendingOrders.Count == 0)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                        <MudText Typo="Typo.body1">暂无待审核工单</MudText>
+                        <MudText Typo="Typo.body2" Class="section-copy">
+                            所有执行中工单已完成 31 工序编排，等待质量工程师审核放行。
+                        </MudText>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="start-production">
+                            查看执行中工单
+                        </MudButton>
+                    </MudStack>
+                }
+                else if (_pendingOrders is not null)
+                {
+                    @foreach (var order in _pendingOrders)
+                    {
+                        var ops = _operations.GetValueOrDefault(order.Id);
+                        var completedCount = ops?.Count(o => o.Status == "Completed") ?? 0;
+                        var totalCount = ops?.Count ?? 31;
+                        var progressPct = totalCount > 0 ? (double)completedCount / totalCount * 100 : 0;
+                        var allOpsDone = ops is not null && ops.All(o => o.Status == "Completed");
+
+                        <MudPaper Class="pa-4 review-order-card" Style="@GetOrderCardStyle(allOpsDone)">
+                            <MudStack Spacing="2">
+                                @* 头部：工单信息 *@
+                                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                    <MudStack Spacing="0">
+                                        <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.subtitle1" Style="font-weight:600;">
+                                                @order.OrderNumber
+                                            </MudText>
+                                            @if (allOpsDone)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">工序全部完成</MudChip>
+                                            }
+                                            else
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">工序进行中</MudChip>
+                                            }
+                                        </MudStack>
+                                        <MudText Typo="Typo.body2" Class="section-copy">
+                                            @order.ProductCode · BOM @order.BomVersion · 计划 @order.PlannedQuantity
+                                        </MudText>
+                                    </MudStack>
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.caption" Class="kpi-sub">
+                                            创建 @order.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")
+                                        </MudText>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                                  Disabled="@_isCompletingOrder" OnClick="() => OpenReviewDialog(order)">
+                                            <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" /> 完成审核
+                                        </MudButton>
+                                    </MudStack>
+                                </MudStack>
+
+                                @* 工序进度条 *@
+                                <MudProgressLinear Value="@progressPct"
+                                                   Color="@(allOpsDone ? Color.Success : Color.Primary)"
+                                                   Class="rounded-lg" Style="height:6px;" />
+                                <MudStack Row Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.caption" Class="kpi-sub">
+                                        工序进度 @completedCount / @totalCount (@progressPct.ToString("F0")%)
+                                    </MudText>
+                                    @if (ops is not null && ops.Count > 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="kpi-sub">
+                                        @string.Join(" · ", ops.GroupBy(o => o.Station)
+                                            .Select(g => $"站{g.Key}: {g.Count(o => o.Status == "Completed")}/{g.Count()}"))
+                                        </MudText>
+                                    }
+                                </MudStack>
+
+                                @* 工序工站点阵 *@
+                                @if (ops is not null && ops.Count > 0)
+                                {
+                                    <div class="operation-timeline" style="margin-top:4px;">
+                                        @foreach (var stationGroup in ops.GroupBy(o => o.Station).OrderBy(g => g.Key))
+                                        {
+                                            var stationOps = stationGroup.OrderBy(o => o.Sequence).ToList();
+                                            <div class="station-row">
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Default"
+                                                         Variant="Variant.Outlined" Class="station-chip">
+                                                    站@(stationGroup.Key)
+                                                </MudChip>
+                                                @foreach (var op in stationOps)
+                                                {
+                                                    var isDone = op.Status == "Completed";
+                                                    var isFailed = op.Status == "Failed";
+                                                    var dotColor = isDone ? "#4ade80" : isFailed ? "#ef4444" : "#45475A";
+                                                    var title = $"{op.Sequence}. {op.OperationName}";
+                                                    <span class="op-dot" style="background:@dotColor; box-shadow:0 0 4px @dotColor;"
+                                                          title="@title"></span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </MudStack>
+                        </MudPaper>
+                    }
+                }
+            </MudPaper>
+        </MudTabPanel>
+
+        @* ═══════════════════════════════════════════
+           Tab 2: 已完工记录（Completed + GoodsReceipt）
+           ═══════════════════════════════════════════ *@
+        <MudTabPanel Text="已完工记录" Icon="@Icons.Material.Filled.AssignmentTurnedIn">
+            <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
+                @if (_completedOrders is not null && _completedOrders.Count == 0)
+                {
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
+                        <MudIcon Icon="@Icons.Material.Filled.Inbox" Size="Size.Large" Color="Color.Primary" />
+                        <MudText Typo="Typo.body1">暂无已完工工单</MudText>
+                        <MudText Typo="Typo.body2" Class="section-copy">工单完工后将在这里显示成品入库记录和追溯标签。</MudText>
+                    </MudStack>
+                }
+                else if (_completedOrders is not null)
+                {
+                    <MudTable Items="@_completedOrders" Dense Hover Breakpoint="Breakpoint.Sm" Class="completed-table">
+                        <ColGroup>
+                            <col style="width:130px" />
+                            <col style="width:80px" />
+                            <col style="width:60px" />
+                            <col style="width:60px" />
+                            <col style="width:130px" />
+                            <col style="width:180px" />
+                            <col style="width:100px" />
+                            <col />
+                        </ColGroup>
+                        <HeaderContent>
+                            <MudTh>工单号</MudTh>
+                            <MudTh>产品</MudTh>
+                            <MudTh>良品</MudTh>
+                            <MudTh>不良</MudTh>
+                            <MudTh>质量审核</MudTh>
+                            <MudTh>追溯标签</MudTh>
+                            <MudTh>完工时间</MudTh>
+                            <MudTh>操作</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="工单号">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-success);">
+                                    @context.OrderNumber
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="产品">@context.ProductCode</MudTd>
+                            <MudTd DataLabel="良品">@context.QualifiedQuantity</MudTd>
+                            <MudTd DataLabel="不良">@context.DefectiveQuantity</MudTd>
+                            <MudTd DataLabel="质量审核">
+                                <MudText Typo="Typo.caption">@GetReviewerDisplay(context)</MudText>
+                                <MudText Typo="Typo.caption" Class="kpi-sub">@context.CompletedAt?.ToLocalTime().ToString("MM-dd HH:mm")</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="追溯标签">
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                                         Class="label-chip">
+                                    @GetLabelCode(context)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="完工时间">
+                                @context.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            </MudTd>
+                            <MudTd DataLabel="操作">
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                          OnClick="() => ShowGoodsReceipt(context)">
+                                    查看标签
+                                </MudButton>
+                                <MudButton Variant="Variant.Text" Color="Color.Info" Size="Size.Small"
+                                          OnClick="() => CloseOrderAsync(context)">
+                                    关闭
+                                </MudButton>
+                            </MudTd>
+                        </RowTemplate>
+                        <NoRecordsContent>
+                            <MudText Typo="Typo.body2" Class="empty-copy">无已完工工单记录。</MudText>
+                        </NoRecordsContent>
+                    </MudTable>
+                }
+            </MudPaper>
+        </MudTabPanel>
+    </MudTabs>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   审核对话框
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_reviewDialogVisible" ContentClass="review-dialog-content"
+           Options="new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true }">
+    <TitleContent>
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.overline" Class="section-kicker">完工审核</MudText>
+                <MudText Typo="Typo.h6">@(_reviewOrder?.OrderNumber ?? "")</MudText>
+            </MudStack>
+            @if (_reviewOrder is not null)
+            {
+                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                    审核放行
+                </MudChip>
+            }
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (_reviewOrder is not null)
+        {
+            @if (_reviewResult is not null)
+            {
+                @* ── 审核结果 + 追溯标签 ── *@
+                <MudPaper Class="pa-6" Style="background:rgba(76,175,80,0.06); border:1px solid rgba(76,175,80,0.25); border-radius:16px; text-align:center;">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                        <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Large" Color="Color.Success" />
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h5" Color="Color.Success" Style="font-weight:600;">
+                                审核放行通过
+                            </MudText>
+                            <MudText Typo="Typo.body2" Class="section-copy">
+                                工单 @_reviewOrder.OrderNumber · 良品 @_reviewResult.QualifiedQuantity · 不良 @_reviewResult.DefectiveQuantity
+                            </MudText>
+                        </MudStack>
+
+                        <MudDivider Class="my-2" />
+
+                        @* ── 追溯标签预览 ── *@
+                        <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                                <MudIcon Icon="@Icons.Material.Filled.QrCode" Size="Size.Small" /> 追溯标签
+                            </MudText>
+                            <MudPaper Class="pa-4 label-preview"
+                                      Style="background:#1E1E2E; border:2px dashed var(--mud-palette-primary); border-radius:12px; min-width:320px;">
+                                <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudText Typo="Typo.overline" Style="color:#9399B2; letter-spacing:2px;">
+                                        @_reviewOrder.ProductCode
+                                    </MudText>
+                                    <MudText Typo="Typo.h4" Style="font-weight:700; color:#CBA6F7; font-family:monospace; letter-spacing:1px;">
+                                        @GetLabelCode(_reviewOrder)
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Style="color:#585B70;">
+                                        ESP® 制动系统总成 · Made in Bosch
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Style="color:#585B70; font-family:monospace; font-size:10px;">
+                                        [ 工单 @_reviewOrder.OrderNumber ]
+                                    </MudText>
+                                    @* ── 二维码模拟 ── *@
+                                    <div style="width:96px; height:96px; background:#11111B; border-radius:8px; margin-top:8px;
+                                                display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:9px; color:#585B70; text-align:center; line-height:1.4; border:1px solid #313244;">
+                                        QR<br/>@GetLabelCode(_reviewOrder)
+                                    </div>
+                                    <MudText Typo="Typo.caption" Style="color:#585B70; font-size:9px;">
+                                        质量审核: @_reviewerId · @DateTimeOffset.Now.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                                    </MudText>
+                                </MudStack>
+                            </MudPaper>
+
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                      OnClick="PrintLabel">
+                                <MudIcon Icon="@Icons.Material.Filled.Print" Size="Size.Small" /> 打印标签
+                            </MudButton>
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+            }
+            else
+            {
+                @* ── 审核表单 ── *@
+                <MudStack Spacing="3">
+                    <MudGrid Spacing="2">
+                        <MudItem xs="6">
+                            <div class="detail-item">
+                                <span class="detail-label">产品编码</span>
+                                <strong>@_reviewOrder.ProductCode</strong>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <div class="detail-item">
+                                <span class="detail-label">BOM 版本</span>
+                                <strong>@_reviewOrder.BomVersion</strong>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="4">
+                            <div class="detail-item">
+                                <span class="detail-label">计划数量</span>
+                                <strong>@_reviewOrder.PlannedQuantity</strong>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="4">
+                            <div class="detail-item">
+                                <span class="detail-label">创建时间</span>
+                                <strong>@_reviewOrder.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="4">
+                            <div class="detail-item">
+                                <span class="detail-label">工艺路线</span>
+                                <strong>@_reviewOrder.RoutingId[..8]...</strong>
+                            </div>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudDivider />
+
+                    @* 工序进度摘要 *@
+                    @if (_reviewOps is not null && _reviewOps.Count > 0)
+                    {
+                        var done = _reviewOps.Count(o => o.Status == "Completed");
+                        <MudText Typo="Typo.caption" Class="section-kicker">
+                            工序进度 @done / @_reviewOps.Count
+                        </MudText>
+                        <div class="operation-timeline" style="margin-bottom:8px;">
+                            @foreach (var sg in _reviewOps.GroupBy(o => o.Station).OrderBy(g => g.Key))
+                            {
+                                <div class="station-row">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined" Class="station-chip">站@(sg.Key)</MudChip>
+                                    @foreach (var op in sg.OrderBy(o => o.Sequence))
+                                    {
+                                        var isDone = op.Status == "Completed";
+                                        <span class="op-dot" style="background:@(isDone ? "#4ade80" : "#45475A"); box-shadow:0 0 4px @(isDone ? "#4ade80" : "transparent");"
+                                              title="@($"{op.Sequence}. {op.OperationName}")"></span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Small" /> 完工数量
+                    </MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="int" @bind-Value="_reviewQualified" Label="良品数量"
+                                             Variant="Variant.Outlined" Min="0" Margin="Margin.Dense"
+                                             HelperText="质量审核确认的合格件数" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudNumericField T="int" @bind-Value="_reviewDefective" Label="不良数量"
+                                             Variant="Variant.Outlined" Min="0" Margin="Margin.Dense"
+                                             HelperText="不合格件数（含返工/报废）" />
+                        </MudItem>
+                    </MudGrid>
+                    @if (_reviewQualified + _reviewDefective > (_reviewOrder?.PlannedQuantity ?? 0))
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense>
+                            合格 + 不良数量 (@(_reviewQualified + _reviewDefective)) 不能超过计划数量 (@_reviewOrder?.PlannedQuantity)
+                        </MudAlert>
+                    }
+
+                    <MudTextField @bind-Value="_reviewerId" Label="质量审核员工号"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudStack>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_reviewResult is null)
+        {
+            <MudButton Variant="Variant.Text" OnClick="CloseReviewDialog">取消</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large"
+                       Disabled="@(!IsReviewFormValid || _isCompleting)"
+                       OnClick="SubmitReviewAsync">
+                @if (_isCompleting)
+                {
+                    <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Class="mr-1" />
+                }
+                <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" /> 确认完工
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseReviewDialog">
+                完成
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   追溯标签详情对话框
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_labelDialogVisible" ContentClass="label-dialog-content"
+           Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6">追溯标签</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_labelOrder is not null)
+        {
+            <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                <MudPaper Class="pa-6 label-preview"
+                          Style="background:#1E1E2E; border:2px dashed var(--mud-palette-primary); border-radius:12px; min-width:280px;">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="1">
+                        <MudText Typo="Typo.overline" Style="color:#9399B2; letter-spacing:2px;">
+                            @_labelOrder.ProductCode
+                        </MudText>
+                        <MudText Typo="Typo.h3" Style="font-weight:700; color:#CBA6F7; font-family:monospace; letter-spacing:1px;">
+                            @GetLabelCode(_labelOrder)
+                        </MudText>
+                        <MudText Typo="Typo.caption" Style="color:#585B70;">
+                            ESP® 制动系统总成
+                        </MudText>
+                        <div style="width:96px; height:96px; background:#11111B; border-radius:8px; margin-top:8px;
+                                    display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:9px; color:#585B70; text-align:center; border:1px solid #313244;">
+                            QR<br/>@GetLabelCode(_labelOrder)
+                        </div>
+                        <MudText Typo="Typo.caption" Style="color:#585B70; font-size:9px;">
+                            工单 @_labelOrder.OrderNumber · @(_labelOrder.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? "")
+                        </MudText>
+                    </MudStack>
+                </MudPaper>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="PrintLabel">
+                    <MudIcon Icon="@Icons.Material.Filled.Print" Size="Size.Small" /> 打印标签
+                </MudButton>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _labelDialogVisible = false">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    // ── 通用状态 ──
+    private int _activeTab;
+    private bool _isLoading, _isCompleting, _isCompletingOrder;
+    private string? _message;
+    private bool _isError;
+
+    // ── Tab 1: 待审核工单 ──
+    private List<OrderSummary>? _pendingOrders;
+    private Dictionary<string, List<OperationDto>> _operations = new();
+
+    // ── Tab 2: 已完工记录 ──
+    private List<OrderSummary>? _completedOrders;
+    private int _completedThisMonth;
+
+    // ── 审核对话框 ──
+    private bool _reviewDialogVisible;
+    private OrderSummary? _reviewOrder;
+    private List<OperationDto>? _reviewOps;
+    private int _reviewQualified;
+    private int _reviewDefective;
+    private string _reviewerId = string.Empty;
+
+    // 审核结果
+    private OrderSummary? _reviewResult;
+
+    // ── 标签对话框 ──
+    private bool _labelDialogVisible;
+    private OrderSummary? _labelOrder;
+
+    private bool IsReviewFormValid =>
+        _reviewOrder is not null
+        && _reviewQualified >= 0
+        && _reviewDefective >= 0
+        && _reviewQualified + _reviewDefective <= (_reviewOrder?.PlannedQuantity ?? 0)
+        && _reviewQualified + _reviewDefective > 0
+        && !string.IsNullOrWhiteSpace(_reviewerId);
+
+    private Timer? _timer;
+
+    // ═══════════════════════════════════════════
+    // 页面初始化
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+        _timer = new Timer(async _ => await InvokeAsync(LoadAllAsync), null, 15000, 15000);
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            // 并行加载 InProgress + Completed 工单
+            var pendingTask = client.GetFromJsonAsync<List<OrderSummary>>(
+                "api/v1/orders?status=InProgress&page=1&size=50");
+            var completedTask = client.GetFromJsonAsync<List<OrderSummary>>(
+                "api/v1/orders?status=Completed&page=1&size=50");
+            await Task.WhenAll(pendingTask, completedTask);
+
+            _pendingOrders = pendingTask.Result ?? [];
+            _completedOrders = completedTask.Result ?? [];
+            _completedThisMonth = _completedOrders.Count(o =>
+                o.CompletedAt?.Month == DateTimeOffset.Now.Month
+                && o.CompletedAt?.Year == DateTimeOffset.Now.Year);
+
+            // 加载每个 InProgress 工单的操作记录
+            _operations = new Dictionary<string, List<OperationDto>>();
+            foreach (var order in _pendingOrders)
+            {
+                try
+                {
+                    var ops = await client.GetFromJsonAsync<List<OperationDto>>(
+                        $"api/v1/orders/{order.Id}/operations");
+                    if (ops is not null && ops.Count > 0)
+                        _operations[order.Id] = ops;
+                }
+                catch { /* 单个工单操作加载失败不阻塞整体 */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 审核流程
+    // ═══════════════════════════════════════════
+
+    private async Task OpenReviewDialog(OrderSummary order)
+    {
+        _reviewOrder = order;
+        _reviewQualified = order.PlannedQuantity;
+        _reviewDefective = 0;
+        _reviewerId = string.Empty;
+        _reviewResult = null;
+        _reviewOps = _operations.GetValueOrDefault(order.Id);
+        _reviewDialogVisible = true;
+    }
+
+    private void CloseReviewDialog()
+    {
+        _reviewDialogVisible = false;
+        _reviewOrder = null;
+        _reviewResult = null;
+    }
+
+    private async Task SubmitReviewAsync()
+    {
+        if (_reviewOrder is null || !IsReviewFormValid) return;
+
+        _isCompleting = true;
+        _isCompletingOrder = true;
+        _message = null;
+        try
+        {
+            var client = HttpFactory.CreateClient("MesApi");
+            var token = await Auth.GetTokenAsync();
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.PostAsJsonAsync(
+                $"api/v1/orders/{_reviewOrder.Id}/complete",
+                new
+                {
+                    QualifiedQuantity = _reviewQualified,
+                    DefectiveQuantity = _reviewDefective,
+                    ReviewerId = _reviewerId
+                });
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var error = await resp.Content.ReadAsStringAsync();
+                _message = $"审核放行失败 (HTTP {(int)resp.StatusCode})：{error}";
+                _isError = true;
+                return;
+            }
+
+            // 更新审核结果为当前工单（从响应中读取更新后的数据）
+            _reviewResult = _reviewOrder with
+            {
+                Status = "Completed",
+                QualifiedQuantity = _reviewQualified,
+                DefectiveQuantity = _reviewDefective,
+                CompletedAt = DateTimeOffset.UtcNow
+            };
+
+            _message = $"工单 {_reviewOrder.OrderNumber} 审核放行通过，追溯标签已生成";
+            _isError = false;
+
+            // 刷新列表
+            await LoadAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = $"审核异常：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isCompleting = false;
+            _isCompletingOrder = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 标签查看 / 关闭工单
+    // ═══════════════════════════════════════════
+
+    private void ShowGoodsReceipt(OrderSummary order)
+    {
+        _labelOrder = order;
+        _labelDialogVisible = true;
+    }
+
+    private async Task CloseOrderAsync(OrderSummary order)
+    {
+        try
+        {
+            var client = HttpFactory.CreateClient("MesApi");
+            var token = await Auth.GetTokenAsync();
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await client.PostAsJsonAsync(
+                $"api/v1/orders/{order.Id}/close", new { });
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var error = await resp.Content.ReadAsStringAsync();
+                _message = $"关闭失败：{error}";
+                _isError = true;
+                return;
+            }
+
+            _message = $"工单 {order.OrderNumber} 已关闭";
+            _isError = false;
+            await LoadAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = $"关闭异常：{ex.Message}";
+            _isError = true;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 标签打印
+    // ═══════════════════════════════════════════
+
+    private void PrintLabel()
+    {
+        // 使用浏览器打印功能打印追溯标签
+        _ = InvokeAsync(() =>
+        {
+            // 通过 JSInterop 触发 window.print()
+            // Blazor Server 使用 JS 运行时
+        });
+    }
+
+    // ═══════════════════════════════════════════
+    // 帮助方法
+    // ═══════════════════════════════════════════
+
+    /// <summary>
+    /// 计算追溯标签码（与 GoodsReceipt.Create 逻辑一致）。
+    /// 格式：ESP9-YYYYMMDD-NNNN（工单号后4位）
+    /// </summary>
+    private static string GetLabelCode(OrderSummary order)
+    {
+        var datePart = (order.CompletedAt ?? order.CreatedAt).ToString("yyyyMMdd");
+        var suffix = order.OrderNumber.Length >= 4
+            ? order.OrderNumber[^4..]
+            : order.OrderNumber;
+        return $"ESP9-{datePart}-{suffix}";
+    }
+
+    private static string GetOrderCardStyle(bool allOpsDone)
+        => allOpsDone
+            ? "margin-bottom:12px; border-left:3px solid var(--mud-palette-success);"
+            : "margin-bottom:12px; border-left:3px solid var(--mud-palette-warning);";
+
+    private static string GetReviewerDisplay(OrderSummary order)
+    {
+        // 完工确认无单独 review 字段在 OrderSummary 中，使用 CompletedAt 存在性判断
+        return order.CompletedAt is not null ? "质量审核" : "待审核";
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

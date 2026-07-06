@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using MesAdmin.Application.Observability;
 using MesAdmin.Domain.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,14 +9,15 @@ using ZLogger;
 namespace MesAdmin.Infrastructure.Plc;
 
 /// <summary>
-/// PLC 数据采集管道（T2.13）。
+/// PLC 数据采集管道（T2.13/T2.16）。
 /// BoundedChannel&lt;PlcSnapshot&gt; 容量 10000 + FullMode=Wait 背压（禁止 BlockingCollection，AGENTS.md 4.3）。
-/// 8 设备 100Hz 读取循环 → Channel → R3 Subject 推送。
-/// ReadAllAsync 喂 R3 管道，供 OeeReactivePipeline 订阅。
+/// 8 设备 100Hz 从 OpcUaPlcClient（多协议驱动）读取 → Channel → R3 Subject 推送。
+/// ReadAllAsync 喂 R3 管道，供 OeeReactivePipeline + AndonReactivePipeline 订阅。
 /// </summary>
 public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposable
 {
     private readonly OpcUaPlcClient _plcClient;
+    private readonly PlcDriverFactory _driverFactory;
     private readonly ILogger<PlcDataAcquisitionPipeline> _logger;
     private readonly IReadOnlyList<Equipment> _equipment;
     private readonly int _channelCapacity;
@@ -28,7 +30,7 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
     private Task? _consumerTask;
     private bool _stopped;
 
-    /// <summary>PLC 数据流（R3 Observable），供 OeeReactivePipeline 订阅</summary>
+    /// <summary>PLC 数据流（R3 Observable），供 OeeReactivePipeline / AndonReactivePipeline 订阅</summary>
     public Observable<PlcSnapshot> PlcStream => _plcStream;
 
     /// <summary>Channel 健康度（供 DashboardHub 10s 推送）</summary>
@@ -36,11 +38,13 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
 
     public PlcDataAcquisitionPipeline(
         OpcUaPlcClient plcClient,
+        PlcDriverFactory driverFactory,
         ILogger<PlcDataAcquisitionPipeline> logger,
         int channelCapacity = 10000,
         int readIntervalMs = 10)
     {
         _plcClient = plcClient;
+        _driverFactory = driverFactory;
         _logger = logger;
         _equipment = Equipment.DefaultEquipment;
         _channelCapacity = channelCapacity;
@@ -58,7 +62,7 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        // 启动 PLC 客户端（开始帧生成 + PipeReader 读取）
+        // 启动 PLC 客户端（开始各协议传输层的帧生成 + PipeReader 读取）
         _ = _plcClient.StartAsync(_cts.Token);
 
         // 生产者：100Hz 轮询 8 设备最新快照写入 Channel
@@ -67,7 +71,12 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
         // 消费者：ReadAllAsync 喂 R3 Subject
         _consumerTask = Task.Run(() => ConsumerLoopAsync(_cts.Token), _cts.Token);
 
-        _logger.ZLogInformation($"PLC 数据采集管道启动：{_equipment.Count} 设备 × 100Hz，Channel 容量 {_channelCapacity}");
+        // 打印传输层状态
+        var transportSummary = string.Join(", ",
+            _driverFactory.GetTransportStatus()
+                .Select(t => $"{t.TransportName}({t.EquipmentCount}设备)"));
+        _logger.ZLogInformation(
+            $"PLC 数据采集管道启动：{_equipment.Count} 设备 × 100Hz，Channel 容量 {_channelCapacity}，传输层：[{transportSummary}]");
         return Task.CompletedTask;
     }
 
@@ -86,6 +95,8 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
                 {
                     await _channel.Writer.WriteAsync(snapshot, ct);
                     Health.IncrementWritten();
+                    AutoMesMetrics.RecordPlcSnapshot(snapshot.EquipmentCode);
+                    AutoMesMetrics.SetPlcChannelBacklog(Health.Written - Health.Read);
                 }
                 catch (ChannelClosedException) { return; }
             }
@@ -106,6 +117,7 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
             {
                 _plcStream.OnNext(snapshot);
                 Health.IncrementRead();
+                AutoMesMetrics.SetPlcChannelBacklog(Health.Written - Health.Read);
             }
         }
         catch (OperationCanceledException) { /* 正常关闭 */ }

@@ -21,6 +21,12 @@ public static class MesRoles
     /// <summary>仓库员 — 批次扫码、线边库存、JIT 看板</summary>
     public const string WarehouseClerk = "WarehouseClerk";
 
+    /// <summary>质检员 — IQC 来料检验、IPQC 过程巡检、首件测量</summary>
+    public const string Inspector = "Inspector";
+
+    /// <summary>技术员 — SPC 样本测量、设备参数调整</summary>
+    public const string Technician = "Technician";
+
     /// <summary>SQE — 来料合格率、PPAP、供应商评分</summary>
     public const string SupplierQualityEngineer = "SupplierQualityEngineer";
 
@@ -32,6 +38,8 @@ public static class MesRoles
         QualityEngineer,
         EquipmentEngineer,
         WarehouseClerk,
-        SupplierQualityEngineer
+        SupplierQualityEngineer,
+        Inspector,
+        Technician
     ];
 }

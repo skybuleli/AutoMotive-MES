@@ -1,0 +1,900 @@
+@page "/spc"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IDisposable
+@using MesAdmin.Web.Services
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+@inject MesApiClient Api
+
+<PageTitle>SPC 质量管理 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T2.5 · SPC Quality Management</MudText>
+                <MudText Typo="Typo.h4">SPC 质量管理</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">控制图 · 检验记录 · 不合格品处置 · 8D 闭环</MudText>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (_errorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>
+            @_errorMessage
+        </MudAlert>
+    }
+
+    @* ── Tab 导航 ── *@
+    <MudPaper Class="pa-4" Style="border-radius:12px;">
+        <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
+                 CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
+
+            <MudTabPanel Text="SPC 控制图" Icon="@Icons.Material.Filled.Analytics">
+                @* ── SPC 控制图内容 ── *@
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudSelect T="string" Label="选择特性" Variant="Variant.Outlined"
+                                   Value="_selectedCharCode" ValueChanged="OnCharCodeChanged"
+                                   Style="min-width:200px;">
+                            @foreach (var c in CharacteristicOptions)
+                            {
+                                <MudSelectItem Value="c">@c — @GetCharacteristicName(c)</MudSelectItem>
+                            }
+                        </MudSelect>
+
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
+                                       OnClick="LoadChartDataAsync" Size="Size.Small" />
+
+                        @if (_spcSamples.Count >= 2)
+                        {
+                            var mean = _spcSamples.Average(s => s.Mean);
+                            var avgStdDev = _spcSamples.Average(s => s.StdDev);
+                            var cpk = avgStdDev > 0
+                                ? Math.Min((106 - mean) / (3 * avgStdDev),
+                                           (mean - 94) / (3 * avgStdDev))
+                                : 0.0;
+                            <MudChip T="string" Color="@(cpk >= 1.33 ? Color.Success : cpk >= 1.0 ? Color.Warning : Color.Error)"
+                                     Size="Size.Small" Variant="Variant.Outlined">
+                                Cpk: @cpk.ToString("F4")
+                            </MudChip>
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                                子组: @_spcSamples.Count
+                            </MudChip>
+                        }
+                    </MudStack>
+
+                    @if (_isLoading && _spcSamples.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body2" Class="section-copy">加载 SPC 样本数据...</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else if (_spcSamples.Count >= 2)
+                    {
+                        <div id="xbarChart" style="width:100%; height:450px; border-radius:12px;"></div>
+                        <div id="rChart" style="width:100%; height:250px; border-radius:12px;"></div>
+                    }
+                    else
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Analytics" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无 @_selectedCharCode 的 SPC 样本数据</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">当采集到至少 2 个子组后，X̄-R 控制图将自动显示。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+
+                    @* SPC 告警列表 *@
+                    @if (_spcAlerts.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600; margin-top:16px;">
+                            判异告警
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="ml-2">
+                                @_spcAlerts.Count(a => !a.IsAcknowledged) 未确认
+                            </MudChip>
+                        </MudText>
+                        <MudTable Items="@_spcAlerts" Dense="true" Hover="true" Striped="true"
+                                  Elevation="0" Class="module-card">
+                            <HeaderContent>
+                                <MudTh>规则</MudTh>
+                                <MudTh>等级</MudTh>
+                                <MudTh>描述</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>时间</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="规则">Rule @context.RuleType</MudTd>
+                                <MudTd DataLabel="等级">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color='@(context.AlertLevel == "Critical" ? Color.Error : context.AlertLevel == "OutOfControl" ? Color.Warning : Color.Info)'
+                                             Variant="Variant.Outlined">
+                                        @context.AlertLevel
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="描述" Style="font-size:0.85rem;">@context.Description</MudTd>
+                                <MudTd DataLabel="状态">
+                                    @if (context.IsAcknowledged)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">已确认</MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">待确认</MudChip>
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            <MudTabPanel Text="NCR 处置看板" Icon="@Icons.Material.Filled.Rule">
+                @* ── NCR 内容 ── *@
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadNcrsAsync"
+                                   Disabled="_isLoading" StartIcon="@Icons.Material.Filled.Refresh">
+                            刷新
+                        </MudButton>
+                        <MudButtonGroup Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small">
+                            <MudButton OnClick='() => OnNcrFilterChanged("Open")'
+                                       Variant='@(_ncrFilter == "Open" ? Variant.Filled : Variant.Outlined)'
+                                       Color='@(_ncrFilter == "Open" ? Color.Warning : Color.Default)'>
+                                待处理
+                            </MudButton>
+                            <MudButton OnClick='() => OnNcrFilterChanged("UnderReview")'
+                                       Variant='@(_ncrFilter == "UnderReview" ? Variant.Filled : Variant.Outlined)'>
+                                评审中
+                            </MudButton>
+                            <MudButton OnClick='() => OnNcrFilterChanged("Dispositioned")'
+                                       Variant='@(_ncrFilter == "Dispositioned" ? Variant.Filled : Variant.Outlined)'>
+                                已处置
+                            </MudButton>
+                            <MudButton OnClick='() => OnNcrFilterChanged("Closed")'
+                                       Variant='@(_ncrFilter == "Closed" ? Variant.Filled : Variant.Outlined)'>
+                                已关闭
+                            </MudButton>
+                        </MudButtonGroup>
+                    </MudStack>
+
+                    @if (_isLoading && _ncrs.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body2" Class="section-copy">加载 NCR 列表...</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else if (_ncrs.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                                <MudText Typo="Typo.body1">暂无 @_ncrFilter 状态的 NCR</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <div class="inventory-grid">
+                            @foreach (var ncr in _ncrs)
+                            {
+                                <MudPaper Class="glass-kpi-card">
+                                    <MudStack Spacing="2">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                                <span class='status-dot @(ncr.Severity == "Critical" ? "alarm" : ncr.Severity == "Major" ? "idle" : "running")'></span>
+                                                <MudText Typo="Typo.subtitle2" Style="font-weight:600;">@ncr.NcrNumber</MudText>
+                                            </MudStack>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color='@(ncr.Severity == "Critical" ? Color.Error : ncr.Severity == "Major" ? Color.Warning : Color.Info)'
+                                                     Variant="Variant.Outlined">
+                                                @ncr.Severity
+                                            </MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2">@ncr.ProductName (@ncr.ProductCode)</MudText>
+                                        <MudText Typo="Typo.caption" Class="kpi-label" Style="white-space:pre-wrap;">@ncr.Description</MudText>
+
+                                        <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">不合格</MudText>
+                                                <MudText Typo="Typo.body2" Color="Color.Error">@ncr.DefectQuantity 件</MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">发现阶段</MudText>
+                                                <MudText Typo="Typo.body2">@ncr.DiscoveredAt</MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">发现人</MudText>
+                                                <MudText Typo="Typo.body2">@ncr.DiscoveredBy</MudText>
+                                            </MudStack>
+                                        </MudStack>
+
+                                        <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                            @if (ncr.Status == "Open")
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning"
+                                                           OnClick="() => OpenNcrDialog(ncr)">
+                                                    提交评审
+                                                </MudButton>
+                                            }
+                                            else if (ncr.Status == "UnderReview")
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                           OnClick="() => OpenNcrDialog(ncr)">
+                                                    做出处置
+                                                </MudButton>
+                                            }
+                                            else if (ncr.Status == "Dispositioned")
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                           OnClick="() => OpenNcrDialog(ncr)">
+                                                    关闭
+                                                </MudButton>
+                                            }
+                                            <MudText Typo="Typo.caption" Class="kpi-sub" Style="margin-left:auto;">
+                                                @ncr.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")
+                                            </MudText>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudStack>
+
+                @* NCR 操作对话框 *@
+                <MudDialog @bind-Visible="_showNcrDialog">
+                    <DialogContent>
+                        <MudStack Spacing="3">
+                            <MudText Typo="Typo.h6">@(_showNcrDialog ? _selectedNcr?.NcrNumber : "")</MudText>
+                            @if (_selectedNcr is not null)
+                            {
+                                <MudText Typo="Typo.body2" Class="kpi-label">@_selectedNcr.Description</MudText>
+
+                                @if (_selectedNcr.Status == "Open")
+                                {
+                                    <MudTextField Label="评审人 (员工号)" Variant="Variant.Outlined"
+                                                  @bind-Value="_ncrReviewerId" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                               OnClick="SubmitNcrReviewAsync" Disabled="_isNcrActionLoading"
+                                               FullWidth="true">
+                                        提交 MRB 评审
+                                    </MudButton>
+                                }
+                                else if (_selectedNcr.Status == "UnderReview")
+                                {
+                                    <MudSelect T="string" Label="处置方式" Variant="Variant.Outlined"
+                                               @bind-Value="_ncrDisposition">
+                                        <MudSelectItem Value='@("Concession")'>让步接收</MudSelectItem>
+                                        <MudSelectItem Value='@("Rework")'>返工</MudSelectItem>
+                                        <MudSelectItem Value='@("Repair")'>返修</MudSelectItem>
+                                        <MudSelectItem Value='@("Scrap")'>报废</MudSelectItem>
+                                        <MudSelectItem Value='@("ReturnToSupplier")'>退货供应商</MudSelectItem>
+                                    </MudSelect>
+                                    <MudTextField Label="评审意见" Variant="Variant.Outlined" Lines="3"
+                                                  @bind-Value="_ncrComments" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                               OnClick="DispositionNcrAsync" Disabled="_isNcrActionLoading"
+                                               FullWidth="true">
+                                        确认处置
+                                    </MudButton>
+                                }
+                                else if (_selectedNcr.Status == "Dispositioned")
+                                {
+                                    <MudText Typo="Typo.body2">
+                                        处置方式：<strong>@_selectedNcr.Disposition</strong>
+                                    </MudText>
+                                    <MudTextField Label="关闭备注" Variant="Variant.Outlined" Lines="2"
+                                                  @bind-Value="_ncrCloseRemarks" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                               OnClick="CloseNcrAsync" Disabled="_isNcrActionLoading"
+                                               FullWidth="true">
+                                        关闭 NCR
+                                    </MudButton>
+                                }
+                            }
+                        </MudStack>
+                    </DialogContent>
+                </MudDialog>
+            </MudTabPanel>
+
+            <MudTabPanel Text="8D 报告" Icon="@Icons.Material.Filled.Assignment">
+                @* ── 8D 内容 ── *@
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="() => _showCreateEightDDialog = true">
+                            新建 8D
+                        </MudButton>
+                        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                            <MudButton OnClick='() => OnEightDFilterChanged("Open")'
+                                       Variant='@(_eightDFilter == "Open" ? Variant.Filled : Variant.Outlined)'>
+                                进行中
+                            </MudButton>
+                            <MudButton OnClick='() => OnEightDFilterChanged("Closed")'
+                                       Variant='@(_eightDFilter == "Closed" ? Variant.Filled : Variant.Outlined)'>
+                                已关闭
+                            </MudButton>
+                        </MudButtonGroup>
+                    </MudStack>
+
+                    @if (_isLoading && _eightDReports.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body2" Class="section-copy">加载 8D 报告列表...</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else if (_eightDReports.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无 @_eightDFilter 状态的 8D 报告</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_eightDReports" Dense="true" Hover="true" Striped="true"
+                                  Elevation="0" Class="module-card">
+                            <HeaderContent>
+                                <MudTh>编号</MudTh>
+                                <MudTh>问题标题</MudTh>
+                                <MudTh>产品</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>负责人</MudTh>
+                                <MudTh>创建时间</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="编号">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.ReportNumber</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="问题" Style="max-width:250px; overflow:hidden; text-overflow:ellipsis;">@context.Title</MudTd>
+                                <MudTd DataLabel="产品">@context.ProductCode</MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color='@(context.Status == "Closed" ? Color.Success : Color.Warning)'
+                                             Variant="Variant.Outlined">
+                                        @(context.Status == "Closed" ? "已关闭" : "进行中")
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="负责人">@(context.TeamLeader ?? "-")</MudTd>
+                                <MudTd DataLabel="创建时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudStack Row Spacing="1">
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                   OnClick="() => OpenEightDDialog(context)">
+                                            查看
+                                        </MudButton>
+                                        @if (context.Status != "Closed")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success"
+                                                       OnClick="() => OpenEightDDialog(context)">
+                                                关闭
+                                            </MudButton>
+                                        }
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+
+                @* 新建 8D 对话框 *@
+                <MudDialog @bind-Visible="_showCreateEightDDialog">
+                    <DialogContent>
+                        <MudStack Spacing="3">
+                            <MudText Typo="Typo.h6">新建 8D 问题解决报告</MudText>
+                            <MudTextField Label="问题标题" Variant="Variant.Outlined" @bind-Value="_newEightDTitle" />
+                            <MudTextField Label="产品编码" Variant="Variant.Outlined" @bind-Value="_newEightDProductCode" />
+                            <MudTextField Label="产品名称" Variant="Variant.Outlined" @bind-Value="_newEightDProductName" />
+                            <MudTextField Label="关联 NCR Id（可选）" Variant="Variant.Outlined" @bind-Value="_newEightDNcrId" />
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       OnClick="CreateEightDAsync" Disabled="_isLoading"
+                                       FullWidth="true">
+                                创建
+                            </MudButton>
+                        </MudStack>
+                    </DialogContent>
+                </MudDialog>
+
+                @* 8D 查看/关闭对话框 *@
+                <MudDialog @bind-Visible="_showEightDDialog">
+                    <DialogContent>
+                        <MudStack Spacing="3">
+                            <MudText Typo="Typo.h6">@(_showEightDDialog ? _selectedEightD?.ReportNumber : "")</MudText>
+                            @if (_selectedEightD is not null)
+                            {
+                                <MudText Typo="Typo.subtitle2">@_selectedEightD.Title</MudText>
+
+                                @if (_selectedEightD.Status == "Closed")
+                                {
+                                    <MudText Typo="Typo.body2" Class="kpi-label">
+                                        关闭时间：@(_selectedEightD.ClosedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm"))
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudTextField Label="总结 (D8)" Variant="Variant.Outlined" Lines="3"
+                                                  @bind-Value="_eightDSummary" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                               OnClick="CloseEightDAsync" Disabled="_isLoading"
+                                               FullWidth="true">
+                                        关闭 8D 报告
+                                    </MudButton>
+                                }
+                            }
+                        </MudStack>
+                    </DialogContent>
+                </MudDialog>
+            </MudTabPanel>
+
+            <MudTabPanel Text="质量概览" Icon="@Icons.Material.Filled.Insights">
+                @* ── 概览内容 ── *@
+                <MudStack Spacing="3" Class="pa-4">
+                    <div class="oee-grid">
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.NotificationsActive" Size="Size.Large"
+                                         Color="@(_activeAlertCount > 0 ? Color.Warning : Color.Success)" />
+                                <MudText Typo="Typo.h3" Color="@(_activeAlertCount > 0 ? Color.Warning : Color.Success)">
+                                    @_activeAlertCount
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">未确认告警</MudText>
+                            </MudStack>
+                        </MudPaper>
+
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.BugReport" Size="Size.Large" Color="Color.Error" />
+                                <MudText Typo="Typo.h3" Color="Color.Error">
+                                    @_ncrs.Count(n => n.Status != "Closed")
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">未关闭 NCR</MudText>
+                            </MudStack>
+                        </MudPaper>
+
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.h3" Color="Color.Primary">
+                                    @_eightDReports.Count(r => r.Status != "Closed")
+                                </MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">进行中 8D</MudText>
+                            </MudStack>
+                        </MudPaper>
+
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.Analytics" Size="Size.Large" Color="Color.Info" />
+                                <MudText Typo="Typo.h3" Color="Color.Info">@_spcSamples.Count</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">SPC 子组 (当前)</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    </div>
+
+                    <MudPaper Class="pa-5" Style="border-radius:12px;">
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:600;">SPC 判异规则状态</MudText>
+                            <MudText Typo="Typo.body2" Class="section-copy">
+                                Western Electric 规则（Rule 1-8）已启用，每新增子组自动检测。未确认告警需质量工程师确认并记录处置措施。
+                            </MudText>
+                        </MudStack>
+                    </MudPaper>
+
+                    <MudPaper Class="pa-5" Style="border-radius:12px;">
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:600;">过程能力状态</MudText>
+                            <MudTable Items="@CharacteristicOptions.Select(c => new { Code = c, Name = GetCharacteristicName(c) })"
+                                      Dense="true" Hover="true" Elevation="0">
+                                <HeaderContent>
+                                    <MudTh>特性编码</MudTh>
+                                    <MudTh>特性名称</MudTh>
+                                    <MudTh>状态</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="编码">@context.Code</MudTd>
+                                    <MudTd DataLabel="名称">@context.Name</MudTd>
+                                    <MudTd DataLabel="状态">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                            待采集
+                                        </MudChip>
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        </MudStack>
+                    </MudPaper>
+                </MudStack>
+            </MudTabPanel>
+
+        </MudTabs>
+    </MudPaper>
+</MudStack>
+
+@* ECharts script *@
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+<script src="~/js/spc-chart-interop.js"></script>
+
+@code {
+    private int _activeTab;
+    private string? _errorMessage;
+    private bool _isLoading;
+
+    // ── SPC 控制图 ──
+    private string _selectedCharCode = "TOR-M6";
+    private List<SpcSampleDto> _spcSamples = [];
+    private List<SpcAlertDto> _spcAlerts = [];
+    private bool _chartInitialized;
+
+    private static readonly string[] CharacteristicOptions =
+        ["TOR-M6", "TOR-M8", "HYD-01", "HYD-02", "HYD-03", "ELE-01", "ELE-02", "DIM-01"];
+
+    // ── NCR ──
+    private string _ncrFilter = "Open";
+    private List<NcrDto> _ncrs = [];
+    private NcrDto? _selectedNcr;
+    private bool _showNcrDialog;
+    private string _ncrReviewerId = "";
+    private string _ncrDisposition = "Concession";
+    private string _ncrComments = "";
+    private string _ncrCloseRemarks = "";
+    private bool _isNcrActionLoading;
+
+    // ── 8D ──
+    private string _eightDFilter = "Open";
+    private List<EightDDto> _eightDReports = [];
+    private bool _showCreateEightDDialog;
+    private string _newEightDTitle = "";
+    private string _newEightDProductCode = "ESP-9.0";
+    private string _newEightDProductName = "ESP 制动总成";
+    private string _newEightDNcrId = "";
+    private EightDDto? _selectedEightD;
+    private bool _showEightDDialog;
+    private string _eightDSummary = "";
+
+    // ── 告警 ──
+    private int _activeAlertCount;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadChartDataAsync();
+            await LoadAlertsAsync();
+            await LoadNcrsAsync();
+            await LoadEightDReportsAsync();
+            StateHasChanged();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  SPC 控制图
+    // ═══════════════════════════════════════════════════════════════
+
+    private async Task LoadChartDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _spcSamples = await Api.GetSpcSamplesAsync(_selectedCharCode, 25) ?? [];
+            _spcAlerts = await Api.GetSpcAlertsAsync(_selectedCharCode) ?? [];
+
+            if (_spcSamples.Count >= 2)
+            {
+                await RenderChartAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"加载 SPC 数据失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnCharCodeChanged(string charCode)
+    {
+        _selectedCharCode = charCode;
+        await LoadChartDataAsync();
+    }
+
+    private async Task RenderChartAsync()
+    {
+        if (_spcSamples.Count < 2) return;
+
+        var means = _spcSamples.Select(s => s.Mean).ToArray();
+        var ranges = _spcSamples.Select(s => s.Range).ToArray();
+        var grandMean = means.Average();
+        var meanRange = ranges.Average();
+        var sigma = meanRange / 2.326; // d2 for n=5
+
+        var ucl = grandMean + 0.577 * meanRange;  // A2=0.577 for n=5
+        var lcl = grandMean - 0.577 * meanRange;
+        var uclR = 2.115 * meanRange;  // D4=2.115 for n=5
+        var clR = meanRange;
+
+        // Simple Cpk estimate
+        var stdDev = sigma;
+        double? cpk = stdDev > 0
+            ? Math.Min((106 - grandMean) / (3 * stdDev), (grandMean - 94) / (3 * stdDev))
+            : null;
+
+        var chartData = new
+        {
+            characteristicCode = _selectedCharCode,
+            characteristicName = GetCharacteristicName(_selectedCharCode),
+            centerLine = Math.Round(grandMean, 4),
+            upperControlLimit = Math.Round(ucl, 4),
+            lowerControlLimit = Math.Round(lcl, 4),
+            upperRangeLimit = Math.Round(uclR, 4),
+            centerRange = Math.Round(clR, 4),
+            cpk = cpk.HasValue ? (double?)Math.Round(cpk.Value, 4) : null,
+            unit = GetCharacteristicUnit(_selectedCharCode),
+            samples = _spcSamples.Select(s => new
+            {
+                s.SubgroupIndex,
+                s.Mean,
+                s.Range,
+                s.StdDev
+            }).ToList()
+        };
+
+        await JSRuntime.InvokeVoidAsync("spcCharts.initXbarRChart", "xbarChart", chartData);
+        await JSRuntime.InvokeVoidAsync("spcCharts.initRChart", "rChart", chartData);
+        _chartInitialized = true;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  SPC 告警
+    // ═══════════════════════════════════════════════════════════════
+
+    private async Task LoadAlertsAsync()
+    {
+        try
+        {
+            _spcAlerts = await Api.GetSpcAlertsAsync() ?? [];
+            _activeAlertCount = _spcAlerts.Count(a => !a.IsAcknowledged);
+        }
+        catch
+        {
+            // non-critical
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  NCR
+    // ═══════════════════════════════════════════════════════════════
+
+    private async Task LoadNcrsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _ncrs = await Api.GetNcrListAsync(_ncrFilter) ?? [];
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"加载 NCR 列表失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnNcrFilterChanged(string status)
+    {
+        _ncrFilter = status;
+        await LoadNcrsAsync();
+    }
+
+    private void OpenNcrDialog(NcrDto ncr)
+    {
+        _selectedNcr = ncr;
+        _ncrReviewerId = "";
+        _ncrDisposition = "Concession";
+        _ncrComments = "";
+        _ncrCloseRemarks = "";
+        _showNcrDialog = true;
+    }
+
+    private async Task SubmitNcrReviewAsync()
+    {
+        if (_selectedNcr is null || string.IsNullOrWhiteSpace(_ncrReviewerId)) return;
+        _isNcrActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.SubmitNcrReviewAsync(_selectedNcr.Id, _ncrReviewerId);
+            if (ok)
+            {
+                _showNcrDialog = false;
+                await LoadNcrsAsync();
+            }
+        }
+        finally
+        {
+            _isNcrActionLoading = false;
+        }
+    }
+
+    private async Task DispositionNcrAsync()
+    {
+        if (_selectedNcr is null || string.IsNullOrWhiteSpace(_ncrComments)) return;
+        _isNcrActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.DispositionNcrAsync(_selectedNcr.Id, _ncrDisposition, _ncrComments);
+            if (ok)
+            {
+                _showNcrDialog = false;
+                await LoadNcrsAsync();
+            }
+        }
+        finally
+        {
+            _isNcrActionLoading = false;
+        }
+    }
+
+    private async Task CloseNcrAsync()
+    {
+        if (_selectedNcr is null || string.IsNullOrWhiteSpace(_ncrCloseRemarks)) return;
+        _isNcrActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.CloseNcrAsync(_selectedNcr.Id, _ncrCloseRemarks);
+            if (ok)
+            {
+                _showNcrDialog = false;
+                await LoadNcrsAsync();
+            }
+        }
+        finally
+        {
+            _isNcrActionLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  8D 报告
+    // ═══════════════════════════════════════════════════════════════
+
+    private async Task LoadEightDReportsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _eightDReports = await Api.GetEightDListAsync(_eightDFilter) ?? [];
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"加载 8D 报告列表失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnEightDFilterChanged(string status)
+    {
+        _eightDFilter = status;
+        await LoadEightDReportsAsync();
+    }
+
+    private async Task CreateEightDAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newEightDTitle) || string.IsNullOrWhiteSpace(_newEightDProductCode))
+            return;
+
+        _isLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.CreateEightDAsync(
+                _newEightDTitle, _newEightDProductCode, _newEightDProductName,
+                string.IsNullOrWhiteSpace(_newEightDNcrId) ? null : _newEightDNcrId);
+            if (ok)
+            {
+                _showCreateEightDDialog = false;
+                _newEightDTitle = "";
+                _newEightDNcrId = "";
+                await LoadEightDReportsAsync();
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenEightDDialog(EightDDto report)
+    {
+        _selectedEightD = report;
+        _eightDSummary = "";
+        _showEightDDialog = true;
+    }
+
+    private async Task CloseEightDAsync()
+    {
+        if (_selectedEightD is null || string.IsNullOrWhiteSpace(_eightDSummary)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.CloseEightDAsync(_selectedEightD.Id, _eightDSummary);
+            if (ok)
+            {
+                _showEightDDialog = false;
+                await LoadEightDReportsAsync();
+            }
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  辅助方法
+    // ═══════════════════════════════════════════════════════════════
+
+    private static string GetCharacteristicName(string code)
+        => code switch
+        {
+            "TOR-M6" => "M6 螺栓扭矩",
+            "TOR-M8" => "M8 螺栓扭矩",
+            "HYD-01" => "建压时间",
+            "HYD-02" => "保压压力",
+            "HYD-03" => "泄漏率",
+            "ELE-01" => "ECU 供电电压",
+            "ELE-02" => "CAN 通信延迟",
+            "DIM-01" => "阀体安装孔直径",
+            _ => code
+        };
+
+    private static string GetCharacteristicUnit(string code)
+        => code switch
+        {
+            "TOR-M6" => "Nm",
+            "TOR-M8" => "Nm",
+            "HYD-01" => "ms",
+            "HYD-02" => "bar",
+            "HYD-03" => "CC/hr",
+            "ELE-01" => "V",
+            "ELE-02" => "μs",
+            "DIM-01" => "mm",
+            _ => ""
+        };
+
+    public void Dispose()
+    {
+        try
+        {
+            _ = JSRuntime.InvokeVoidAsync("spcCharts.disposeChart", "xbarChart");
+            _ = JSRuntime.InvokeVoidAsync("spcCharts.disposeChart", "rChart");
+        }
+        catch
+        {
+            // ignore disposal errors
+        }
+    }
+}

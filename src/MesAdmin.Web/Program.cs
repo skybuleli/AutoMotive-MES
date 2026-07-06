@@ -50,6 +50,9 @@ builder.Services.AddCascadingAuthenticationState();
 // ── OEE SignalR Hub 客户端（T2.19，连接 Api 的 /hubs/dashboard）──
 builder.Services.AddSingleton<OeeHubClient>();
 
+// ── Andon SignalR Hub 客户端（T2.22，连接 Api 的 /hubs/andon）──
+builder.Services.AddSingleton<AndonHubClient>();
+
 builder.Services.AddHttpClient("MesApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["Api:BaseUrl"] ?? "http://localhost:5040/");

@@ -1,0 +1,1141 @@
+@page "/spare-parts"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject MesApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>备件管理 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T2.18 · Spare Parts Management</MudText>
+                <MudText Typo="Typo.h4">备件管理</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">备件库存看板 · 出入库管理 · 采购申请审批</MudText>
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                               OnClick="() => LoadAllAsync()" Size="Size.Small" />
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudPaper Class="pa-4" Style="border-radius:12px;">
+        <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
+                 CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
+
+            @* ═══════════════════════════════════════════
+               Tab 1: 备件库存看板
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="库存看板" Icon="@Icons.Material.Filled.Dashboard">
+                <MudStack Spacing="3" Class="pa-4">
+                    @* 摘要 KPI 卡片 *@
+                    <div class="oee-grid">
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Large" Color="Color.Info" />
+                                <MudText Typo="Typo.h3" Color="Color.Info">@_allParts.Count</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">备件总数</MudText>
+                            </MudStack>
+                        </MudPaper>
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Large" Color="Color.Warning" />
+                                <MudText Typo="Typo.h3" Color="Color.Warning">@_yellowCount</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">黄色预警</MudText>
+                            </MudStack>
+                        </MudPaper>
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" />
+                                <MudText Typo="Typo.h3" Color="Color.Error">@_redCount</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">红色短缺</MudText>
+                            </MudStack>
+                        </MudPaper>
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.PostAdd" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.h3" Color="Color.Primary">@_pendingPrCount</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">待审批采购</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    </div>
+
+                    @* 库存状态网格 *@
+                    @if (_isLoading && _allParts.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">加载备件数据...</MudText>
+                        </MudStack>
+                    }
+                    else if (_allParts.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无备件数据</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">请切换到「备件管理」标签页创建备件。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <div class="inventory-grid">
+                            @foreach (var part in _allParts)
+                            {
+                                <MudPaper Class="glass-kpi-card" Style="@GetStockCardStyle(part.StockLevel)">
+                                    <MudStack Spacing="2">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                                <span class="status-dot @(part.StockLevel == "Red" ? "alarm" : part.StockLevel == "Yellow" ? "idle" : "running")" 
+                                                      style="width:10px;height:10px;"></span>
+                                                <MudText Typo="Typo.subtitle2" Style="font-weight:600;">@part.MaterialCode</MudText>
+                                            </MudStack>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@GetStockChipColor(part.StockLevel)"
+                                                     Variant="Variant.Outlined">
+                                                @GetStockLabel(part.StockLevel)
+                                            </MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2">@part.MaterialName</MudText>
+                                        @if (!string.IsNullOrWhiteSpace(part.EquipmentCode))
+                                        {
+                                            <MudText Typo="Typo.caption" Class="kpi-label">设备：@part.EquipmentCode</MudText>
+                                        }
+
+                                        <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">当前</MudText>
+                                                <MudText Typo="Typo.h4" Color="@GetQuantityColor(part.StockLevel)">
+                                                    @part.CurrentQuantity.ToString("F0")
+                                                </MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">安全</MudText>
+                                                <MudText Typo="Typo.body2">@part.SafetyStock.ToString("F0")</MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">最低</MudText>
+                                                <MudText Typo="Typo.body2">@part.MinimumStock.ToString("F0")</MudText>
+                                            </MudStack>
+                                        </MudStack>
+
+                                        <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                            @if (part.StockLevel == "Red")
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning"
+                                                           OnClick="() => OpenRestockDialog(part)">
+                                                    补货
+                                                </MudButton>
+                                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                           OnClick="() => AutoCreatePurchaseRequest(part)">
+                                                    申请采购
+                                                </MudButton>
+                                            }
+                                            else if (part.StockLevel == "Yellow")
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default"
+                                                           OnClick="() => OpenRestockDialog(part)">
+                                                    补货
+                                                </MudButton>
+                                            }
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Info"
+                                                       OnClick="() => OpenUpdateStockDialog(part)">
+                                                盘点
+                                            </MudButton>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 2: 备件管理
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="备件管理" Icon="@Icons.Material.Filled.Inventory2">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudTextField @bind-Value="_searchFilter" Label="搜索物料编码/名称"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate
+                                      OnKeyDown="OnSearchKeyDown" Style="min-width:200px;" />
+                        <MudSelect T="string" Label="库存状态" Variant="Variant.Outlined" Dense
+                                   @bind-Value="_stockFilter" Style="min-width:120px;">
+                            <MudSelectItem Value="@("all")">全部</MudSelectItem>
+                            <MudSelectItem Value="@("Normal")">正常</MudSelectItem>
+                            <MudSelectItem Value="@("Yellow")">黄色预警</MudSelectItem>
+                            <MudSelectItem Value="@("Red")">红色短缺</MudSelectItem>
+                        </MudSelect>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add" OnClick="() => _showCreateDialog = true">
+                            新建备件
+                        </MudButton>
+                    </MudStack>
+
+                    @if (_isLoading && _filteredParts.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        </MudStack>
+                    }
+                    else if (_filteredParts.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-6">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无匹配备件</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_filteredParts" Dense Hover Breakpoint="Breakpoint.Sm" Elevation="0" Class="module-card">
+                            <ColGroup>
+                                <col style="width:120px" />
+                                <col style="min-width:100px" />
+                                <col style="width:80px" />
+                                <col style="width:60px" />
+                                <col style="width:60px" />
+                                <col style="width:60px" />
+                                <col style="width:80px" />
+                                <col style="width:160px" />
+                            </ColGroup>
+                            <HeaderContent>
+                                <MudTh>物料编码</MudTh>
+                                <MudTh>名称</MudTh>
+                                <MudTh>单位</MudTh>
+                                <MudTh>当前</MudTh>
+                                <MudTh>安全</MudTh>
+                                <MudTh>最低</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="物料编码">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.MaterialCode</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="名称">
+                                    <MudText Typo="Typo.body2">@context.MaterialName</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-sub">@context.Specification</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="单位">@context.Unit</MudTd>
+                                <MudTd DataLabel="当前">
+                                    <MudText Typo="Typo.body2" Color="@GetQuantityColor(context.StockLevel)">
+                                        @context.CurrentQuantity.ToString("F0")
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="安全">@context.SafetyStock.ToString("F0")</MudTd>
+                                <MudTd DataLabel="最低">@context.MinimumStock.ToString("F0")</MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetStockChipColor(context.StockLevel)"
+                                             Variant="Variant.Outlined">
+                                        @GetStockLabel(context.StockLevel)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudStack Row Spacing="1">
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                   OnClick="() => OpenUpdateStockDialog(context)">
+                                            盘点
+                                        </MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success"
+                                                   OnClick="() => OpenRestockDialog(context)">
+                                            补货
+                                        </MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Info"
+                                                   OnClick="() => ViewSparePartHistory(context)">
+                                            使用记录
+                                        </MudButton>
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 3: 采购申请审批
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="采购申请" Icon="@Icons.Material.Filled.PostAdd">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="() => _showCreatePrDialog = true">
+                            新建采购申请
+                        </MudButton>
+                        <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                            <MudButton OnClick='() => OnPrFilterChanged("Pending")'
+                                       Variant='@(_prFilter == "Pending" ? Variant.Filled : Variant.Outlined)'
+                                       Color='@(_prFilter == "Pending" ? Color.Warning : Color.Default)'>
+                                待审批
+                            </MudButton>
+                            <MudButton OnClick='() => OnPrFilterChanged("Approved")'
+                                       Variant='@(_prFilter == "Approved" ? Variant.Filled : Variant.Outlined)'>
+                                已批准
+                            </MudButton>
+                            <MudButton OnClick='() => OnPrFilterChanged("Cancelled")'
+                                       Variant='@(_prFilter == "Cancelled" ? Variant.Filled : Variant.Outlined)'>
+                                已取消
+                            </MudButton>
+                            <MudButton OnClick='() => OnPrFilterChanged(null)'
+                                       Variant='@(_prFilter is null ? Variant.Filled : Variant.Outlined)'>
+                                全部
+                            </MudButton>
+                        </MudButtonGroup>
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                                       OnClick="LoadPurchaseRequestsAsync" Size="Size.Small" />
+                    </MudStack>
+
+                    @if (_isLoading && _purchaseRequests.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        </MudStack>
+                    }
+                    else if (_purchaseRequests.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-6">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.PostAdd" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无 @(_prFilter ?? "") 状态的采购申请</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_purchaseRequests" Dense Hover Breakpoint="Breakpoint.Sm" Elevation="0" Class="module-card">
+                            <ColGroup>
+                                <col style="width:140px" />
+                                <col style="width:80px" />
+                                <col style="width:60px" />
+                                <col style="min-width:120px" />
+                                <col style="width:80px" />
+                                <col style="width:80px" />
+                                <col style="width:130px" />
+                                <col style="width:140px" />
+                            </ColGroup>
+                            <HeaderContent>
+                                <MudTh>申请编号</MudTh>
+                                <MudTh>备件</MudTh>
+                                <MudTh>数量</MudTh>
+                                <MudTh>原因</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>申请人</MudTh>
+                                <MudTh>申请时间</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="编号">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.RequestNumber</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="备件">
+                                    @* 查找对应备件名称 *@
+                                    @{
+                                        var matchedPart = _allParts.FirstOrDefault(p => p.Id == context.SparePartId);
+                                    }
+                                    <MudText Typo="Typo.body2">@(matchedPart?.MaterialCode ?? context.SparePartId[..Math.Min(8, context.SparePartId.Length)])</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="数量">@context.Quantity.ToString("F0")</MudTd>
+                                <MudTd DataLabel="原因">
+                                    <MudText Typo="Typo.caption" Style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                        @context.Reason
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@GetPrStatusColor(context.Status)"
+                                             Variant="Variant.Outlined">
+                                        @GetPrStatusLabel(context.Status)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="申请人">@context.RequestedBy</MudTd>
+                                <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudStack Row Spacing="1">
+                                        @if (context.Status == "Pending")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                       OnClick="() => ApprovePurchaseRequest(context)">
+                                                审批
+                                            </MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                                       OnClick="() => OpenCancelPrDialog(context)">
+                                                取消
+                                            </MudButton>
+                                        }
+                                        else if (context.Status == "Approved")
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                                                已批准 by @(context.ApprovedBy ?? "-")
+                                            </MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.caption" Class="kpi-sub">@context.Status</MudText>
+                                        }
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+        </MudTabs>
+    </MudPaper>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   对话框: 补货
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showRestockDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">备件补货</MudText>
+            @if (_selectedPart is not null)
+            {
+                <MudText Typo="Typo.body2">
+                    @_selectedPart.MaterialCode · @_selectedPart.MaterialName
+                </MudText>
+                <MudText Typo="Typo.caption" Class="kpi-label">
+                    当前库存：@_selectedPart.CurrentQuantity.ToString("F0") @_selectedPart.Unit
+                </MudText>
+                <MudNumericField T="double" @bind-Value="_restockQuantity" Label="补货数量"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showRestockDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(_restockQuantity <= 0)"
+                   OnClick="RestockAsync">
+            确认补货
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 盘点更新
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showUpdateStockDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">库存盘点</MudText>
+            @if (_selectedPart is not null)
+            {
+                <MudText Typo="Typo.body2">
+                    @_selectedPart.MaterialCode · @_selectedPart.MaterialName
+                </MudText>
+                <MudText Typo="Typo.caption" Class="kpi-label">
+                    当前库存：@_selectedPart.CurrentQuantity.ToString("F0") @_selectedPart.Unit
+                </MudText>
+                <MudNumericField T="double" @bind-Value="_stockUpdateQuantity" Label="盘点后数量"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showUpdateStockDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(_stockUpdateQuantity < 0)"
+                   OnClick="UpdateStockAsync">
+            确认更新
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 新建备件
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreateDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建备件</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_newPart.MaterialCode" Label="物料编码" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_newPart.MaterialName" Label="物料名称" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_newPart.Specification" Label="规格型号" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="4">
+                    <MudTextField @bind-Value="_newPart.Unit" Label="计量单位" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="4">
+                    <MudNumericField T="double" @bind-Value="_newPart.SafetyStock" Label="安全库存" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                </MudItem>
+                <MudItem xs="4">
+                    <MudNumericField T="double" @bind-Value="_newPart.MinimumStock" Label="最低库存" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_newPart.EquipmentCode" Label="适用设备（可选）" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_newPart.Remarks" Label="备注" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreateDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(!IsCreateFormValid)"
+                   OnClick="CreateSparePartAsync">
+            创建
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 创建采购申请
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreatePrDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建采购申请</MudText>
+            <MudSelect T="string" Label="选择备件" Variant="Variant.Outlined"
+                       @bind-Value="_newPrSparePartId">
+                @foreach (var p in _allParts)
+                {
+                    <MudSelectItem Value="@p.Id">@p.MaterialCode — @p.MaterialName (库存: @p.CurrentQuantity.ToString("F0"))</MudSelectItem>
+                }
+            </MudSelect>
+            <MudNumericField T="double" @bind-Value="_newPrQuantity" Label="申请数量" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+            <MudTextField @bind-Value="_newPrReason" Label="申请原因" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreatePrDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                   Disabled="@(string.IsNullOrWhiteSpace(_newPrSparePartId) || _newPrQuantity <= 0 || string.IsNullOrWhiteSpace(_newPrReason))"
+                   OnClick="CreatePurchaseRequestAsync">
+            提交申请
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 取消采购申请确认
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCancelPrDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">取消采购申请</MudText>
+            @if (_selectedPr is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedPr.RequestNumber</MudText>
+                <MudText Typo="Typo.caption" Class="kpi-label">数量：@_selectedPr.Quantity · 原因：@_selectedPr.Reason</MudText>
+                <MudTextField @bind-Value="_cancelPrReason" Label="取消原因" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCancelPrDialog = false">返回</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error"
+                   Disabled="@(string.IsNullOrWhiteSpace(_cancelPrReason))"
+                   OnClick="CancelPurchaseRequestAsync">
+            确认取消
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 审批确认
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showApproveDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">审批采购申请</MudText>
+            @if (_selectedPr is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedPr.RequestNumber</MudText>
+                <MudText Typo="Typo.caption" Class="kpi-label">
+                    备件：@{
+                        var m = _allParts.FirstOrDefault(p => p.Id == _selectedPr.SparePartId);
+                        @(m?.MaterialCode ?? _selectedPr.SparePartId[..Math.Min(8, _selectedPr.SparePartId.Length)])
+                    } · 数量：@_selectedPr.Quantity
+                </MudText>
+                <MudText Typo="Typo.body2" Class="kpi-label">原因：@_selectedPr.Reason</MudText>
+                <MudTextField @bind-Value="_approveBy" Label="审批人 (员工号)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showApproveDialog = false">返回</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(string.IsNullOrWhiteSpace(_approveBy))"
+                   OnClick="ApprovePurchaseRequestAsync">
+            确认批准
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 使用记录弹窗
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showUsageDialog" FullWidth="true" MaxWidth="MaxWidth.Medium">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">备件使用记录</MudText>
+            @if (_selectedPart is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedPart.MaterialCode · @_selectedPart.MaterialName</MudText>
+            }
+
+            @if (_partUsages.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="kpi-sub">暂无使用记录</MudText>
+            }
+            else
+            {
+                <MudTable Items="@_partUsages" Dense Hover Elevation="0" Class="module-card">
+                    <HeaderContent>
+                        <MudTh>工单 Id</MudTh>
+                        <MudTh>数量</MudTh>
+                        <MudTh>单价</MudTh>
+                        <MudTh>备注</MudTh>
+                        <MudTh>时间</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="工单">@context.MaintenanceWorkOrderId[..Math.Min(12, context.MaintenanceWorkOrderId.Length)]</MudTd>
+                        <MudTd DataLabel="数量">@context.Quantity.ToString("F0")</MudTd>
+                        <MudTd DataLabel="单价">@(context.UnitPrice?.ToString("F2") ?? "-")</MudTd>
+                        <MudTd DataLabel="备注">@(context.Remarks ?? "-")</MudTd>
+                        <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showUsageDialog = false">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private int _activeTab;
+    private bool _isLoading, _isError;
+    private string? _message;
+
+    // ── 备件列表 ──
+    private List<SparePartDto> _allParts = [];
+    private List<SparePartDto> _filteredParts = [];
+    private string _searchFilter = string.Empty;
+    private string _stockFilter = "all";
+
+    // ── 库存统计 ──
+    private int _yellowCount, _redCount;
+
+    // ── 采购申请 ──
+    private string? _prFilter = "Pending";
+    private List<PurchaseRequestDto> _purchaseRequests = [];
+    private int _pendingPrCount;
+
+    // ── 当前选中 ──
+    private SparePartDto? _selectedPart;
+    private PurchaseRequestDto? _selectedPr;
+
+    // ── 补货对话框 ──
+    private bool _showRestockDialog;
+    private double _restockQuantity;
+
+    // ── 盘点对话框 ──
+    private bool _showUpdateStockDialog;
+    private double _stockUpdateQuantity;
+
+    // ── 新建备件对话框 ──
+    private bool _showCreateDialog;
+    private readonly CreatePartForm _newPart = new();
+
+    // ── 采购申请对话框 ──
+    private bool _showCreatePrDialog, _showCancelPrDialog, _showApproveDialog;
+    private string _newPrSparePartId = string.Empty;
+    private double _newPrQuantity = 1;
+    private string _newPrReason = string.Empty;
+    private string _cancelPrReason = string.Empty;
+    private string _approveBy = string.Empty;
+
+    // ── 使用记录 ──
+    private bool _showUsageDialog;
+    private List<SparePartUsageDto> _partUsages = [];
+
+    private bool IsCreateFormValid =>
+        !string.IsNullOrWhiteSpace(_newPart.MaterialCode)
+        && !string.IsNullOrWhiteSpace(_newPart.MaterialName)
+        && !string.IsNullOrWhiteSpace(_newPart.Unit)
+        && _newPart.SafetyStock >= 0
+        && _newPart.MinimumStock >= 0;
+
+    // ═══════════════════════════════════════════
+    // 页面初始化
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            _allParts = await Api.GetSparePartsAsync() ?? [];
+            _purchaseRequests = await Api.GetPurchaseRequestsAsync() ?? [];
+
+            ApplyFilters();
+            ComputeStockStats();
+            UpdatePendingPrCount();
+
+            // 如果切换到 PR Tab 无数据，尝试加载 pending
+            if (_purchaseRequests.Count == 0 && _prFilter == "Pending")
+            {
+                _purchaseRequests = await Api.GetPurchaseRequestsAsync("Pending") ?? [];
+                UpdatePendingPrCount();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载数据失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadPurchaseRequestsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _purchaseRequests = await Api.GetPurchaseRequestsAsync(_prFilter) ?? [];
+            UpdatePendingPrCount();
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载采购申请失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = _allParts.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchFilter))
+        {
+            var filter = _searchFilter.ToLower();
+            query = query.Where(p =>
+                p.MaterialCode.ToLower().Contains(filter)
+                || p.MaterialName.ToLower().Contains(filter)
+                || (p.EquipmentCode?.ToLower().Contains(filter) ?? false));
+        }
+
+        if (_stockFilter != "all")
+        {
+            query = query.Where(p => p.StockLevel == _stockFilter);
+        }
+
+        _filteredParts = query.ToList();
+    }
+
+    private void ComputeStockStats()
+    {
+        _redCount = _allParts.Count(p => p.StockLevel == "Red");
+        _yellowCount = _allParts.Count(p => p.StockLevel == "Yellow");
+    }
+
+    private void UpdatePendingPrCount()
+    {
+        _pendingPrCount = _purchaseRequests.Count(r => r.Status == "Pending");
+    }
+
+    // ═══════════════════════════════════════════
+    // 搜索
+    // ═══════════════════════════════════════════
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            ApplyFilters();
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 库存操作
+    // ═══════════════════════════════════════════
+
+    private void OpenRestockDialog(SparePartDto part)
+    {
+        _selectedPart = part;
+        _restockQuantity = part.SuggestedPurchaseQuantity > 0 ? part.SuggestedPurchaseQuantity : 1;
+        _showRestockDialog = true;
+    }
+
+    private async Task RestockAsync()
+    {
+        if (_selectedPart is null || _restockQuantity <= 0) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.RestockSparePartAsync(_selectedPart.Id, _restockQuantity);
+            if (ok && data is not null)
+            {
+                _showRestockDialog = false;
+                var idx = _allParts.FindIndex(p => p.Id == _selectedPart.Id);
+                if (idx >= 0) _allParts[idx] = data;
+                _message = $"{data.MaterialCode} 补货 {_restockQuantity} 成功，当前库存 {data.CurrentQuantity}";
+                _isError = false;
+                ComputeStockStats();
+                ApplyFilters();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"补货失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenUpdateStockDialog(SparePartDto part)
+    {
+        _selectedPart = part;
+        _stockUpdateQuantity = part.CurrentQuantity;
+        _showUpdateStockDialog = true;
+    }
+
+    private async Task UpdateStockAsync()
+    {
+        if (_selectedPart is null || _stockUpdateQuantity < 0) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.UpdateSparePartStockAsync(_selectedPart.Id, _stockUpdateQuantity);
+            if (ok && data is not null)
+            {
+                _showUpdateStockDialog = false;
+                var idx = _allParts.FindIndex(p => p.Id == _selectedPart.Id);
+                if (idx >= 0) _allParts[idx] = data;
+                _message = $"{data.MaterialCode} 库存已更新为 {data.CurrentQuantity}";
+                _isError = false;
+                ComputeStockStats();
+                ApplyFilters();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"盘点更新失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 新建备件
+    // ═══════════════════════════════════════════
+
+    private async Task CreateSparePartAsync()
+    {
+        if (!IsCreateFormValid) return;
+        _isLoading = true;
+        try
+        {
+            var body = new CreateSparePartBody(
+                _newPart.MaterialCode, _newPart.MaterialName, _newPart.Specification,
+                _newPart.Unit, _newPart.SafetyStock, _newPart.MinimumStock,
+                string.IsNullOrWhiteSpace(_newPart.EquipmentCode) ? null : _newPart.EquipmentCode,
+                string.IsNullOrWhiteSpace(_newPart.Remarks) ? null : _newPart.Remarks);
+
+            var (ok, data, _) = await Api.CreateSparePartAsync(body);
+            if (ok && data is not null)
+            {
+                _showCreateDialog = false;
+                _newPart.Clear();
+                _allParts.Add(data);
+                _message = $"备件 {data.MaterialCode} 创建成功";
+                _isError = false;
+                ComputeStockStats();
+                ApplyFilters();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"创建备件失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 使用记录
+    // ═══════════════════════════════════════════
+
+    private async Task ViewSparePartHistory(SparePartDto part)
+    {
+        _selectedPart = part;
+        _isLoading = true;
+        try
+        {
+            _partUsages = await Api.GetSparePartUsagesAsync(part.Id) ?? [];
+            _showUsageDialog = true;
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载使用记录失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 采购申请
+    // ═══════════════════════════════════════════
+
+    private async Task OnPrFilterChanged(string? status)
+    {
+        _prFilter = status;
+        await LoadPurchaseRequestsAsync();
+    }
+
+    private async Task CreatePurchaseRequestAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPrSparePartId) || _newPrQuantity <= 0 || string.IsNullOrWhiteSpace(_newPrReason))
+            return;
+
+        _isLoading = true;
+        try
+        {
+            var body = new CreatePurchaseRequestBody(_newPrSparePartId, _newPrQuantity, _newPrReason);
+            var (ok, data, _) = await Api.CreatePurchaseRequestAsync(body);
+            if (ok && data is not null)
+            {
+                _showCreatePrDialog = false;
+                _newPrSparePartId = string.Empty;
+                _newPrQuantity = 1;
+                _newPrReason = string.Empty;
+                _purchaseRequests.Add(data);
+                _message = $"采购申请 {data.RequestNumber} 已创建";
+                _isError = false;
+                UpdatePendingPrCount();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"创建采购申请失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCancelPrDialog(PurchaseRequestDto pr)
+    {
+        _selectedPr = pr;
+        _cancelPrReason = string.Empty;
+        _showCancelPrDialog = true;
+    }
+
+    private async Task CancelPurchaseRequestAsync()
+    {
+        if (_selectedPr is null || string.IsNullOrWhiteSpace(_cancelPrReason)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.CancelPurchaseRequestAsync(_selectedPr.Id, _cancelPrReason);
+            if (ok && data is not null)
+            {
+                _showCancelPrDialog = false;
+                var idx = _purchaseRequests.FindIndex(r => r.Id == _selectedPr.Id);
+                if (idx >= 0) _purchaseRequests[idx] = data;
+                _message = $"采购申请 {data.RequestNumber} 已取消";
+                _isError = false;
+                UpdatePendingPrCount();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"取消采购申请失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ApprovePurchaseRequest(PurchaseRequestDto pr)
+    {
+        _selectedPr = pr;
+        _approveBy = string.Empty;
+        _showApproveDialog = true;
+    }
+
+    private async Task ApprovePurchaseRequestAsync()
+    {
+        if (_selectedPr is null || string.IsNullOrWhiteSpace(_approveBy)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.ApprovePurchaseRequestAsync(_selectedPr.Id, _approveBy);
+            if (ok && data is not null)
+            {
+                _showApproveDialog = false;
+                var idx = _purchaseRequests.FindIndex(r => r.Id == _selectedPr.Id);
+                if (idx >= 0) _purchaseRequests[idx] = data;
+                _message = $"采购申请 {data.RequestNumber} 已批准";
+                _isError = false;
+                UpdatePendingPrCount();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"审批采购申请失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async void AutoCreatePurchaseRequest(SparePartDto part)
+    {
+        try
+        {
+            var (ok, data, _) = await Api.CheckStockAsync(part.Id);
+            if (ok)
+            {
+                await LoadAllAsync();
+                _activeTab = 2; // 切换到采购申请标签页
+                _message = $"已自动生成采购申请：{data?.ExistingPurchaseRequest?.RequestNumber ?? "检查完成"}";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"{part.MaterialCode} 库存检查失败：{ex.Message}";
+            _isError = true;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 样式/标签辅助方法
+    // ═══════════════════════════════════════════
+
+    private static string GetStockLabel(string level) => level switch
+    {
+        "Red" => "短缺",
+        "Yellow" => "预警",
+        "Normal" => "正常",
+        _ => level
+    };
+
+    private static Color GetStockChipColor(string level) => level switch
+    {
+        "Red" => Color.Error,
+        "Yellow" => Color.Warning,
+        "Normal" => Color.Success,
+        _ => Color.Default
+    };
+
+    private static Color GetQuantityColor(string level) => level switch
+    {
+        "Red" => Color.Error,
+        "Yellow" => Color.Warning,
+        "Normal" => Color.Success,
+        _ => Color.Default
+    };
+
+    private static string GetPrStatusLabel(string status) => status switch
+    {
+        "Pending" => "待审批",
+        "Approved" => "已批准",
+        "Ordered" => "已下单",
+        "Received" => "已收货",
+        "Cancelled" => "已取消",
+        _ => status
+    };
+
+    private static Color GetPrStatusColor(string status) => status switch
+    {
+        "Pending" => Color.Warning,
+        "Approved" => Color.Success,
+        "Ordered" => Color.Info,
+        "Received" => Color.Primary,
+        "Cancelled" => Color.Default,
+        _ => Color.Default
+    };
+
+    private static string GetStockCardStyle(string level) => level switch
+    {
+        "Red" => "border-left: 4px solid var(--mud-palette-error);",
+        "Yellow" => "border-left: 4px solid var(--mud-palette-warning);",
+        "Normal" => "border-left: 4px solid var(--mud-palette-success);",
+        _ => ""
+    };
+
+    // ═══════════════════════════════════════════
+    // 表单模型
+    // ═══════════════════════════════════════════
+
+    public class CreatePartForm
+    {
+        public string MaterialCode { get; set; } = string.Empty;
+        public string MaterialName { get; set; } = string.Empty;
+        public string Specification { get; set; } = string.Empty;
+        public string Unit { get; set; } = string.Empty;
+        public double SafetyStock { get; set; } = 10;
+        public double MinimumStock { get; set; } = 5;
+        public string? EquipmentCode { get; set; }
+        public string? Remarks { get; set; }
+
+        public void Clear()
+        {
+            MaterialCode = ""; MaterialName = ""; Specification = "";
+            Unit = ""; SafetyStock = 10; MinimumStock = 5;
+            EquipmentCode = null; Remarks = null;
+        }
+    }
+}

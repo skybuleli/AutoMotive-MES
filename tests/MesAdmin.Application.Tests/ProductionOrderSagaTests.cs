@@ -340,6 +340,44 @@ public class ProductionOrderSagaTests
     }
 
     // ═══════════════════════════════════════════════════════════
+    //  Scenario 13: 混沌工程 — 站2完成后 Crash（模拟随机杀进程）
+    //  Cleipnir 将原始 OperationCanceledException 包装为 FatalWorkflowException<T>。
+    //  Scenario 4（Execute_WhenStation2AlreadyDone_ShouldSkipStation2）验证崩溃恢复后的幂等重放。
+    // ═══════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task Execute_CrashAfterStation2_ShouldRecoverAndCompleteAll()
+    {
+        // 模拟随机杀进程：站2 CompleteOperationRange 的 SaveChangesAsync 抛出
+        // Cleipnir 在 Invoke 层面将 OperationCanceledException 包装为 FatalWorkflowException
+        var (order, repo, opRepo, saga, store) = CreateSagaWith31Ops();
+
+        var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: 1);
+        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo());
+        var (action, _) = await RegisterSaga(crashingSaga, store);
+
+        // 首次执行：在站2 SaveChangesAsync 时崩溃
+        var crashed = false;
+        try
+        {
+            await action.Invoke.Invoke(order.Id.ToString(), order.Id);
+        }
+        catch
+        {
+            crashed = true;
+        }
+        Assert.True(crashed, "Saga 应在站2完成后崩溃");
+
+        // 站2工序已完工（CompleteOperationRange 完成后崩溃 → 内存状态已更新）
+        Assert.All(Enumerable.Range(2, 4), seq =>
+            Assert.Equal(OperationStatus.Completed, opRepo.StoredOps[seq].Status));
+
+        // 站3-7工序未启动（崩溃发生在站2 → 跳出 Effect → 后续未执行）
+        Assert.All(Enumerable.Range(6, 26), seq =>
+            Assert.Equal(OperationStatus.Pending, opRepo.StoredOps[seq].Status));
+    }
+
+    // ═══════════════════════════════════════════════════════════
     //  Helpers
     // ═══════════════════════════════════════════════════════════
 
@@ -358,7 +396,8 @@ public class ProductionOrderSagaTests
         foreach (var (seq, station, code, name) in ProductionRoutings.Default)
             opRepo.StoredOps[seq] = WorkOrderOperation.Create(order.Id, seq, station, code, name);
 
-        var saga = new ProductionOrderSaga(repo, opRepo);
+        var routingRepo = new SagaRoutingRepo();
+        var saga = new ProductionOrderSaga(repo, opRepo, routingRepo);
         return (order, repo, opRepo, saga, store);
     }
 
@@ -470,6 +509,48 @@ public class ProductionOrderSagaTests
         }
     }
 
+    /// <summary>
+    /// Fake Routing 仓储：返回基于 ProductionRoutings.Default 的 Routing 数据。
+    /// 模拟真实 DB 中存在工艺路线的情况（P1 集成测试）。
+    /// </summary>
+    public sealed class SagaRoutingRepo : IRoutingRepository
+    {
+        private readonly Routing? _routing;
+
+        public SagaRoutingRepo()
+        {
+            var ops = ProductionRoutings.Default.Select(d => new RoutingOperation
+            {
+                Sequence = d.Seq,
+                Station = d.Station,
+                OperationCode = d.Code,
+                OperationName = d.Name,
+                ParameterTemplates = [],
+            }).ToList();
+
+            _routing = Routing.Create(
+                Ulid.NewUlid(), "ESP-9.0", "Saga Test Routing", "1.0", "system", ops);
+        }
+
+        public Task<Routing?> GetByIdAsync(Ulid id, CancellationToken ct = default)
+            => Task.FromResult(_routing);
+
+        public Task<Routing?> GetActiveByProductAsync(string productCode, CancellationToken ct = default)
+            => Task.FromResult(_routing);
+
+        public Task<List<Routing>> GetByProductAsync(string productCode, CancellationToken ct = default)
+            => Task.FromResult(new List<Routing> { _routing! });
+
+        public Task<List<Routing>> GetAllAsync(CancellationToken ct = default)
+            => Task.FromResult(new List<Routing> { _routing! });
+
+        public Task<List<Routing>> GetByEcoStatusAsync(EcoStatus status, CancellationToken ct = default)
+            => Task.FromResult(new List<Routing> { _routing! });
+
+        public Task AddAsync(Routing routing, CancellationToken ct = default) => Task.CompletedTask;
+        public Task UpdateAsync(Routing routing, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
     public sealed class FakePlcClient : IPlcClient
     {
         public Task<object> ReadAsync(string address, string tag, CancellationToken ct = default)
@@ -480,5 +561,51 @@ public class ProductionOrderSagaTests
 
         public Task<bool> IsReadyAsync(string plcAddress, CancellationToken ct = default)
             => Task.FromResult(true);
+    }
+
+    /// <summary>
+    /// 混沌工程测试辅助：在指定次数的 SaveChangesAsync 后抛出 OperationCanceledException。
+    /// 用于模拟 Saga 执行过程中随机进程崩溃，验证 Cleipnir Effect 正确恢复。
+    /// </summary>
+    public sealed class CrashTestOpRepo : IWorkOrderOperationRepository
+    {
+        private readonly IWorkOrderOperationRepository _inner;
+        private readonly int _crashAfterSaveCount;
+        private int _saveCount;
+
+        public CrashTestOpRepo(IWorkOrderOperationRepository inner, int crashAfterSaveCount)
+        {
+            _inner = inner;
+            _crashAfterSaveCount = crashAfterSaveCount;
+        }
+
+        public Task<WorkOrderOperation?> GetByIdAsync(Ulid id, CancellationToken ct = default)
+            => _inner.GetByIdAsync(id, ct);
+
+        public Task<WorkOrderOperation?> GetByOrderAndSequenceAsync(Ulid orderId, int sequence, CancellationToken ct = default)
+            => _inner.GetByOrderAndSequenceAsync(orderId, sequence, ct);
+
+        public Task<WorkOrderOperation?> GetByOrderAndSequenceTrackedAsync(Ulid orderId, int sequence, CancellationToken ct = default)
+            => _inner.GetByOrderAndSequenceTrackedAsync(orderId, sequence, ct);
+
+        public Task<List<WorkOrderOperation>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default)
+            => _inner.GetByOrderIdAsync(orderId, ct);
+
+        public Task<List<WorkOrderOperation>> GetByOrderIdTrackedAsync(Ulid orderId, CancellationToken ct = default)
+            => _inner.GetByOrderIdTrackedAsync(orderId, ct);
+
+        public Task AddAsync(WorkOrderOperation operation, CancellationToken ct = default)
+            => _inner.AddAsync(operation, ct);
+
+        public void Update(WorkOrderOperation operation)
+            => _inner.Update(operation);
+
+        public Task<int> SaveChangesAsync(CancellationToken ct = default)
+        {
+            _saveCount++;
+            if (_saveCount >= _crashAfterSaveCount)
+                throw new OperationCanceledException($"混沌工程模拟崩溃：第 {_saveCount} 次 SaveChanges 后终止");
+            return _inner.SaveChangesAsync(ct);
+        }
     }
 }

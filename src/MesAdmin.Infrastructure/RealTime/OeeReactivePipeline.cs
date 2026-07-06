@@ -1,3 +1,4 @@
+using MesAdmin.Application.Observability;
 using MesAdmin.Domain.Models;
 using MesAdmin.Infrastructure.Plc;
 using MessagePipe;
@@ -44,6 +45,7 @@ public sealed class OeeReactivePipeline : IHostedService, IAsyncDisposable
                 try
                 {
                     var oee = ComputeOeeFromSnapshot(snapshot);
+                    AutoMesMetrics.SetOeeValue(snapshot.EquipmentCode, oee.Oee);
                     await _publisher.PublishAsync(new PlcDataChanged(oee), ct);
                 }
                 catch (Exception ex)

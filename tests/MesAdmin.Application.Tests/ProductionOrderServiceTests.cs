@@ -11,7 +11,8 @@ public class ProductionOrderCommandHandlerTests
     {
         var repo = new FakeProductionOrderRepository();
         var opRepo = new FakeWorkOrderOperationRepository();
-        var handler = new CreateOrderHandler(repo, opRepo);
+        var routingRepo = new FakeRoutingRepository(); // 无 routing，回退到硬编码
+        var handler = new CreateOrderHandler(repo, opRepo, routingRepo);
 
         var order = await handler.ExecuteAsync(
             new CreateOrderCommand(" esp-9.0 ", " BOM-A ", Ulid.NewUlid(), 50, (short)1), default);
@@ -29,7 +30,8 @@ public class ProductionOrderCommandHandlerTests
     {
         var repo = new FakeProductionOrderRepository();
         var opRepo = new FakeWorkOrderOperationRepository();
-        var handler = new CreateOrderHandler(repo, opRepo);
+        var routingRepo = new FakeRoutingRepository();
+        var handler = new CreateOrderHandler(repo, opRepo, routingRepo);
 
         var order = await handler.ExecuteAsync(
             new CreateOrderCommand("ESP-9.0", "BOM-A", Ulid.NewUlid(), 50, (short)1), default);
@@ -183,5 +185,99 @@ public class ProductionOrderCommandHandlerTests
         public void Update(WorkOrderOperation operation) { }
 
         public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(1);
+    }
+
+    // ═══════════════════════════════════════════
+    //  P0 集成测试：Routing 表初始化工序
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public async Task CreateOrder_WhenRoutingFound_ShouldUseRoutingTableOps()
+    {
+        var repo = new FakeProductionOrderRepository();
+        var opRepo = new FakeWorkOrderOperationRepository();
+        var routingRepo = new FakeRoutingRepository(true); // 返回 Routing 表数据
+        var handler = new CreateOrderHandler(repo, opRepo, routingRepo);
+
+        var order = await handler.ExecuteAsync(
+            new CreateOrderCommand("ESP-9.0", "BOM-A", Ulid.NewUlid(), 50, (short)1), default);
+
+        Assert.Equal(31, opRepo.StoredOperations.Count);
+        // 验证工序名称来自 Routing 表而非硬编码
+        var seq1 = opRepo.StoredOperations.First(o => o.Sequence == 1);
+        Assert.Equal("上料扫码", seq1.OperationName);
+        Assert.Equal("LOAD-01", seq1.OperationCode);
+
+        var seq31 = opRepo.StoredOperations.First(o => o.Sequence == 31);
+        Assert.Equal("VIN 绑定 + 标签打印", seq31.OperationName);
+        Assert.Equal("VN-01", seq31.OperationCode);
+    }
+
+    [Fact]
+    public async Task CreateOrder_WhenRoutingNotFound_ShouldUseHardcodedFallback()
+    {
+        var repo = new FakeProductionOrderRepository();
+        var opRepo = new FakeWorkOrderOperationRepository();
+        var routingRepo = new FakeRoutingRepository(false); // 返回 null，触发回退
+        var handler = new CreateOrderHandler(repo, opRepo, routingRepo);
+
+        var order = await handler.ExecuteAsync(
+            new CreateOrderCommand("ESP-9.0", "BOM-A", Ulid.NewUlid(), 50, (short)1), default);
+
+        Assert.Equal(31, opRepo.StoredOperations.Count);
+        // 回退到硬编码时，工序名与生产路线定义一致
+        var seq1 = opRepo.StoredOperations.First(o => o.Sequence == 1);
+        Assert.Equal("上料扫码", seq1.OperationName);
+    }
+
+    /// <summary>
+    /// Fake Routing 仓储用于测试。
+    /// hasRouting=true 时返回兼容的 Routing 数据，false 时返回 null（模拟 DB 无数据）。
+    /// </summary>
+    private sealed class FakeRoutingRepository : IRoutingRepository
+    {
+        private readonly Routing? _routing;
+
+        public FakeRoutingRepository(bool hasRouting = false)
+        {
+            if (!hasRouting) return;
+
+            var ops = ProductionRoutings.Default.Select(d => new RoutingOperation
+            {
+                Sequence = d.Seq,
+                Station = d.Station,
+                OperationCode = d.Code,
+                OperationName = d.Name,
+                ParameterTemplates = [],
+            }).ToList();
+
+            _routing = Routing.Create(
+                Ulid.NewUlid(), "ESP-9.0", "Test Routing", "1.0", "system", ops);
+        }
+
+        public Task<Routing?> GetByIdAsync(Ulid id, CancellationToken ct = default)
+            => Task.FromResult(_routing);
+
+        public Task<Routing?> GetActiveByProductAsync(string productCode, CancellationToken ct = default)
+            => Task.FromResult(_routing);
+
+        public Task<List<Routing>> GetByProductAsync(string productCode, CancellationToken ct = default)
+            => Task.FromResult(_routing is not null ? new List<Routing> { _routing } : new List<Routing>());
+
+        public Task<List<Routing>> GetAllAsync(CancellationToken ct = default)
+            => Task.FromResult(_routing is not null ? new List<Routing> { _routing } : new List<Routing>());
+
+        public Task<List<Routing>> GetByEcoStatusAsync(EcoStatus status, CancellationToken ct = default)
+            => Task.FromResult(_routing is not null ? new List<Routing> { _routing } : new List<Routing>());
+
+        public Task AddAsync(Routing routing, CancellationToken ct = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(Routing routing, CancellationToken ct = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

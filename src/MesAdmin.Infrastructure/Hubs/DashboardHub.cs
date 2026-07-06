@@ -1,4 +1,5 @@
 using MemoryPack;
+using MesAdmin.Application.Observability;
 using MesAdmin.Domain.Models;
 using MesAdmin.Infrastructure.Plc;
 using MesAdmin.Infrastructure.RealTime;
@@ -20,6 +21,7 @@ public sealed class DashboardHub : Hub
 {
     private readonly IAsyncSubscriber<PlcDataChanged> _subscriber;
     private readonly ILogger<DashboardHub> _logger;
+    private IDisposable? _subscription;
 
     public DashboardHub(IAsyncSubscriber<PlcDataChanged> subscriber, ILogger<DashboardHub> logger)
     {
@@ -31,10 +33,11 @@ public sealed class DashboardHub : Hub
     public override async Task OnConnectedAsync()
     {
         await base.OnConnectedAsync();
+        AutoMesMetrics.RecordSignalRConnected("dashboard");
         _logger.ZLogInformation($"DashboardHub 客户端连接：{Context.ConnectionId}");
 
         // 订阅 PlcDataChanged 消息，推送给当前客户端
-        _ = _subscriber.Subscribe(async (msg, ct) =>
+        _subscription = _subscriber.Subscribe(async (msg, ct) =>
         {
             try
             {
@@ -42,6 +45,7 @@ public sealed class DashboardHub : Hub
             }
             catch (Exception ex)
             {
+                AutoMesMetrics.RecordSignalRPushFailure("dashboard", "OeeUpdated");
                 _logger.ZLogError($"OEE 推送失败：{ex.Message}");
             }
         });
@@ -49,6 +53,9 @@ public sealed class DashboardHub : Hub
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
+        _subscription?.Dispose();
+        _subscription = null;
+        AutoMesMetrics.RecordSignalRDisconnected("dashboard");
         _logger.ZLogInformation($"DashboardHub 客户端断开：{Context.ConnectionId}");
         return base.OnDisconnectedAsync(exception);
     }
@@ -101,6 +108,7 @@ public sealed class ChannelHealthPushService : IHostedService, IAsyncDisposable
             }
             catch (Exception ex)
             {
+                AutoMesMetrics.RecordSignalRPushFailure("dashboard", "ChannelHealth");
                 _logger.ZLogError($"ChannelHealth 推送异常：{ex.Message}");
             }
 
