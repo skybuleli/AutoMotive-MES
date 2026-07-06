@@ -5,6 +5,8 @@ using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
 using MesAdmin.Infrastructure.Data;
 using MesAdmin.Infrastructure.Data.Repositories;
+using MesAdmin.Application.Features.Quality;
+using MesAdmin.Infrastructure.RealTime;
 using Microsoft.Extensions.Logging;
 
 namespace MesAdmin.Application.Tests;
@@ -43,8 +45,10 @@ public class EfTrackingIntegrationTests
         var orders = scope.ServiceProvider.GetRequiredService<IProductionOrderRepository>();
         var opRepo = scope.ServiceProvider.GetRequiredService<IWorkOrderOperationRepository>();
 
+        var routingRepo = scope.ServiceProvider.GetRequiredService<IRoutingRepository>();
+
         // 创建工单
-        var createHandler = new CreateOrderHandler(orders, opRepo);
+        var createHandler = new CreateOrderHandler(orders, opRepo, routingRepo);
         var order = await createHandler.ExecuteAsync(
             new CreateOrderCommand("ESP-9.0", "BOM-IT-1", Ulid.NewUlid(), 10, (short)1), default);
 
@@ -65,8 +69,10 @@ public class EfTrackingIntegrationTests
         var orders = scope.ServiceProvider.GetRequiredService<IProductionOrderRepository>();
         var opRepo = scope.ServiceProvider.GetRequiredService<IWorkOrderOperationRepository>();
 
+        var routingRepo = scope.ServiceProvider.GetRequiredService<IRoutingRepository>();
+
         // 创建 + 放行（同一 scope 内连续操作）
-        var createHandler = new CreateOrderHandler(orders, opRepo);
+        var createHandler = new CreateOrderHandler(orders, opRepo, routingRepo);
         var order = await createHandler.ExecuteAsync(
             new CreateOrderCommand("ESP-9.1", "BOM-IT-2", Ulid.NewUlid(), 5, (short)1), default);
 
@@ -99,7 +105,8 @@ public class EfTrackingIntegrationTests
         var orders = scope.ServiceProvider.GetRequiredService<IProductionOrderRepository>();
         var opRepo = scope.ServiceProvider.GetRequiredService<IWorkOrderOperationRepository>();
 
-        var createHandler = new CreateOrderHandler(orders, opRepo);
+        var routingRepo = scope.ServiceProvider.GetRequiredService<IRoutingRepository>();
+        var createHandler = new CreateOrderHandler(orders, opRepo, routingRepo);
         var order = await createHandler.ExecuteAsync(
             new CreateOrderCommand("ESP-9.0", "BOM-IT-3", Ulid.NewUlid(), 3, (short)1), default);
 
@@ -167,6 +174,29 @@ public class DatabaseFixture : IAsyncLifetime
         services.AddScoped<IMaterialConsumptionRepository, MaterialConsumptionRepository>();
         services.AddScoped<IConsumptionVarianceRepository, ConsumptionVarianceRepository>();
         services.AddScoped<ISapInventorySyncRecordRepository, SapInventorySyncRecordRepository>();
+
+        // 质量体系仓储（T2.x）
+        services.AddScoped<IQualityRecordRepository, QualityRecordRepository>();
+        services.AddScoped<IInspectionPlanRepository, InspectionPlanRepository>();
+        services.AddScoped<ISpcSampleRepository, SpcSampleRepository>();
+        services.AddScoped<ISpcRuleAlertRepository, SpcRuleAlertRepository>();
+        services.AddScoped<INonConformanceReportRepository, NonConformanceReportRepository>();
+        services.AddScoped<IEightDReportRepository, EightDReportRepository>();
+
+        // Andon 报警仓储（T2.20-T2.23）
+        services.AddScoped<IAndonEventRepository, AndonEventRepository>();
+
+        // 预防性维护仓储（T2.17）
+        services.AddScoped<IMaintenancePlanRepository, MaintenancePlanRepository>();
+        services.AddScoped<IMaintenanceWorkOrderRepository, MaintenanceWorkOrderRepository>();
+
+        // 备件管理仓储（T2.18）
+        services.AddScoped<ISparePartRepository, SparePartRepository>();
+        services.AddScoped<ISparePartUsageRepository, SparePartUsageRepository>();
+        services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
+
+        // 工艺路线仓储（T3.1/T3.2 M07）
+        services.AddScoped<IRoutingRepository, RoutingRepository>();
 
         // 无日志 Provider（测试中 ILogger<T> 可正常解析，输出丢弃）
         services.AddLogging(b => b.ClearProviders());

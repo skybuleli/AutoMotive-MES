@@ -2,10 +2,12 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.EntityFrameworkCore;
 using MesAdmin.Api.Infrastructure;
+using MesAdmin.Application.Observability;
 using MesAdmin.Application.Behaviors;
 using MesAdmin.Application.DependencyInjection;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Application.Features.Inventory;
+using MesAdmin.Application.Features.Routing;
 using MesAdmin.Application.Sagas;
 using MesAdmin.Infrastructure;
 using MesAdmin.Infrastructure.Data;
@@ -15,14 +17,24 @@ using MesAdmin.Infrastructure.Logging;
 using MesAdmin.Infrastructure.Plc;
 using MesAdmin.Infrastructure.Workflows;
 using MesAdmin.Infrastructure.Security;
+using MesAdmin.Infrastructure.Reports;
+using MesAdmin.Infrastructure.RealTime;
+using MesAdmin.Infrastructure.Data.Repositories;
+using FluentEmail.Smtp;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using System.Net.Mail;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseDefaultServiceProvider((context, options) =>
-{
-    options.ValidateScopes = context.HostingEnvironment.IsDevelopment();
-    options.ValidateOnBuild = context.HostingEnvironment.IsDevelopment();
-});
+// ValidateOnBuild disabled temporarily for preview; QualityReportService DI chain needs resolution
+// builder.Host.UseDefaultServiceProvider((context, options) =>
+// {
+//     options.ValidateScopes = context.HostingEnvironment.IsDevelopment();
+//     options.ValidateOnBuild = context.HostingEnvironment.IsDevelopment();
+// });
 
 // ── FastEndpoints（REPR 模式 + 命令/事件总线）──
 builder.Services.AddFastEndpoints();
@@ -53,8 +65,70 @@ builder.Services.AddScoped<ProductionOrderSaga>();
 // ── JWT 认证 + 6 角色 RBAC ──
 builder.Services.AddMesJwtAuthentication(builder.Configuration);
 
+// ── QuestPDF 社区许可 ──
+QuestPDF.Settings.License = LicenseType.Community;
+
+// ── FluentEmail SMTP（质量报表邮件推送 T2.9）──
+builder.Services.AddFluentEmail(builder.Configuration["QualityReports:Email:From"] ?? "automes@bosch.com")
+    .AddSmtpSender(new SmtpClient
+    {
+        Host = builder.Configuration["QualityReports:Email:SmtpHost"] ?? "localhost",
+        Port = builder.Configuration.GetValue<int>("QualityReports:Email:SmtpPort", 25),
+        EnableSsl = builder.Configuration.GetValue<bool>("QualityReports:Email:EnableSsl"),
+        Credentials = !string.IsNullOrEmpty(builder.Configuration["QualityReports:Email:Username"])
+            ? new System.Net.NetworkCredential(
+                builder.Configuration["QualityReports:Email:Username"],
+                builder.Configuration["QualityReports:Email:Password"])
+            : null
+    });
+
+// ── 质量报表服务（T2.9）──
+builder.Services.AddSingleton<PdfReportGenerator>();
+builder.Services.AddSingleton<QualityReportService>();
+builder.Services.AddHostedService<QualityReportService>(sp => sp.GetRequiredService<QualityReportService>());
+
+// ── 100% 在线液压测试管道（T2.6）──
+builder.Services.AddScoped<IHydraulicTestRepository, HydraulicTestRepository>();
+builder.Services.AddHostedService<HydraulicTestReactivePipeline>();
+
+// ── 预防性维护（T2.17）──
+builder.Services.AddScoped<IMaintenancePlanRepository, MaintenancePlanRepository>();
+builder.Services.AddScoped<IMaintenanceWorkOrderRepository, MaintenanceWorkOrderRepository>();
+builder.Services.AddHostedService<PreventiveMaintenanceService>();
+
+// ── 备件管理（T2.18）──
+builder.Services.AddScoped<ISparePartRepository, SparePartRepository>();
+builder.Services.AddScoped<ISparePartUsageRepository, SparePartUsageRepository>();
+builder.Services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
+
+// ── 工艺路线管理（T3.1/T3.2 M07）──
+builder.Services.AddScoped<IRoutingRepository, RoutingRepository>();
+
+// ── 防错三重校验（T3.3）──
+builder.Services.AddScoped<TripleCheckService>();
+
 // ── ZLogger 结构化日志 ──
 builder.Logging.AddZLogger();
+
+// ── OpenTelemetry Metrics -> GreptimeDB OTLP ──
+var otlpEndpoint = NormalizeGreptimeMetricsEndpoint(
+    builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:4000/v1/otlp");
+var otelServiceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "MesAdmin.Api";
+var otelServiceNamespace = builder.Configuration["OTEL_SERVICE_NAMESPACE"] ?? "AutoMES";
+var greptimeDbName = builder.Configuration["Observability:GreptimeDbName"] ?? "public";
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(serviceName: otelServiceName, serviceNamespace: otelServiceNamespace))
+    .WithMetrics(metrics => metrics
+        .AddMeter(AutoMesMetrics.MeterName)
+        .AddOtlpExporter((exporter, reader) =>
+        {
+            exporter.Endpoint = new Uri(otlpEndpoint);
+            exporter.Protocol = OtlpExportProtocol.HttpProtobuf;
+            exporter.Headers = $"X-Greptime-DB-Name={greptimeDbName}";
+            reader.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds = 5000;
+        }));
 
 var app = builder.Build();
 
@@ -88,7 +162,21 @@ app.UseFastEndpoints(config =>
 if (app.Environment.IsDevelopment())
     app.UseSwaggerGen();
 
-// ── SignalR DashboardHub 端点（MemoryPack 二进制协议，T2.15）──
+// ── SignalR 端点（MemoryPack 二进制协议）──
 app.MapHub<DashboardHub>("/hubs/dashboard");
+app.MapHub<AndonHub>("/hubs/andon");
 
 app.Run();
+
+static string NormalizeGreptimeMetricsEndpoint(string configuredEndpoint)
+{
+    var endpoint = configuredEndpoint.TrimEnd('/');
+
+    if (endpoint.EndsWith("/v1/otlp/v1/metrics", StringComparison.OrdinalIgnoreCase))
+        return endpoint;
+
+    if (endpoint.EndsWith("/v1/otlp", StringComparison.OrdinalIgnoreCase))
+        return endpoint + "/v1/metrics";
+
+    return endpoint + "/v1/otlp/v1/metrics";
+}

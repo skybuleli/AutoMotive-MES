@@ -16,7 +16,8 @@ public sealed partial record CreateOrderCommand(
 
 internal sealed class CreateOrderHandler(
     IProductionOrderRepository orders,
-    IWorkOrderOperationRepository operationRepo) : ICommandHandler<CreateOrderCommand, ProductionOrder>
+    IWorkOrderOperationRepository operationRepo,
+    IRoutingRepository routingRepo) : ICommandHandler<CreateOrderCommand, ProductionOrder>
 {
     public async Task<ProductionOrder> ExecuteAsync(CreateOrderCommand cmd, CancellationToken ct)
     {
@@ -45,8 +46,16 @@ internal sealed class CreateOrderHandler(
 
         await orders.AddAsync(order, ct);
 
-        // ── T1.4 物料齐套：初始化 31 道工序记录 ──
-        foreach (var (seq, station, code, name) in ProductionRoutings.Default)
+        // ═══ P0 集成：优先从 Routing 表查询工艺路线，未找到则回退到硬编码默认值 ═══
+        var routing = await routingRepo.GetByIdAsync(cmd.RoutingId, ct);
+        var routingData = routing is not null && routing.Operations.Count > 0
+            ? routing.Operations.OrderBy(o => o.Sequence)
+                .Select(o => (o.Sequence, o.Station, o.OperationCode, o.OperationName))
+                .ToList()
+            : null;
+
+        // 初始化 31 道工序记录
+        foreach (var (seq, station, code, name) in routingData ?? ProductionRoutings.Default)
         {
             var op = WorkOrderOperation.Create(order.Id, seq, station, code, name);
             await operationRepo.AddAsync(op, ct);

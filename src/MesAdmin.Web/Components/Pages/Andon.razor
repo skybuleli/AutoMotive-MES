@@ -1,0 +1,532 @@
+@page "/andon"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IAsyncDisposable
+@using MesAdmin.Web.Services
+@using MesAdmin.Infrastructure.RealTime
+@inject MesApiClient Api
+@inject AndonHubClient AndonHub
+
+<PageTitle>Andon 报警 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T2.20 · Andon Alarm System</MudText>
+                <MudText Typo="Typo.h4">Andon 三级报警</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">L1 工位声光 · L2 班组长 PDA · L3 生产经理 · 自动升级</MudText>
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                    L3 @_stats.EscalatedL3Count
+                </MudChip>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                    L2 @_stats.EscalatedL2Count
+                </MudChip>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">
+                    待确认 @_stats.ActiveCount
+                </MudChip>
+                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                    今日 @_stats.TodayCount
+                </MudChip>
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
+                               OnClick="LoadDataAsync" Size="Size.Small" />
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (_errorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>
+            @_errorMessage
+        </MudAlert>
+    }
+
+    @* ── 过滤栏 ── *@
+    <MudPaper Class="pa-3" Style="border-radius:12px;">
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                <MudButton OnClick='() => SetFilter("all")'
+                           Variant='@(_statusFilter == "all" ? Variant.Filled : Variant.Outlined)'>
+                    全部
+                </MudButton>
+                <MudButton OnClick='() => SetFilter("Active")'
+                           Variant='@(_statusFilter == "Active" ? Variant.Filled : Variant.Outlined)'
+                           Color='@(_statusFilter == "Active" ? Color.Warning : Color.Default)'>
+                    L1 工位
+                </MudButton>
+                <MudButton OnClick='() => SetFilter("EscalatedL2")'
+                           Variant='@(_statusFilter == "EscalatedL2" ? Variant.Filled : Variant.Outlined)'
+                           Color='@(_statusFilter == "EscalatedL2" ? Color.Warning : Color.Default)'>
+                    L2 班组长
+                </MudButton>
+                <MudButton OnClick='() => SetFilter("EscalatedL3")'
+                           Variant='@(_statusFilter == "EscalatedL3" ? Variant.Filled : Variant.Outlined)'
+                           Color='@(_statusFilter == "EscalatedL3" ? Color.Error : Color.Default)'>
+                    L3 经理
+                </MudButton>
+            </MudButtonGroup>
+        </MudStack>
+    </MudPaper>
+
+    @if (_isLoading && _events.Count == 0)
+    {
+        <MudPaper Class="glass-kpi-card pa-8">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="section-copy">加载报警数据...</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else if (_events.Count == 0)
+    {
+        <MudPaper Class="glass-kpi-card pa-8">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                <MudText Typo="Typo.body1">暂无报警</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">所有设备运行正常。</MudText>
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <div class="inventory-grid">
+            @foreach (var ev in _filteredEvents)
+            {
+                var isCritical = ev.Severity == "Critical";
+                var isL3 = ev.Status == "EscalatedL3";
+                var isActive = ev.Status == "Active";
+                var isPulsing = isActive || isL3 || ev.Status == "EscalatedL2";
+
+                <MudPaper Class="@($"glass-kpi-card {(isPulsing ? "andon-pulse" : "")}")">
+                    <MudStack Spacing="2">
+                        @* 头部：级别 + 编号 *@
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                <span class="status-dot @(isCritical ? "alarm" : ev.Severity == "Major" ? "idle" : "running")"></span>
+                                <MudChip T="string" Size="Size.Small" Color="@(isL3 ? Color.Error : ev.Status == "EscalatedL2" ? Color.Warning : Color.Info)"
+                                         Variant="Variant.Filled">
+                                    @GetLevelLabel(ev.Status, ev.EscalationLevel)
+                                </MudChip>
+                                <MudText Typo="Typo.subtitle2" Style="font-weight:600;">@ev.EventNumber</MudText>
+                            </MudStack>
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(isCritical ? Color.Error : ev.Severity == "Major" ? Color.Warning : Color.Info)"
+                                     Variant="Variant.Outlined">
+                                @ev.AlarmType
+                            </MudChip>
+                        </MudStack>
+
+                        @* 描述 *@
+                        <MudText Typo="Typo.body2" Style="font-weight:500;">@ev.Description</MudText>
+
+                        @* 详情行 *@
+                        <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Class="kpi-label">设备</MudText>
+                                <MudText Typo="Typo.body2">@ev.EquipmentCode</MudText>
+                            </MudStack>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Class="kpi-label">工站</MudText>
+                                <MudText Typo="Typo.body2">站@(ev.Station)</MudText>
+                            </MudStack>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Class="kpi-label">经过时间</MudText>
+                                <MudText Typo="Typo.body2" Color="@(isCritical ? Color.Error : Color.Default)">
+                                    @GetElapsedTime(ev.OccurredAt)
+                                </MudText>
+                            </MudStack>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Class="kpi-label">过程值</MudText>
+                                <MudText Typo="Typo.body2" Color="@(isCritical ? Color.Error : Color.Default)">
+                                    @ev.ProcessValue.ToString("F1")
+                                    @if (ev.UpperLimit.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Style="display:inline; color:#9399B2;">/ @ev.UpperLimit</MudText>
+                                    }
+                                </MudText>
+                            </MudStack>
+                        </MudStack>
+
+                        @* 升级链可视化 *@
+                        <MudStack Row Spacing="1" AlignItems="AlignItems.Center" Class="mt-2">
+                            <MudChip T="string" Size="Size.Small" Color="@(ev.EscalationLevel >= 0 ? Color.Success : Color.Default)"
+                                     Variant="@(ev.EscalationLevel >= 0 ? Variant.Filled : Variant.Outlined)">L1</MudChip>
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Style="color:#9399B2;" />
+                            <MudChip T="string" Size="Size.Small" Color="@(ev.EscalationLevel >= 1 ? Color.Warning : Color.Default)"
+                                     Variant="@(ev.EscalationLevel >= 1 ? Variant.Filled : Variant.Outlined)">L2</MudChip>
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Style="color:#9399B2;" />
+                            <MudChip T="string" Size="Size.Small" Color="@(ev.EscalationLevel >= 2 ? Color.Error : Color.Default)"
+                                     Variant="@(ev.EscalationLevel >= 2 ? Variant.Filled : Variant.Outlined)">L3</MudChip>
+                            @if (ev.Status == "Acknowledged")
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined" Class="ml-2">
+                                    已确认: @ev.AcknowledgedBy
+                                </MudChip>
+                            }
+                            @if (ev.Status == "Resolved")
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined" Class="ml-2">
+                                    已解决
+                                </MudChip>
+                            }
+                            @if (ev.Status == "Closed")
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled" Class="ml-2">
+                                    已关闭
+                                </MudChip>
+                            }
+                        </MudStack>
+
+                        @* 操作按钮 *@
+                        <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                            @if (ev.Status is "Active" or "EscalatedL2" or "EscalatedL3")
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning"
+                                           OnClick="() => OpenAcknowledgeDialog(ev)">
+                                    确认
+                                </MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success"
+                                           OnClick="() => OpenResolveDialog(ev)">
+                                    解决
+                                </MudButton>
+                            }
+                            else if (ev.Status is "Acknowledged")
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success"
+                                           OnClick="() => OpenResolveDialog(ev)">
+                                    解决
+                                </MudButton>
+                            }
+                            else if (ev.Status is "Resolved")
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Default"
+                                           OnClick="() => OpenCloseDialog(ev)">
+                                    关闭
+                                </MudButton>
+                            }
+                            <MudText Typo="Typo.caption" Class="kpi-sub" Style="margin-left:auto;">
+                                @ev.OccurredAt.ToLocalTime().ToString("MM-dd HH:mm:ss")
+                            </MudText>
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+            }
+        </div>
+    }
+</MudStack>
+
+@* 确认对话框 *@
+<MudDialog @bind-Visible="_showAckDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">确认报警 — @_selectedEvent?.EventNumber</MudText>
+            <MudText Typo="Typo.body2" Class="kpi-label">@_selectedEvent?.Description</MudText>
+            <MudTextField Label="确认员工号" Variant="Variant.Outlined" @bind-Value="_ackUserId" />
+            <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                       OnClick="AcknowledgeAsync" Disabled="_isActionLoading"
+                       FullWidth="true">
+                确认
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+@* 解决对话框 *@
+<MudDialog @bind-Visible="_showResolveDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">解决报警 — @_selectedEvent?.EventNumber</MudText>
+            <MudText Typo="Typo.body2" Class="kpi-label">@_selectedEvent?.Description</MudText>
+            <MudTextField Label="解决员工号" Variant="Variant.Outlined" @bind-Value="_resolveUserId" />
+            <MudTextField Label="解决措施" Variant="Variant.Outlined" Lines="3" @bind-Value="_resolution" />
+            <MudButton Variant="Variant.Filled" Color="Color.Success"
+                       OnClick="ResolveAsync" Disabled="_isActionLoading"
+                       FullWidth="true">
+                解决
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+@* 关闭对话框 *@
+<MudDialog @bind-Visible="_showCloseDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">关闭报警 — @_selectedEvent?.EventNumber</MudText>
+            <MudText Typo="Typo.body2" Class="kpi-label">@_selectedEvent?.Description</MudText>
+            <MudText Typo="Typo.body2">解决措施：@_selectedEvent?.Resolution</MudText>
+            <MudTextField Label="关闭备注" Variant="Variant.Outlined" Lines="2" @bind-Value="_closeRemarks" />
+            <MudButton Variant="Variant.Filled" Color="Color.Default"
+                       OnClick="CloseAsync" Disabled="_isActionLoading"
+                       FullWidth="true">
+                关闭
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    private List<AndonEventDto> _events = [];
+    private List<AndonEventDto> _filteredEvents => _statusFilter == "all"
+        ? _events
+        : _events.Where(e => e.Status == _statusFilter).ToList();
+
+    private AndonStatsDto _stats = new(0, 0, 0, 0);
+    private string _statusFilter = "all";
+    private bool _isLoading;
+    private bool _isActionLoading;
+    private string? _errorMessage;
+
+    // ── 对话框状态 ──
+    private bool _showAckDialog;
+    private bool _showResolveDialog;
+    private bool _showCloseDialog;
+    private AndonEventDto? _selectedEvent;
+    private string _ackUserId = "";
+    private string _resolveUserId = "";
+    private string _resolution = "";
+    private string _closeRemarks = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 注册 SignalR 回调
+        AndonHub.OnAndonCreated += HandleAndonCreated;
+        AndonHub.OnAndonEscalated += HandleAndonEscalated;
+        AndonHub.OnAndonAcknowledged += HandleAndonAcknowledged;
+        AndonHub.OnAndonResolved += HandleAndonResolved;
+        AndonHub.OnAndonClosed += HandleAndonClosed;
+
+        await AndonHub.StartAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var eventsTask = Api.GetAndonListAsync();
+            var statsTask = Api.GetAndonStatsAsync();
+            await Task.WhenAll(eventsTask, statsTask);
+            _events = eventsTask.Result ?? [];
+            _stats = statsTask.Result ?? new(0, 0, 0, 0);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"加载报警数据失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        try
+        {
+            var stats = await Api.GetAndonStatsAsync();
+            if (stats is not null) _stats = stats;
+        }
+        catch { }
+    }
+
+    private async Task SetFilter(string status)
+    {
+        _statusFilter = status;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // ── SignalR 回调 ──
+
+    private void HandleAndonCreated(AndonEventCreatedMessage msg)
+    {
+        _events.Insert(0, new AndonEventDto(
+            msg.EventId, msg.EventNumber, msg.EquipmentCode, msg.Station,
+            msg.AlarmType.ToString(), msg.Severity.ToString(), msg.Status.ToString(),
+            0, msg.Description, msg.ProcessValue, msg.ProcessTag,
+            msg.UpperLimit, msg.LowerLimit, null, null, null, null, null, null,
+            null, null, null, null, msg.OccurredAt, msg.OccurredAt));
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleAndonEscalated(AndonEventEscalatedMessage msg)
+    {
+        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
+        if (ev is not null)
+        {
+            _events[_events.IndexOf(ev)] = ev with
+            {
+                Status = msg.NewLevel == 2 ? "EscalatedL3" : "EscalatedL2",
+                EscalationLevel = msg.NewLevel,
+            };
+        }
+        _ = LoadStatsAsync();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleAndonAcknowledged(AndonEventAcknowledgedMessage msg)
+    {
+        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
+        if (ev is not null)
+        {
+            _events[_events.IndexOf(ev)] = ev with
+            {
+                Status = "Acknowledged",
+                AcknowledgedBy = msg.AcknowledgedBy,
+                AcknowledgedAt = msg.AcknowledgedAt,
+            };
+        }
+        _ = LoadStatsAsync();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleAndonResolved(AndonEventResolvedMessage msg)
+    {
+        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
+        if (ev is not null)
+        {
+            _events[_events.IndexOf(ev)] = ev with
+            {
+                Status = "Resolved",
+                ResolvedBy = msg.ResolvedBy,
+                Resolution = msg.Resolution,
+                ResolvedAt = msg.ResolvedAt,
+            };
+        }
+        _ = LoadStatsAsync();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleAndonClosed(AndonEventClosedMessage msg)
+    {
+        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
+        if (ev is not null)
+        {
+            _events[_events.IndexOf(ev)] = ev with
+            {
+                Status = "Closed",
+                CloseRemarks = msg.CloseRemarks,
+                ClosedAt = msg.ClosedAt,
+            };
+        }
+        _ = LoadStatsAsync();
+        InvokeAsync(StateHasChanged);
+    }
+
+    // ── 对话框操作 ──
+
+    private void OpenAcknowledgeDialog(AndonEventDto ev)
+    {
+        _selectedEvent = ev;
+        _ackUserId = "";
+        _showAckDialog = true;
+    }
+
+    private void OpenResolveDialog(AndonEventDto ev)
+    {
+        _selectedEvent = ev;
+        _resolveUserId = "";
+        _resolution = "";
+        _showResolveDialog = true;
+    }
+
+    private void OpenCloseDialog(AndonEventDto ev)
+    {
+        _selectedEvent = ev;
+        _closeRemarks = "";
+        _showCloseDialog = true;
+    }
+
+    private async Task AcknowledgeAsync()
+    {
+        if (_selectedEvent is null || string.IsNullOrWhiteSpace(_ackUserId)) return;
+        _isActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.AcknowledgeAndonAsync(_selectedEvent.Id, _ackUserId);
+            if (ok)
+            {
+                _showAckDialog = false;
+                await LoadDataAsync();
+            }
+        }
+        finally
+        {
+            _isActionLoading = false;
+        }
+    }
+
+    private async Task ResolveAsync()
+    {
+        if (_selectedEvent is null || string.IsNullOrWhiteSpace(_resolveUserId) || string.IsNullOrWhiteSpace(_resolution)) return;
+        _isActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.ResolveAndonAsync(_selectedEvent.Id, _resolveUserId, _resolution);
+            if (ok)
+            {
+                _showResolveDialog = false;
+                await LoadDataAsync();
+            }
+        }
+        finally
+        {
+            _isActionLoading = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_selectedEvent is null || string.IsNullOrWhiteSpace(_closeRemarks)) return;
+        _isActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.CloseAndonAsync(_selectedEvent.Id, _closeRemarks);
+            if (ok)
+            {
+                _showCloseDialog = false;
+                await LoadDataAsync();
+            }
+        }
+        finally
+        {
+            _isActionLoading = false;
+        }
+    }
+
+    // ── 辅助方法 ──
+
+    private static string GetLevelLabel(string status, int level)
+        => status switch
+        {
+            "Active" => "L1 工位",
+            "EscalatedL2" => "L2 班组长",
+            "EscalatedL3" => "L3 经理",
+            "Acknowledged" => level > 0 ? $"L{level + 1} 已确认" : "已确认",
+            "Resolved" => "已解决",
+            "Closed" => "已关闭",
+            _ => "未知"
+        };
+
+    private static string GetElapsedTime(DateTimeOffset occurredAt)
+    {
+        var elapsed = DateTimeOffset.UtcNow - occurredAt;
+        if (elapsed.TotalMinutes < 1) return $"{elapsed.Seconds}s";
+        if (elapsed.TotalHours < 1) return $"{elapsed.Minutes}min{elapsed.Seconds}s";
+        return $"{elapsed.Hours}h{elapsed.Minutes}min";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        AndonHub.OnAndonCreated -= HandleAndonCreated;
+        AndonHub.OnAndonEscalated -= HandleAndonEscalated;
+        AndonHub.OnAndonAcknowledged -= HandleAndonAcknowledged;
+        AndonHub.OnAndonResolved -= HandleAndonResolved;
+        AndonHub.OnAndonClosed -= HandleAndonClosed;
+        await AndonHub.DisposeAsync();
+    }
+}

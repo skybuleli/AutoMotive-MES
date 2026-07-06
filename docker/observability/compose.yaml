@@ -1,0 +1,78 @@
+services:
+  greptimedb:
+    image: greptime/greptimedb:v1.1.2
+    container_name: automes-greptimedb
+    command:
+      - standalone
+      - start
+      - --http-addr
+      - 0.0.0.0:4000
+      - --mysql-addr
+      - 0.0.0.0:4002
+      - --postgres-addr
+      - 0.0.0.0:4003
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "4000:4000"
+      - "4002:4002"
+      - "4003:4003"
+    volumes:
+      - greptimedb-data:/greptimedb_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.146.0
+    container_name: automes-vmalert
+    command:
+      - -rule=/etc/vmalert/vmalert-rules.yaml
+      - -datasource.url=http://greptimedb:4000/v1/prometheus?db=public
+      - "-datasource.headers=Content-Type: application/x-www-form-urlencoded"
+      - -datasource.disableStepParam
+      - -notifier.url=http://alertmanager:9093
+      - -evaluationInterval=30s
+      - -httpListenAddr=:8880
+    ports:
+      - "8880:8880"
+    volumes:
+      - ./vmalert-rules.yaml:/etc/vmalert/vmalert-rules.yaml:ro
+    depends_on:
+      greptimedb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8880/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.33.1
+    container_name: automes-alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yaml
+      - --storage.path=/alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
+      - alertmanager-data:/alertmanager
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  greptimedb-data:
+    driver: local
+  alertmanager-data:
+    driver: local

@@ -1,0 +1,63 @@
+groups:
+  - name: automes-phase1
+    interval: 30s
+    rules:
+      - alert: SagaEffectFailures
+        expr: increase(automes_saga_effect_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          category: saga
+        annotations:
+          summary: "Saga effect failures detected"
+          description: "One or more Saga effects failed in the last 5 minutes."
+
+      - alert: PlcChannelBacklogHigh
+        expr: automes_plc_channel_backlog > 1000
+        for: 2m
+        labels:
+          severity: critical
+          category: plc
+        annotations:
+          summary: "PLC channel backlog is high"
+          description: "PLC acquisition backlog stayed above 1000 for 2 minutes."
+
+      - alert: PlcFrameParseErrors
+        expr: increase(automes_plc_frame_parse_errors_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: plc
+        annotations:
+          summary: "PLC frame parse errors increased"
+          description: "More than 10 PLC frame parse errors occurred in 5 minutes."
+
+      - alert: LowOee
+        expr: automes_oee_value < 0.75
+        for: 5m
+        labels:
+          severity: warning
+          category: production
+        annotations:
+          summary: "OEE below threshold"
+          description: "Observed OEE stayed below 75% for 5 minutes."
+
+      - alert: AndonResponseSlow
+        expr: automes_andon_response_duration_seconds > 300
+        for: 1m
+        labels:
+          severity: critical
+          category: andon
+        annotations:
+          summary: "Andon response is slow"
+          description: "An active Andon response exceeded 5 minutes."
+
+      - alert: SignalRPushFailures
+        expr: increase(automes_signalr_push_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          category: realtime
+        annotations:
+          summary: "SignalR push failures detected"
+          description: "Dashboard push failures occurred in the last 5 minutes."

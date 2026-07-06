@@ -1,0 +1,830 @@
+@page "/routing"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject MesApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>工艺管理 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">T3.5 · M07 Routing Management</MudText>
+                <MudText Typo="Typo.h4">工艺管理</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">工艺路线管理 · ECO 审批流 · 工序参数模板</MudText>
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                               OnClick="LoadAllAsync" Size="Size.Small" />
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudPaper Class="pa-4" Style="border-radius:12px;">
+        <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
+                 CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
+
+            @* ═══════════════════════════════════════════
+               Tab 1: 工艺路线列表 + ECO 审批
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="工艺路线" Icon="@Icons.Material.Filled.Route">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudTextField @bind-Value="_productFilter" Label="产品编码"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate
+                                      OnKeyDown="OnSearchKeyDown" Style="min-width:140px;" />
+                        <MudSelect T="string" Label="ECO 状态" Variant="Variant.Outlined" Dense
+                                   @bind-Value="_ecoFilter" Style="min-width:140px;">
+                            <MudSelectItem Value="@("all")">全部</MudSelectItem>
+                            <MudSelectItem Value="@("Draft")">草稿</MudSelectItem>
+                            <MudSelectItem Value="@("PendingApproval")">审批中</MudSelectItem>
+                            <MudSelectItem Value="@("Approved")">已批准</MudSelectItem>
+                            <MudSelectItem Value="@("Released")">已生效</MudSelectItem>
+                            <MudSelectItem Value="@("Superseded")">已取代</MudSelectItem>
+                        </MudSelect>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add" OnClick="() => PrepareCreateAsync()">
+                            新建工艺路线
+                        </MudButton>
+                    </MudStack>
+
+                    @if (_isLoading && _routings.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">加载工艺路线...</MudText>
+                        </MudStack>
+                    }
+                    else if (_routings.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-6">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Route" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无工艺路线</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">点击「新建工艺路线」创建 ESP-9.0/9.1 的 31 工序定义。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        @* KPI 摘要 *@
+                        <div class="oee-grid" style="grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));">
+                            <MudPaper Class="glass-kpi-card">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.h4" Color="Color.Info">@_routings.Count</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-label">总版本</MudText>
+                                </MudStack>
+                            </MudPaper>
+                            <MudPaper Class="glass-kpi-card">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.h4" Color="Color.Success">@_activeCount</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-label">已生效</MudText>
+                                </MudStack>
+                            </MudPaper>
+                            <MudPaper Class="glass-kpi-card">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.h4" Color="Color.Warning">@_pendingCount</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-label">审批中</MudText>
+                                </MudStack>
+                            </MudPaper>
+                            <MudPaper Class="glass-kpi-card">
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                    <MudText Typo="Typo.h4" Color="Color.Primary">@_draftCount</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-label">草稿</MudText>
+                                </MudStack>
+                            </MudPaper>
+                        </div>
+
+                        @* 工艺路线表格 *@
+                        <MudTable Items="@_filteredRoutings" Dense Hover Breakpoint="Breakpoint.Sm"
+                                  Elevation="0" Class="module-card">
+                            <ColGroup>
+                                <col style="width:100px" />
+                                <col style="width:80px" />
+                                <col style="min-width:120px" />
+                                <col style="width:70px" />
+                                <col style="width:70px" />
+                                <col style="width:70px" />
+                                <col style="width:60px" />
+                                <col style="width:60px" />
+                                <col style="width:200px" />
+                            </ColGroup>
+                            <HeaderContent>
+                                <MudTh>产品编码</MudTh>
+                                <MudTh>版本</MudTh>
+                                <MudTh>名称</MudTh>
+                                <MudTh>工序</MudTh>
+                                <MudTh>ECO 状态</MudTh>
+                                <MudTh>ECN 编号</MudTh>
+                                <MudTh>生效</MudTh>
+                                <MudTh>创建人</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="产品">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.ProductCode</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="版本">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                        @context.Version
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="名称" Style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">
+                                    <MudText Typo="Typo.body2">@context.Name</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="工序">
+                                    <MudText Typo="Typo.body2">@context.OperationCount</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetEcoChipColor(context.EcoStatus)"
+                                             Variant="Variant.Outlined">
+                                        @GetEcoLabel(context.EcoStatus)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="ECN">
+                                    <MudText Typo="Typo.caption">@(context.EcoNumber ?? "-")</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="生效">
+                                    @if (context.IsActive)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption">-</MudText>
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="创建人">
+                                    <MudText Typo="Typo.caption">@context.CreatedBy</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudStack Row Spacing="1">
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                   OnClick="() => SelectRouting(context)">
+                                            查看
+                                        </MudButton>
+                                        @if (context.EcoStatus == "Draft")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning"
+                                                       OnClick="() => SubmitEcoAsync(context)">
+                                                提交审批
+                                            </MudButton>
+                                        }
+                                        else if (context.EcoStatus == "PendingApproval")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                       OnClick="() => OpenApproveDialog(context)">
+                                                审批通过
+                                            </MudButton>
+                                        }
+                                        else if (context.EcoStatus == "Approved")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                       OnClick="() => ReleaseRoutingAsync(context)">
+                                                发布生效
+                                            </MudButton>
+                                        }
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 2: 新建工艺路线
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="新建工艺路线" Icon="@Icons.Material.Filled.AddCircle">
+                <MudStack Spacing="3" Class="pa-4">
+                    @if (_defaultRouting is null && _isLoadingDefault)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">加载 ESP 默认工艺路线模板...</MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudPaper Class="pa-5" Style="border-radius:12px;">
+                            <MudStack Spacing="3">
+                                <MudText Typo="Typo.h6">基于 ESP 默认模板创建新版本</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">
+                                    系统将自动填充 31 工序 × 7 站的标准工艺路线。您只需填写版本信息和 ECO 变更说明。
+                                </MudText>
+                            </MudStack>
+                        </MudPaper>
+
+                        <MudPaper Class="pa-5" Style="border-radius:12px;">
+                            <MudGrid Spacing="3">
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_newRouting.ProductCode"
+                                                  Label="产品编码" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_newRouting.Version"
+                                                  Label="版本号" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                  HelperText="如 V2.0" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="_newRouting.Name"
+                                                  Label="名称" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                  HelperText="如 ESP 制动总成工艺路线" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_newRouting.EcoNumber"
+                                                  Label="ECN 编号（可选）" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField @bind-Value="_newRouting.CreatedBy"
+                                                  Label="创建人（员工号）" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="_newRouting.ChangeDescription"
+                                                  Label="变更说明" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                                </MudItem>
+                            </MudGrid>
+
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       Class="mt-4" FullWidth="true"
+                                       Disabled="@(!IsCreateFormValid)"
+                                       OnClick="CreateRoutingAsync"
+                                       StartIcon="@Icons.Material.Filled.Save">
+                                创建工艺路线（31 工序）
+                            </MudButton>
+                        </MudPaper>
+                    }
+
+                    @if (_defaultRouting is not null)
+                    {
+                        <MudPaper Class="pa-4" Style="border-radius:12px;">
+                            <MudText Typo="Typo.subtitle2" Style="font-weight:600;margin-bottom:12px;">
+                                参考：ESP 默认 @_defaultRouting.OperationCount 工序定义
+                            </MudText>
+                            <MudTable Items="@_defaultRouting.Operations.OrderBy(o => o.Sequence)" Dense Hover
+                                      Elevation="0" Style="font-size:0.85rem;">
+                                <ColGroup>
+                                    <col style="width:50px" />
+                                    <col style="width:50px" />
+                                    <col style="width:70px" />
+                                    <col style="min-width:100px" />
+                                    <col style="width:60px" />
+                                    <col style="width:100px" />
+                                    <col style="width:100px" />
+                                </ColGroup>
+                                <HeaderContent>
+                                    <MudTh>#</MudTh>
+                                    <MudTh>工站</MudTh>
+                                    <MudTh>编码</MudTh>
+                                    <MudTh>名称</MudTh>
+                                    <MudTh>工时</MudTh>
+                                    <MudTh>设备</MudTh>
+                                    <MudTh>参数</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="#">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Tertiary" Variant="Variant.Outlined">
+                                            @context.Sequence
+                                        </MudChip>
+                                    </MudTd>
+                                    <MudTd DataLabel="站">@context.Station</MudTd>
+                                    <MudTd DataLabel="编码">
+                                        <MudText Typo="Typo.body2" Style="font-weight:500;">@context.OperationCode</MudText>
+                                    </MudTd>
+                                    <MudTd DataLabel="名称">@context.OperationName</MudTd>
+                                    <MudTd DataLabel="工时">
+                                        @(context.StandardTimeSeconds.HasValue ? $"{context.StandardTimeSeconds:F1}s" : "-")
+                                    </MudTd>
+                                    <MudTd DataLabel="设备">
+                                        @(context.FixtureCode ?? "-")
+                                    </MudTd>
+                                    <MudTd DataLabel="参数">
+                                        <MudText Typo="Typo.caption">
+                                            @(context.ParameterTemplates.Count > 0
+                                                ? $"{context.ParameterTemplates.Count} 个参数"
+                                                : "-")
+                                        </MudText>
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        </MudPaper>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+        </MudTabs>
+    </MudPaper>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   对话框: ECO 审批通过
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showApproveDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">审批 ECO</MudText>
+            @if (_selectedRouting is not null)
+            {
+                <MudText Typo="Typo.body2">
+                    @_selectedRouting.ProductCode · V@(_selectedRouting.Version) · @_selectedRouting.Name
+                </MudText>
+                <MudText Typo="Typo.caption" Class="kpi-label">
+                    ECN: @(_selectedRouting.EcoNumber ?? "-")
+                </MudText>
+                @if (!string.IsNullOrWhiteSpace(_selectedRouting.ChangeDescription))
+                {
+                    <MudText Typo="Typo.body2" Class="kpi-label">变更说明：@_selectedRouting.ChangeDescription</MudText>
+                }
+                <MudTextField @bind-Value="_approveBy" Label="审批人" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showApproveDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(string.IsNullOrWhiteSpace(_approveBy))"
+                   OnClick="ApproveEcoAsync">
+            确认审批通过
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 工艺路线明细
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showDetailDialog" FullWidth="true" MaxWidth="MaxWidth.Large">
+    <DialogContent>
+        @if (_detailRouting is not null)
+        {
+            <MudStack Spacing="3">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">@_detailRouting.Name</MudText>
+                        <MudText Typo="Typo.body2" Class="kpi-label">
+                            @_detailRouting.ProductCode · V@(_detailRouting.Version)
+                        </MudText>
+                    </MudStack>
+                    <MudChip T="string" Size="Size.Small" Color="@GetEcoChipColor(_detailRouting.EcoStatus)"
+                             Variant="Variant.Outlined">
+                        @GetEcoLabel(_detailRouting.EcoStatus)
+                    </MudChip>
+                </MudStack>
+
+                @* 版本信息 *@
+                <MudStack Row Spacing="4" Wrap="Wrap.Wrap">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.caption" Class="kpi-label">创建人</MudText>
+                        <MudText Typo="Typo.body2">@_detailRouting.CreatedBy</MudText>
+                    </MudStack>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.caption" Class="kpi-label">创建时间</MudText>
+                        <MudText Typo="Typo.body2">@_detailRouting.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+                    </MudStack>
+                    @if (_detailRouting.ApprovedBy is not null)
+                    {
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.caption" Class="kpi-label">审批人</MudText>
+                            <MudText Typo="Typo.body2">@_detailRouting.ApprovedBy</MudText>
+                        </MudStack>
+                    }
+                    @if (_detailRouting.EffectiveDate.HasValue)
+                    {
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.caption" Class="kpi-label">生效时间</MudText>
+                            <MudText Typo="Typo.body2">@_detailRouting.EffectiveDate.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</MudText>
+                        </MudStack>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_detailRouting.ChangeDescription))
+                    {
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.caption" Class="kpi-label">变更说明</MudText>
+                            <MudText Typo="Typo.body2">@_detailRouting.ChangeDescription</MudText>
+                        </MudStack>
+                    }
+                </MudStack>
+
+                @* 工序明细表 *@
+                <MudText Typo="Typo.subtitle2" Style="font-weight:600;margin-top:8px;">
+                    工序明细 (@_detailRouting.Operations.Count 道工序)
+                </MudText>
+                <MudTable Items="@_detailRouting.Operations.OrderBy(o => o.Sequence)" Dense Hover
+                          Elevation="0" Style="font-size:0.85rem;">
+                    <ColGroup>
+                        <col style="width:40px" />
+                        <col style="width:40px" />
+                        <col style="width:70px" />
+                        <col style="min-width:90px" />
+                        <col style="width:60px" />
+                        <col style="width:70px" />
+                        <col style="min-width:140px" />
+                    </ColGroup>
+                    <HeaderContent>
+                        <MudTh>#</MudTh>
+                        <MudTh>站</MudTh>
+                        <MudTh>编码</MudTh>
+                        <MudTh>名称</MudTh>
+                        <MudTh>工时</MudTh>
+                        <MudTh>夹具</MudTh>
+                        <MudTh>参数模板</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="#">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Tertiary" Variant="Variant.Outlined">
+                                @context.Sequence
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="站">@context.Station</MudTd>
+                        <MudTd DataLabel="编码">
+                            <MudText Typo="Typo.body2" Style="font-weight:500;">@context.OperationCode</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="名称">@context.OperationName</MudTd>
+                        <MudTd DataLabel="工时">
+                            @(context.StandardTimeSeconds.HasValue ? $"{context.StandardTimeSeconds:F1}s" : "-")
+                        </MudTd>
+                        <MudTd DataLabel="夹具">@(context.FixtureCode ?? "-")</MudTd>
+                        <MudTd DataLabel="参数">
+                            @if (context.ParameterTemplates.Count == 0)
+                            {
+                                <MudText Typo="Typo.caption" Class="kpi-sub">-</MudText>
+                            }
+                            else
+                            {
+                                <MudStack Spacing="0">
+                                    @foreach (var pt in context.ParameterTemplates)
+                                    {
+                                        <MudText Typo="Typo.caption" Style="white-space:nowrap;">
+                                            @pt.ParameterCode: @pt.StandardValue @pt.Unit
+                                            @if (pt.LowerSpecLimit.HasValue || pt.UpperSpecLimit.HasValue)
+                                            {
+                                                <span style="color:var(--mud-palette-warning);">
+                                                    (@(pt.LowerSpecLimit?.ToString() ?? "∞") ~ @(pt.UpperSpecLimit?.ToString() ?? "∞"))
+                                                </span>
+                                            }
+                                            @if (pt.EnableSpc)
+                                            {
+                                                <span style="color:var(--mud-palette-info);"> SPC</span>
+                                            }
+                                        </MudText>
+                                    }
+                                </MudStack>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showDetailDialog = false">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private int _activeTab;
+    private bool _isLoading, _isError, _isLoadingDefault, _showApproveDialog, _showDetailDialog;
+    private string? _message;
+    private string _approveBy = string.Empty;
+
+    // ── 工艺路线列表 ──
+    private List<RoutingResponseDto> _routings = [];
+    private List<RoutingResponseDto> _filteredRoutings = [];
+    private string _productFilter = string.Empty;
+    private string _ecoFilter = "all";
+
+    // ── 统计 ──
+    private int _activeCount, _pendingCount, _draftCount;
+
+    // ── 当前选中 ──
+    private RoutingResponseDto? _selectedRouting;
+    private RoutingResponseDto? _detailRouting;
+
+    // ── 默认模板（新建工艺路线参考） ──
+    private RoutingResponseDto? _defaultRouting;
+
+    // ── 新建表单 ──
+    private readonly CreateRoutingForm _newRouting = new();
+
+    private bool IsCreateFormValid =>
+        !string.IsNullOrWhiteSpace(_newRouting.ProductCode)
+        && !string.IsNullOrWhiteSpace(_newRouting.Version)
+        && !string.IsNullOrWhiteSpace(_newRouting.Name)
+        && !string.IsNullOrWhiteSpace(_newRouting.CreatedBy);
+
+    // ═══════════════════════════════════════════
+    // 页面初始化
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            _routings = await Api.GetRoutingsAsync() ?? [];
+            ApplyFilters();
+            ComputeStats();
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载工艺路线失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = _routings.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_productFilter))
+        {
+            var filter = _productFilter.ToLower();
+            query = query.Where(r => r.ProductCode.ToLower().Contains(filter));
+        }
+
+        if (_ecoFilter != "all")
+        {
+            query = query.Where(r => r.EcoStatus == _ecoFilter);
+        }
+
+        _filteredRoutings = query.ToList();
+    }
+
+    private void ComputeStats()
+    {
+        _activeCount = _routings.Count(r => r.IsActive);
+        _pendingCount = _routings.Count(r => r.EcoStatus == "PendingApproval");
+        _draftCount = _routings.Count(r => r.EcoStatus == "Draft");
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            ApplyFilters();
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // ECO 工作流操作
+    // ═══════════════════════════════════════════
+
+    private async Task SubmitEcoAsync(RoutingResponseDto routing)
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            var (ok, data, _) = await Api.SubmitRoutingAsync(routing.Id);
+            if (ok && data is not null)
+            {
+                ReplaceRouting(routing.Id, data);
+                _message = $"工艺路线 {routing.ProductCode} V{routing.Version} 已提交 ECO 审批";
+                _isError = false;
+                ComputeStats();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"提交 ECO 审批失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenApproveDialog(RoutingResponseDto routing)
+    {
+        _selectedRouting = routing;
+        _approveBy = string.Empty;
+        _showApproveDialog = true;
+    }
+
+    private async Task ApproveEcoAsync()
+    {
+        if (_selectedRouting is null || string.IsNullOrWhiteSpace(_approveBy)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.ApproveRoutingAsync(_selectedRouting.Id, _approveBy);
+            if (ok && data is not null)
+            {
+                _showApproveDialog = false;
+                ReplaceRouting(_selectedRouting.Id, data);
+                _message = $"工艺路线 {data.ProductCode} V{data.Version} 已审批通过";
+                _isError = false;
+                ComputeStats();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"审批失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ReleaseRoutingAsync(RoutingResponseDto routing)
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            var (ok, data, _) = await Api.ReleaseRoutingAsync(routing.Id);
+            if (ok && data is not null)
+            {
+                // 重新加载全部（旧版本可能被 Supersede）
+                await LoadAllAsync();
+                _message = $"工艺路线 {routing.ProductCode} V{routing.Version} 已发布生效";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"发布生效失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 查看详情
+    // ═══════════════════════════════════════════
+
+    private void SelectRouting(RoutingResponseDto routing)
+    {
+        _detailRouting = routing;
+        _showDetailDialog = true;
+    }
+
+    // ═══════════════════════════════════════════
+    // 新建工艺路线
+    // ═══════════════════════════════════════════
+
+    private async Task PrepareCreateAsync()
+    {
+        _activeTab = 1; // 切换到新建标签页
+        _isLoadingDefault = true;
+        _newRouting.Clear();
+        _newRouting.ProductCode = "ESP-9.0";
+        try
+        {
+            _defaultRouting = await GetDefaultFallback();
+        }
+        catch
+        {
+            _defaultRouting = await GetDefaultFallback();
+        }
+        finally
+        {
+            _isLoadingDefault = false;
+        }
+    }
+
+    private async Task<RoutingResponseDto?> GetDefaultFallback()
+    {
+        try
+        {
+            var d = await Api.GetAsync<RoutingResponseDto>("api/v1/routing/ESP-9.0/default");
+            return d;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task CreateRoutingAsync()
+    {
+        if (!IsCreateFormValid) return;
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            // 从默认模板构建 31 工序
+            var defaultOps = _defaultRouting?.Operations
+                .Select(o => new CreateRoutingOperationBody(
+                    o.Sequence, o.Station, o.OperationCode, o.OperationName,
+                    o.StandardTimeSeconds, o.FixtureCode, o.FixtureName,
+                    o.ParameterTemplates.Select(pt => new CreateParameterTemplateBody(
+                        pt.ParameterCode, pt.ParameterName, pt.StandardValue,
+                        pt.UpperSpecLimit, pt.LowerSpecLimit, pt.Unit,
+                        pt.EnableSpc, pt.SpcSubgroupSize
+                    )).ToList()
+                )).ToList() ?? [];
+
+            var body = new CreateRoutingBody(
+                _newRouting.ProductCode,
+                _newRouting.Name,
+                _newRouting.Version,
+                _newRouting.CreatedBy,
+                string.IsNullOrWhiteSpace(_newRouting.EcoNumber) ? null : _newRouting.EcoNumber,
+                string.IsNullOrWhiteSpace(_newRouting.ChangeDescription) ? null : _newRouting.ChangeDescription,
+                defaultOps);
+
+            var (ok, data, _) = await Api.CreateRoutingAsync(body);
+            if (ok && data is not null)
+            {
+                _message = $"工艺路线 {data.ProductCode} V{data.Version} 创建成功！";
+                _isError = false;
+                _newRouting.Clear();
+                _newRouting.ProductCode = "ESP-9.0";
+                _routings.Add(data);
+                ComputeStats();
+                ApplyFilters();
+                // 回到列表标签页
+                _activeTab = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"创建工艺路线失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 辅助方法
+    // ═══════════════════════════════════════════
+
+    private void ReplaceRouting(string id, RoutingResponseDto updated)
+    {
+        var idx = _routings.FindIndex(r => r.Id == id);
+        if (idx >= 0) _routings[idx] = updated;
+        ApplyFilters();
+    }
+
+    private static string GetEcoLabel(string status) => status switch
+    {
+        "Draft" => "草稿",
+        "PendingApproval" => "审批中",
+        "Approved" => "已批准",
+        "Released" => "已生效",
+        "Superseded" => "已取代",
+        _ => status
+    };
+
+    private static Color GetEcoChipColor(string status) => status switch
+    {
+        "Draft" => Color.Default,
+        "PendingApproval" => Color.Warning,
+        "Approved" => Color.Info,
+        "Released" => Color.Success,
+        "Superseded" => Color.Tertiary,
+        _ => Color.Default
+    };
+
+    // ═══════════════════════════════════════════
+    // 表单模型
+    // ═══════════════════════════════════════════
+
+    public class CreateRoutingForm
+    {
+        public string ProductCode { get; set; } = "ESP-9.0";
+        public string Version { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? EcoNumber { get; set; }
+        public string? ChangeDescription { get; set; }
+        public string CreatedBy { get; set; } = string.Empty;
+
+        public void Clear()
+        {
+            ProductCode = "ESP-9.0";
+            Version = "";
+            Name = "";
+            EcoNumber = null;
+            ChangeDescription = null;
+            CreatedBy = "";
+        }
+    }
+}
