@@ -22,6 +22,7 @@ public sealed partial record CompleteOrderCommand(
 internal sealed class CompleteOrderHandler(
     IProductionOrderRepository orders,
     IGoodsReceiptRepository goodsReceipts,
+    ISapOrderSyncRecordRepository sapOrderSyncRepo,
     ILogger<CompleteOrderHandler> logger,
     BackflushMaterialsHandler? backflushHandler = null) : ICommandHandler<CompleteOrderCommand, ProductionOrder>
 {
@@ -48,6 +49,15 @@ internal sealed class CompleteOrderHandler(
             cmd.QualifiedQuantity, cmd.ReviewerId, DateTimeOffset.UtcNow);
         await goodsReceipts.AddAsync(receipt, ct);
         await goodsReceipts.SaveChangesAsync(ct);
+
+        // 3. T3.14: 若工单来自 SAP，创建工单状态同步记录
+        if (!string.IsNullOrWhiteSpace(order.ExternalOrderNumber))
+        {
+            var syncRecord = SapOrderSyncRecord.Create(
+                order.Id, order.OrderNumber, order.ExternalOrderNumber,
+                OrderStatus.Completed, cmd.QualifiedQuantity);
+            await sapOrderSyncRepo.AddAsync(syncRecord, ct);
+        }
 
         await RunBackflushAsync(cmd.OrderId, order.OrderNumber, ct);
 

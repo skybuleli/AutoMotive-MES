@@ -54,6 +54,25 @@ public class MesDbContext : DbContext
     // ── 工艺路线管理 (T3.1/T3.2 M07) ──
     public DbSet<Routing> Routings => Set<Routing>();
 
+    // ── SAP 工单同步记录 (T3.14) ──
+    public DbSet<SapOrderSyncRecord> SapOrderSyncRecords => Set<SapOrderSyncRecord>();
+
+    // ═══════════════════════════════════════════════════════════
+    //  M08 SQE 供应商质量模块实体配置 (T3.6-T3.8)
+    // ═══════════════════════════════════════════════════════════
+
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+    public DbSet<SupplierScoreCard> SupplierScoreCards => Set<SupplierScoreCard>();
+    public DbSet<PpapDocument> PpapDocuments => Set<PpapDocument>();
+    public DbSet<CriticalSupplierSetting> CriticalSupplierSettings => Set<CriticalSupplierSetting>();
+
+    // ═══════════════════════════════════════════════════════════
+    //  M09 排程管理实体配置 (T3.10-T3.13)
+    // ═══════════════════════════════════════════════════════════
+
+    public DbSet<ProductionSchedule> ProductionSchedules => Set<ProductionSchedule>();
+    public DbSet<CapacityCalendar> CapacityCalendars => Set<CapacityCalendar>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // ── production_orders 表 ──
@@ -312,6 +331,25 @@ public class MesDbContext : DbContext
             b.Property(r => r.Resolution).HasMaxLength(512);
             b.Property(r => r.CreatedAt).HasColumnType("timestamptz");
             b.Property(r => r.ResolvedAt).HasColumnType("timestamptz");
+        });
+
+        // ── sap_order_sync_records 表（T3.14 工单双向同步）──
+        modelBuilder.Entity<SapOrderSyncRecord>(b =>
+        {
+            b.ToTable("sap_order_sync_records");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(r => r.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(r => r.OrderId).HasDatabaseName("idx_sap_order_sync_order");
+            b.Property(r => r.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(r => r.ExternalOrderNumber).HasMaxLength(64).IsRequired();
+            b.HasIndex(r => r.ExternalOrderNumber).HasDatabaseName("idx_sap_order_sync_external");
+            b.Property(r => r.Status).HasConversion<string>().HasMaxLength(16);
+            b.Property(r => r.SapDocumentNumber).HasMaxLength(64);
+            b.Property(r => r.SyncError).HasMaxLength(512);
+            b.HasIndex(r => r.SapSynced).HasDatabaseName("idx_sap_order_sync_status");
+            b.Property(r => r.SyncedAt).HasColumnType("timestamptz");
+            b.Property(r => r.CreatedAt).HasColumnType("timestamptz");
         });
 
         // ── sap_inventory_sync_records 表（T1.17 → T3.14 SAP 同步）──
@@ -719,6 +757,142 @@ public class MesDbContext : DbContext
                     pt.Property(p => p.Unit).HasMaxLength(16).IsRequired();
                 });
             });
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        //  M09 排程管理 (T3.10-T3.13)
+        // ═══════════════════════════════════════════════════════════
+
+        // ── production_schedules 表 ──
+        modelBuilder.Entity<ProductionSchedule>(b =>
+        {
+            b.ToTable("production_schedules");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(s => s.OrderId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(s => s.OrderId).HasDatabaseName("idx_schedule_order");
+            b.Property(s => s.OrderNumber).HasMaxLength(32).IsRequired();
+            b.Property(s => s.ProductCode).HasMaxLength(32).IsRequired();
+            b.Property(s => s.EquipmentCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(s => s.EquipmentCode).HasDatabaseName("idx_schedule_equipment");
+            b.HasIndex(s => s.ScheduleDate).HasDatabaseName("idx_schedule_date");
+            b.Property(s => s.Status).HasConversion<int>();
+            b.HasIndex(s => s.Status).HasDatabaseName("idx_schedule_status");
+            b.Property(s => s.RushType).HasConversion<int>();
+            b.Property(s => s.RushReason).HasMaxLength(256);
+            b.Property(s => s.Remarks).HasMaxLength(512);
+            b.Property(s => s.PlannedStartAt).HasColumnType("timestamptz");
+            b.Property(s => s.PlannedEndAt).HasColumnType("timestamptz");
+            b.Property(s => s.CreatedAt).HasColumnType("timestamptz");
+            b.Property(s => s.UpdatedAt).HasColumnType("timestamptz");
+        });
+
+        // ── capacity_calendars 表 ──
+        modelBuilder.Entity<CapacityCalendar>(b =>
+        {
+            b.ToTable("capacity_calendars");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(c => c.EquipmentCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(c => c.EquipmentCode).IsUnique();
+            b.Property(c => c.EquipmentName).HasMaxLength(64).IsRequired();
+            b.Property(c => c.ShiftTemplate).HasMaxLength(256).IsRequired();
+            b.Property(c => c.CreatedAt).HasColumnType("timestamptz");
+            b.Property(c => c.UpdatedAt).HasColumnType("timestamptz");
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        //  M08 SQE 供应商质量 (T3.6-T3.8)
+        // ═══════════════════════════════════════════════════════════
+
+        // ── suppliers 表 ──
+        modelBuilder.Entity<Supplier>(b =>
+        {
+            b.ToTable("suppliers");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(s => s.SupplierCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(s => s.SupplierCode).IsUnique();
+            b.Property(s => s.SupplierName).HasMaxLength(128).IsRequired();
+            b.Property(s => s.ShortName).HasMaxLength(64);
+            b.Property(s => s.CreditCode).HasMaxLength(32);
+            b.Property(s => s.ContactPerson).HasMaxLength(32);
+            b.Property(s => s.ContactPhone).HasMaxLength(32);
+            b.Property(s => s.ContactEmail).HasMaxLength(64);
+            b.Property(s => s.Address).HasMaxLength(256);
+            b.Property(s => s.MaterialCategory).HasMaxLength(64).IsRequired();
+            b.HasIndex(s => s.MaterialCategory).HasDatabaseName("idx_supplier_category");
+            b.Property(s => s.MaterialCodes).HasMaxLength(512).IsRequired();
+            b.Property(s => s.Tier).HasConversion<int>();
+            b.HasIndex(s => s.Tier).HasDatabaseName("idx_supplier_tier");
+            b.Property(s => s.IsoCertification).HasMaxLength(64);
+            b.Property(s => s.IsoExpiryDate).HasColumnType("timestamptz");
+            b.Property(s => s.Remarks).HasMaxLength(512);
+            b.Property(s => s.LatestScoreAt).HasColumnType("timestamptz");
+            b.Property(s => s.CreatedAt).HasColumnType("timestamptz");
+            b.Property(s => s.UpdatedAt).HasColumnType("timestamptz");
+        });
+
+        // ── supplier_score_cards 表 ──
+        modelBuilder.Entity<SupplierScoreCard>(b =>
+        {
+            b.ToTable("supplier_score_cards");
+            b.HasKey(c => c.Id);
+            b.Property(c => c.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(c => c.SupplierId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(c => c.SupplierId).HasDatabaseName("idx_scorecard_supplier");
+            b.Property(c => c.SupplierCode).HasMaxLength(32).IsRequired();
+            b.Property(c => c.Period).HasMaxLength(16).IsRequired();
+            b.HasIndex(c => c.Period).HasDatabaseName("idx_scorecard_period");
+            b.HasIndex(c => new { c.SupplierId, c.Period }).HasDatabaseName("ux_scorecard_supplier_period");
+            b.Property(c => c.IncomingQualityData).HasMaxLength(256);
+            b.Property(c => c.OnTimeDeliveryData).HasMaxLength(256);
+            b.Property(c => c.EightDResponseData).HasMaxLength(256);
+            b.Property(c => c.PpapPassRateData).HasMaxLength(256);
+            b.Property(c => c.PriceCompetitivenessData).HasMaxLength(256);
+            b.Property(c => c.EvaluatedBy).HasMaxLength(32).IsRequired();
+            b.Property(c => c.Remarks).HasMaxLength(512);
+            b.Property(c => c.CreatedAt).HasColumnType("timestamptz");
+        });
+
+        // ── ppap_documents 表 ──
+        modelBuilder.Entity<PpapDocument>(b =>
+        {
+            b.ToTable("ppap_documents");
+            b.HasKey(d => d.Id);
+            b.Property(d => d.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(d => d.SupplierId).HasConversion<UlidToGuidConverter>();
+            b.HasIndex(d => d.SupplierId).HasDatabaseName("idx_ppap_supplier");
+            b.Property(d => d.SupplierCode).HasMaxLength(32).IsRequired();
+            b.Property(d => d.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(d => d.MaterialCode).HasDatabaseName("idx_ppap_material");
+            b.Property(d => d.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(d => d.Status).HasConversion<int>();
+            b.HasIndex(d => d.Status).HasDatabaseName("idx_ppap_status");
+            b.Property(d => d.SubmittedAt).HasColumnType("timestamptz");
+            b.Property(d => d.ApprovedAt).HasColumnType("timestamptz");
+            b.Property(d => d.ExpiryDate).HasColumnType("timestamptz");
+            b.Property(d => d.Version).HasMaxLength(16);
+            b.Property(d => d.ApprovedBy).HasMaxLength(32);
+            b.Property(d => d.RejectionReason).HasMaxLength(512);
+            b.Property(d => d.Remarks).HasMaxLength(512);
+            b.Property(d => d.CreatedBy).HasMaxLength(32).IsRequired();
+            b.Property(d => d.CreatedAt).HasColumnType("timestamptz");
+            b.Property(d => d.UpdatedAt).HasColumnType("timestamptz");
+        });
+
+        // ── critical_supplier_settings 表 ──
+        modelBuilder.Entity<CriticalSupplierSetting>(b =>
+        {
+            b.ToTable("critical_supplier_settings");
+            b.HasKey(s => s.Id);
+            b.Property(s => s.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(s => s.MaterialCode).HasMaxLength(32).IsRequired();
+            b.HasIndex(s => s.MaterialCode).IsUnique();
+            b.Property(s => s.MaterialName).HasMaxLength(64).IsRequired();
+            b.Property(s => s.Remarks).HasMaxLength(256);
+            b.Property(s => s.CreatedAt).HasColumnType("timestamptz");
+            b.Property(s => s.UpdatedAt).HasColumnType("timestamptz");
         });
 
         // ═══════════════════════════════════════════════════════════

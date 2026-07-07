@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoMES 可观测性方案 — 3 服务 on Uncloud</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Noto+Serif:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --outer-bg: #E4E1DC; --page-bg: #FDFCF9; --surface: #FFFFFF;
+  --border: #E8E6E2; --divider: #C5C0BA;
+  --text-primary: #151515; --text-body: #3D3D3D; --text-secondary: #717171;
+  --hero-bg: #D7EDE2; --hero-deco: #8FC5A8; --hero-deco2: #5FA882;
+  --success-bg: #E8FBCF; --success-fg: #3D4826;
+  --warning-bg: #FFF0DC; --warning-fg: #E47700;
+  --info-bg: #DEE5F7; --info-fg: #3E54CE;
+  --error-bg: #FDECEA; --error-fg: #C4433A;
+  --neutral-bg: #FDF9F2; --neutral-fg: #7C746F;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter Tight',sans-serif;background:var(--outer-bg);color:var(--text-body);font-size:14px;line-height:1.6;padding:24px 16px}
+.page{max-width:1200px;margin:0 auto;background:var(--page-bg);border-radius:24px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+.hero{position:relative;background:var(--hero-bg);padding:48px 40px 36px;overflow:hidden}
+.hero-blob{position:absolute;border-radius:60% 40% 55% 45%/55% 45% 55% 45%;opacity:.15;pointer-events:none}
+.hero-blob:nth-child(1){width:180px;height:140px;background:var(--hero-deco);top:-30px;right:8%}
+.hero-blob:nth-child(2){width:120px;height:160px;background:var(--hero-deco2);bottom:-40px;left:5%}
+.hero-blob:nth-child(3){width:90px;height:90px;background:var(--hero-deco);top:40%;left:60%}
+.hero-blob:nth-child(4){width:140px;height:100px;background:var(--hero-deco2);top:10%;left:25%;opacity:.1}
+.hero-eyebrow{font-size:12px;font-weight:500;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+.hero-headline{font-family:'Noto Serif',serif;font-size:48px;font-weight:500;letter-spacing:-0.02em;color:var(--text-primary);line-height:1.15;margin-bottom:16px;position:relative;z-index:1}
+.hero-sub{font-size:15px;color:var(--text-body);max-width:720px;position:relative;z-index:1;line-height:1.6}
+.hero-divider{border:none;border-top:.5px solid var(--divider);margin:24px 0 0;opacity:.6}
+.hero-stats{display:flex;gap:40px;margin-top:20px;position:relative;z-index:1;flex-wrap:wrap}
+.hero-stat-val{font-size:26px;font-weight:600;color:var(--text-primary)}
+.hero-stat-label{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.section{padding:36px 40px}
+.section+.section{border-top:.5px solid var(--border)}
+.section-title{font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:6px}
+.section-sub{font-size:12px;color:var(--text-secondary);margin-bottom:20px}
+.section-rule{border:none;border-top:.5px solid var(--border);margin-bottom:24px}
+.card-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{background:var(--surface);border:.5px solid var(--border);border-radius:12px;padding:20px 22px}
+.card-title{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:8px}
+.card-body{font-size:14px;color:var(--text-body);line-height:1.65}
+.card-body ul{padding-left:18px;margin:8px 0}.card-body li{margin-bottom:4px}
+.card-meta{font-size:12px;color:var(--text-secondary);margin-top:8px}
+.pill{display:inline-block;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;margin-right:5px;margin-bottom:4px}
+.pill-success{background:var(--success-bg);color:var(--success-fg)}
+.pill-warning{background:var(--warning-bg);color:var(--warning-fg)}
+.pill-info{background:var(--info-bg);color:var(--info-fg)}
+.pill-error{background:var(--error-bg);color:var(--error-fg)}
+.pill-neutral{background:var(--neutral-bg);color:var(--neutral-fg)}
+.alert{border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.alert-title{font-weight:600;font-size:13px;margin-bottom:4px}
+.alert-body{font-size:13px;line-height:1.55}
+.alert-info{background:var(--info-bg);color:var(--info-fg)}
+.alert-success{background:var(--success-bg);color:var(--success-fg)}
+.alert-warning{background:var(--warning-bg);color:var(--warning-fg)}
+.table-wrap{overflow-x:auto;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{font-size:12px;font-weight:500;color:var(--text-secondary);text-align:left;padding:10px 14px;border-bottom:1px solid var(--divider)}
+tbody td{padding:10px 14px;border-bottom:.5px solid var(--border);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+.chart-box{position:relative;height:280px;margin:16px 0}
+.code-block{background:#F8F7F4;border:.5px solid var(--border);border-radius:10px;padding:18px 20px;font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.7;overflow-x:auto;white-space:pre-wrap;margin:12px 0}
+.cm{color:#999}.kw{color:#6E9298}.str{color:#5FA882}
+.simplify-box{background:var(--hero-bg);border:1px solid var(--hero-deco);border-radius:12px;padding:16px 20px;margin:10px 0}
+.simplify-title{font-weight:600;font-size:14px;color:var(--text-primary);margin-bottom:4px}
+.simplify-body{font-size:13px;color:var(--text-body)}
+.arch-diagram{display:flex;flex-direction:column;gap:10px;margin:16px 0;font-size:13px}
+.arch-row{display:flex;gap:10px;align-items:stretch}
+.arch-box{flex:1;background:var(--surface);border:.5px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.arch-box.hl{border-color:var(--hero-deco2);background:var(--hero-bg)}
+.arch-box-name{font-weight:600;font-size:14px;color:var(--text-primary);margin-bottom:3px}
+.arch-box-role{font-size:12px;color:var(--text-secondary)}
+.arch-box-ports{font-size:11px;color:var(--text-secondary);margin-top:5px;font-family:monospace}
+.arch-arrow{display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-secondary);flex-shrink:0;width:28px}
+.footer{background:var(--hero-bg);padding:32px 40px}
+.footer-top{display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px}
+.footer-brand{font-weight:600;font-size:15px;color:var(--text-primary)}
+.footer-sub{font-size:12px;color:var(--text-secondary);margin-top:2px}
+.footer-meta{display:flex;gap:40px}
+.footer-meta-col{font-size:12px;color:var(--text-secondary);line-height:1.8}
+.footer-divider{border:none;border-top:.5px solid var(--divider);margin:20px 0 16px;opacity:.5}
+.footer-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--text-secondary)}
+@media(max-width:768px){
+  body{padding:0}.page{border-radius:0}
+  .hero{padding:32px 20px 24px}.hero-headline{font-size:32px}.hero-stats{gap:20px}
+  .section{padding:24px 20px}.card-grid{grid-template-columns:1fr}
+  .footer{padding:24px 20px}.footer-meta{flex-direction:column;gap:16px}
+  .arch-row{flex-direction:column}.arch-arrow{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ═══════════ HERO ═══════════ -->
+<div class="hero">
+  <div class="hero-blob"></div><div class="hero-blob"></div><div class="hero-blob"></div><div class="hero-blob"></div>
+  <div class="hero-eyebrow">AutoMES · 基础设施决策 · 2026-07-06 修订 v3</div>
+  <div class="hero-headline">VaultS3 + GreptimeDB<br>+ Alertmanager</div>
+  <div class="hero-sub">
+    完整的 3 服务可观测性栈，基于 Uncloud 部署，无 K8S。
+    <strong>VaultS3</strong> 做对象存储底座（S3 兼容，Rust 单二进制），<strong>GreptimeDB</strong> 存算分离对接 VaultS3（含内置 Perses Dashboard + Trace Gantt），<strong>Alertmanager</strong> 告警路由。
+    全 Apache 2.0，全 CNCF 生态。
+  </div>
+  <hr class="hero-divider">
+  <div class="hero-stats">
+    <div><div class="hero-stat-val">3</div><div class="hero-stat-label">服务（存储+观测+告警）</div></div>
+    <div><div class="hero-stat-val">0</div><div class="hero-stat-label">K8S 依赖</div></div>
+    <div><div class="hero-stat-val">Uncloud</div><div class="hero-stat-label">已有编排平台</div></div>
+    <div><div class="hero-stat-val">~250MB</div><div class="hero-stat-label">总内存占用</div></div>
+  </div>
+</div>
+
+<!-- ═══════════ 1. 为什么是这三个 ═══════════ -->
+<div class="section">
+  <div class="section-title">3 服务职责分明</div>
+  <div class="section-sub">每个都不可替代，每个都极简</div>
+  <hr class="section-rule">
+
+  <div class="simplify-box">
+    <div class="simplify-title">🗄️ VaultS3 — 对象存储底座</div>
+    <div class="simplify-body">Rust 实现、S3 兼容、Apache 2.0、单二进制 ~15MB。提供 S3 API（:9000），AutoMES 应用文件存储 + GreptimeDB 数据存储共用一个实例。无需引入 MinIO（Java，~200MB+）或自建 Ceph。</div>
+  </div>
+
+  <div class="simplify-box">
+    <div class="simplify-title">📊 GreptimeDB — 统一可观测性后端</div>
+    <div class="simplify-body">内置 Perses Dashboard（:4000/dashboard，含 Trace Gantt），原生 OTLP 接收（应用直发），SQL+PromQL 双查询，数据存 VaultS3（无状态容器）。</div>
+  </div>
+
+  <div class="simplify-box">
+    <div class="simplify-title">🔔 Alertmanager — 告警路由</div>
+    <div class="simplify-body">Prometheus 生态标配，单二进制 ~20MB。从 GreptimeDB Prometheus API 拉取指标评估规则，Webhook 推送到飞书/钉钉/邮件。</div>
+  </div>
+</div>
+
+<!-- ═══════════ 2. 架构 ═══════════ -->
+<div class="section">
+  <div class="section-title">架构：VaultS3 是底座，上面跑无状态服务</div>
+  <div class="section-sub">VaultS3 先启动 → GreptimeDB 依赖 → Alertmanager 依赖 GreptimeDB</div>
+  <hr class="section-rule">
+
+  <div class="arch-diagram">
+    <div class="arch-row">
+      <div class="arch-box hl">
+        <div class="arch-box-name">VaultS3</div>
+        <div class="arch-box-role">对象存储（S3 API）</div>
+        <div class="arch-box-ports">:9000 · 数据持久层</div>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-arrow">↑</div>
+      <div style="flex:1;text-align:center;font-size:11px;color:var(--text-secondary);padding:6px 0">GreptimeDB 数据 + AutoMES 文件 共用 VaultS3</div>
+      <div class="arch-arrow">↑</div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-box hl">
+        <div class="arch-box-name">GreptimeDB</div>
+        <div class="arch-box-role">可观测性后端 + Perses Dashboard</div>
+        <div class="arch-box-ports">:4000 HTTP/OTLP/Dashboard · :4002 MySQL · :4003 PG</div>
+      </div>
+      <div class="arch-arrow">↔</div>
+      <div class="arch-box">
+        <div class="arch-box-name">Alertmanager</div>
+        <div class="arch-box-role">告警评估 · 路由 · Webhook</div>
+        <div class="arch-box-ports">:9093</div>
+      </div>
+    </div>
+    <div class="arch-row">
+      <div class="arch-box"><div class="arch-box-name">AutoMES App</div><div class="arch-box-role">OTLP → GreptimeDB · 文件 → VaultS3</div></div>
+      <div class="arch-box"><div class="arch-box-name">📧 邮件</div></div>
+      <div class="arch-box"><div class="arch-box-name">💬 飞书/钉钉</div></div>
+    </div>
+  </div>
+
+  <div class="alert alert-success">
+    <div class="alert-title">🔑 VaultS3 是核心依赖——先把它跑起来</div>
+    <div class="alert-body">
+      <strong>启动顺序</strong>：VaultS3 → GreptimeDB → Alertmanager。<br>
+      <strong>共用实例</strong>：AutoMES 应用文件（质量检测图片、工单附件）和 GreptimeDB 可观测数据存储在同一个 VaultS3 实例的不同 bucket 中。<br>
+      <strong>高可用</strong>：VaultS3 数据持久在本地卷（或挂载到 Uncloud 机器）。GreptimeDB 和 Alertmanager 无状态，挂了自动重启。Phase 2 可升级为 VaultS3 多节点 Raft 集群。
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 3. Uncloud compose.yaml ═══════════ -->
+<div class="section">
+  <div class="section-title">Uncloud compose.yaml — 3 服务完整部署</div>
+  <div class="section-sub">这就是全部。依赖关系清晰，Uncloud 自动处理启动顺序</div>
+  <hr class="section-rule">
+
+  <div class="code-block"><span class="cm"># ──────────────────────────────────────────────</span>
+<span class="cm"># observability-stack.yaml — AutoMES 可观测性栈 on Uncloud</span>
+<span class="cm"># 部署: uc deploy -f observability-stack.yaml</span>
+<span class="cm"># ──────────────────────────────────────────────</span>
+
+<span class="kw">x-machines</span>: [<span class="str">mes-monitor-1</span>]  <span class="cm"># Phase 1: 单主机（Phase 2 加 mes-monitor-2）</span>
+
+<span class="kw">services</span>:
+
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="cm"># VaultS3 — 对象存储底座（必须先启动）</span>
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="kw">vaults3</span>:
+    <span class="kw">image</span>: <span class="str">eniz1806/vaults3:latest</span>
+    <span class="kw">container_name</span>: <span class="str">mes-vaults3</span>
+    <span class="kw">ports</span>:
+      - <span class="str">"9000:9000"</span>   <span class="cm"># S3 API</span>
+    <span class="kw">environment</span>:
+      <span class="cm"># 管理员凭证（GreptimeDB 和 AutoMES 共用）</span>
+      <span class="kw">VAULTS3_ACCESS_KEY</span>: <span class="str">${VaultS3_ACCESS_KEY:-mes-admin}</span>
+      <span class="kw">VAULTS3_SECRET_KEY</span>: <span class="str">${VaultS3_SECRET_KEY:-change-me-in-production}</span>
+    <span class="kw">volumes</span>:
+      <span class="cm"># 数据持久化：VaultS3 挂了数据不丢</span>
+      - <span class="str">vaults3_data:/data</span>
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: [<span class="str">"CMD"</span>, <span class="str">"curl"</span>, <span class="str">"-f"</span>, <span class="str">"http://localhost:9000/health"</span>]
+      <span class="kw">interval</span>: <span class="str">10s</span>
+      <span class="kw">retries</span>: <span class="str">5</span>
+    <span class="kw">restart</span>: <span class="str">unless-stopped</span>
+
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="cm"># Bucket 初始化（一次性任务）</span>
+  <span class="cm"># VaultS3 就绪后自动创建所需 bucket</span>
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="kw">vaults3-init</span>:
+    <span class="kw">image</span>: <span class="str">amazon/aws-cli:latest</span>
+    <span class="kw">depends_on</span>:
+      <span class="kw">vaults3</span>:
+        <span class="kw">condition</span>: <span class="str">service_healthy</span>
+    <span class="kw">entrypoint</span>: |
+      /bin/sh -c '
+        aws --endpoint-url http://vaults3:9000 \
+            s3 mb s3://automes-files 2>/dev/null || true;
+        aws --endpoint-url http://vaults3:9000 \
+            s3 mb s3://automes-observability 2>/dev/null || true;
+        echo "Buckets ready: automes-files, automes-observability"
+      '
+    <span class="kw">environment</span>:
+      <span class="kw">AWS_ACCESS_KEY_ID</span>: <span class="str">${VaultS3_ACCESS_KEY:-mes-admin}</span>
+      <span class="kw">AWS_SECRET_ACCESS_KEY</span>: <span class="str">${VaultS3_SECRET_KEY:-change-me-in-production}</span>
+      <span class="kw">AWS_DEFAULT_REGION</span>: <span class="str">us-east-1</span>
+
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="cm"># GreptimeDB — 可观测性后端（依赖 VaultS3）</span>
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="kw">greptimedb</span>:
+    <span class="kw">image</span>: <span class="str">greptime/greptimedb:v1.1.2</span>
+    <span class="kw">command</span>: <span class="str">standalone start</span>
+      <span class="str">--http-addr 0.0.0.0:4000</span>
+      <span class="str">--mysql-addr 0.0.0.0:4002</span>
+      <span class="str">--postgres-addr 0.0.0.0:4003</span>
+    <span class="kw">depends_on</span>:
+      <span class="kw">vaults3-init</span>:
+        <span class="kw">condition</span>: <span class="str">service_completed_successfully</span>
+    <span class="kw">environment</span>:
+      <span class="kw">TZ</span>: <span class="str">Asia/Shanghai</span>
+      <span class="cm"># S3 存储后端 → VaultS3</span>
+      <span class="kw">GREPTIMEDB_STORAGE__TYPE</span>: <span class="str">S3</span>
+      <span class="kw">GREPTIMEDB_STORAGE__BUCKET</span>: <span class="str">automes-observability</span>
+      <span class="kw">GREPTIMEDB_STORAGE__ROOT</span>: <span class="str">greptimedb</span>
+      <span class="kw">GREPTIMEDB_STORAGE__ENDPOINT</span>: <span class="str">http://vaults3:9000</span>
+      <span class="kw">GREPTIMEDB_STORAGE__ACCESS_KEY_ID</span>: <span class="str">${VaultS3_ACCESS_KEY:-mes-admin}</span>
+      <span class="kw">GREPTIMEDB_STORAGE__SECRET_ACCESS_KEY</span>: <span class="str">${VaultS3_SECRET_KEY:-change-me-in-production}</span>
+      <span class="kw">GREPTIMEDB_STORAGE__REGION</span>: <span class="str">us-east-1</span>
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: [<span class="str">"CMD"</span>, <span class="str">"curl"</span>, <span class="str">"-f"</span>, <span class="str">"http://localhost:4000/health"</span>]
+      <span class="kw">interval</span>: <span class="str">30s</span>
+      <span class="kw">timeout</span>: <span class="str">10s</span>
+      <span class="kw">retries</span>: <span class="str">3</span>
+    <span class="kw">restart</span>: <span class="str">unless-stopped</span>
+
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="cm"># Alertmanager — 告警路由</span>
+  <span class="cm"># ═══════════════════════════════════════════</span>
+  <span class="kw">alertmanager</span>:
+    <span class="kw">image</span>: <span class="str">prom/alertmanager:latest</span>
+    <span class="kw">command</span>:
+      <span class="str">--config.file=/etc/alertmanager/alertmanager.yml</span>
+      <span class="str">--storage.path=/alertmanager</span>
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: [<span class="str">"CMD"</span>, <span class="str">"wget"</span>, <span class="str">"-q"</span>, <span class="str">"http://localhost:9093/-/healthy"</span>]
+      <span class="kw">interval</span>: <span class="str">30s</span>
+    <span class="kw">restart</span>: <span class="str">unless-stopped</span>
+    <span class="kw">configs</span>:
+      - <span class="kw">source</span>: <span class="str">alertmanager_config</span>
+        <span class="kw">target</span>: <span class="str">/etc/alertmanager/alertmanager.yml</span>
+
+<span class="cm"># ──────────────────────────────────────────────</span>
+<span class="cm"># 卷 & 配置文件</span>
+<span class="cm"># ──────────────────────────────────────────────</span>
+<span class="kw">volumes</span>:
+  <span class="kw">vaults3_data</span>:
+
+<span class="kw">configs</span>:
+  <span class="kw">alertmanager_config</span>:
+    <span class="kw">content</span>: |
+      <span class="kw">global</span>:
+        <span class="kw">resolve_timeout</span>: <span class="str">5m</span>
+      <span class="kw">route</span>:
+        <span class="kw">receiver</span>: <span class="str">'feishu-webhook'</span>
+        <span class="kw">group_by</span>: [<span class="str">'alertname'</span>]
+        <span class="kw">group_wait</span>: <span class="str">10s</span>
+        <span class="kw">group_interval</span>: <span class="str">10s</span>
+        <span class="kw">repeat_interval</span>: <span class="str">1h</span>
+      <span class="kw">receivers</span>:
+        - <span class="kw">name</span>: <span class="str">'feishu-webhook'</span>
+          <span class="kw">webhook_configs</span>:
+            - <span class="kw">url</span>: <span class="str">'https://open.feishu.cn/open-apis/bot/v2/hook/YOUR-TOKEN'</span></div>
+
+  <div class="alert alert-info" style="margin-top:16px;">
+    <div class="alert-title">📐 启动依赖链</div>
+    <div class="alert-body">
+      <code>VaultS3 (健康检查通过) → vaults3-init (创建 bucket) → GreptimeDB (连接 VaultS3 启动) → Alertmanager (连接 GreptimeDB)</code><br>
+      所有服务都配置了 <code>restart: unless-stopped</code> 和健康检查，任意服务挂了 Uncloud 自动重启。
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 4. 告警规则 ═══════════ -->
+<div class="section">
+  <div class="section-title">告警规则（Prometheus Rule）</div>
+  <div class="section-sub">Alertmanager 从 GreptimeDB Prometheus API 拉取指标评估</div>
+  <hr class="section-rule">
+
+  <div class="code-block"><span class="cm"># alert-rules.yml</span>
+
+<span class="kw">groups</span>:
+  - <span class="kw">name</span>: <span class="str">automes-production</span>
+    <span class="kw">interval</span>: <span class="str">30s</span>
+    <span class="kw">rules</span>:
+
+      <span class="cm"># 产线设备温度过高</span>
+      - <span class="kw">alert</span>: <span class="str">HighTemperature</span>
+        <span class="kw">expr</span>: <span class="str">avg(plc_temperature{line=~"line-[1-4]"}) by (line) > 85</span>
+        <span class="kw">for</span>: <span class="str">2m</span>
+        <span class="kw">labels</span>:
+          <span class="kw">severity</span>: <span class="str">warning</span>
+          <span class="kw">category</span>: <span class="str">equipment</span>
+        <span class="kw">annotations</span>:
+          <span class="kw">summary</span>: <span class="str">"产线 {{ $labels.line }} 温度超标"</span>
+          <span class="kw">description</span>: <span class="str">"当前 {{ $value }}°C，阈值 85°C"</span>
+
+      <span class="cm"># OEE 低于阈值</span>
+      - <span class="kw">alert</span>: <span class="str">LowOEE</span>
+        <span class="kw">expr</span>: <span class="str">oee_value < 0.75</span>
+        <span class="kw">for</span>: <span class="str">5m</span>
+        <span class="kw">labels</span>:
+          <span class="kw">severity</span>: <span class="str">critical</span>
+          <span class="kw">category</span>: <span class="str">production</span>
+
+      <span class="cm"># Saga 事务超时</span>
+      - <span class="kw">alert</span>: <span class="str">SagaTimeout</span>
+        <span class="kw">expr</span>: <span class="str">saga_duration_seconds > 30</span>
+        <span class="kw">for</span>: <span class="str">1m</span>
+        <span class="kw">labels</span>:
+          <span class="kw">severity</span>: <span class="str">warning</span>
+          <span class="kw">category</span>: <span class="str">application</span></div>
+</div>
+
+<!-- ═══════════ 5. 高可用 ═══════════ -->
+<div class="section">
+  <div class="section-title">高可用策略：分层自愈</div>
+  <div class="section-sub">不靠 K8S，靠分层设计</div>
+  <hr class="section-rule">
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">🗄️ VaultS3 — 数据持久层</div>
+      <div class="card-body">
+        <ul>
+          <li>数据卷 <code>vaults3_data</code> 持久化到 Uncloud 宿主机</li>
+          <li>挂了自动重启，数据不丢</li>
+          <li>Phase 2 可组 Raft 多节点集群（端口 :9001）</li>
+          <li><strong>恢复时间</strong>：5-10 秒（容器重启）</li>
+        </ul>
+      </div>
+      <div class="card-meta"><span class="pill pill-success">数据安全</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 GreptimeDB — 无状态计算层</div>
+      <div class="card-body">
+        <ul>
+          <li>所有数据在 VaultS3，本地无状态</li>
+          <li>挂了自动重启 → 从 VaultS3 恢复</li>
+          <li>Phase 2 加第二台机器部署第二个实例</li>
+          <li><strong>恢复时间</strong>：15-30 秒</li>
+        </ul>
+      </div>
+      <div class="card-meta"><span class="pill pill-info">可水平扩展</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔔 Alertmanager — 无状态告警层</div>
+      <div class="card-body">
+        <ul>
+          <li>规则在配置文件，状态在内存</li>
+          <li>挂了自动重启 → 重新加载规则</li>
+          <li>最多丢失一个 evaluation interval 的告警</li>
+          <li><strong>恢复时间</strong>：5-10 秒</li>
+        </ul>
+      </div>
+      <div class="card-meta"><span class="pill pill-success">秒级恢复</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ 6. 对比 ═══════════ -->
+<div class="section">
+  <div class="section-title">最终方案 vs 原始方案</div>
+  <div class="section-sub">从 K8S + 4 组件 + 独立存储 → Uncloud + 3 服务 + VaultS3 一体化</div>
+  <hr class="section-rule">
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>维度</th><th>原始方案</th><th>最终方案</th><th>变化</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight:600">存储底座</td><td>未确定（可能 MinIO）</td><td>VaultS3（Rust, ~15MB）</td><td><span class="pill pill-success">确定</span></td></tr>
+        <tr><td>容器数</td><td>4+1（含 MinIO）</td><td>3</td><td><span class="pill pill-success">-40%</span></td></tr>
+        <tr><td>仪表盘</td><td>独立 Perses 容器</td><td>GreptimeDB 内置 Perses</td><td><span class="pill pill-success">合并</span></td></tr>
+        <tr><td>OTLP</td><td>OTel Collector 转发</td><td>应用直发 GreptimeDB</td><td><span class="pill pill-success">简化</span></td></tr>
+        <tr><td>部署平台</td><td>K8S</td><td>Uncloud（已有）</td><td><span class="pill pill-success">零新工具</span></td></tr>
+        <tr><td>高可用</td><td>K8S 多副本</td><td>VaultS3 持久化 + 自动重启</td><td><span class="pill pill-success">架构简化</span></td></tr>
+        <tr><td>总内存</td><td>~600MB+</td><td>~250MB</td><td><span class="pill pill-success">-58%</span></td></tr>
+        <tr><td>许可证</td><td>混合</td><td>全部 Apache 2.0</td><td><span class="pill pill-success">统一</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════ Footer ═══════════ -->
+<div class="footer">
+  <div class="footer-top">
+    <div>
+      <div class="footer-brand">AutoMES · 可观测性方案 v3</div>
+      <div class="footer-sub">VaultS3 + GreptimeDB + Alertmanager on Uncloud · 3 服务 · 0 K8S</div>
+    </div>
+    <div class="footer-meta">
+      <div class="footer-meta-col"><div>更新日期</div><div>2026-07-06</div><div>版本 v3.0</div></div>
+      <div class="footer-meta-col"><div>决策状态</div><div>✅ 3 服务 Uncloud 部署</div><div>❌ 无需 K8S/MinIO</div></div>
+    </div>
+  </div>
+  <hr class="footer-divider">
+  <div class="footer-bottom">
+    <div>文档 generated by <a href="https://allyhub.com" target="_blank">AllyHub AI</a></div>
+    <div>© 2026 AutoMES Infrastructure Decision</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+(function(){
+  const c=document.getElementById('simplifyChart');
+  if(!c)return;
+  new Chart(c,{type:'bar',data:{labels:['容器数','内存(MB)','端口数','配置文件'],datasets:[
+    {label:'原始方案',data:[5,600,9,5],backgroundColor:'rgba(228,119,0,0.2)',borderColor:'#E47700',borderWidth:1.5},
+    {label:'最终方案',data:[3,250,5,2],backgroundColor:'rgba(95,168,130,0.3)',borderColor:'#5FA882',borderWidth:1.5}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{usePointStyle:true,padding:20}}},scales:{y:{beginAtZero:true,grid:{color:'#E8E6E2'},ticks:{font:{size:11}}},x:{grid:{display:false},ticks:{font:{size:12}}}}}});
+})();
+</script>
+
+</body>
+</html>

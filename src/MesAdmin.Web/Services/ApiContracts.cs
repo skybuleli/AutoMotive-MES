@@ -463,3 +463,243 @@ public record CreateParameterTemplateBody(
 
 /// <summary>审批工艺路线请求体</summary>
 public record ApproveRoutingBody(string ApprovedBy);
+
+// ═══════════════════════════════════════════
+// M08 SQE 供应商质量相关 DTO (T3.6-T3.8)
+// ═══════════════════════════════════════════
+
+/// <summary>供应商响应 DTO</summary>
+public record SupplierDto(
+    string Id,
+    string SupplierCode,
+    string SupplierName,
+    string? ShortName,
+    string? ContactPerson,
+    string? ContactPhone,
+    string? ContactEmail,
+    string MaterialCategory,
+    string MaterialCodes,
+    string Tier,
+    bool IsCritical,
+    double LatestScore,
+    DateTimeOffset? LatestScoreAt,
+    string? IsoCertification,
+    DateTimeOffset? IsoExpiryDate,
+    bool IsActive,
+    string? Remarks,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>供应商评分卡响应 DTO</summary>
+public record SupplierScoreCardDto(
+    string Id,
+    string SupplierId,
+    string SupplierCode,
+    string Period,
+    double IncomingQualityScore,
+    string IncomingQualityData,
+    double OnTimeDeliveryScore,
+    string OnTimeDeliveryData,
+    double EightDResponseScore,
+    string EightDResponseData,
+    double PpapPassRateScore,
+    string PpapPassRateData,
+    double PriceCompetitivenessScore,
+    string PriceCompetitivenessData,
+    double WeightedTotal,
+    string EvaluatedBy,
+    string? Remarks,
+    DateTimeOffset CreatedAt);
+
+/// <summary>PPAP 文档响应 DTO</summary>
+public record PpapDocumentDto(
+    string Id,
+    string SupplierId,
+    string SupplierCode,
+    string MaterialCode,
+    string MaterialName,
+    int PpapLevel,
+    string Status,
+    DateTimeOffset? SubmittedAt,
+    DateTimeOffset? ApprovedAt,
+    DateTimeOffset? ExpiryDate,
+    string Version,
+    string? ApprovedBy,
+    string? RejectionReason,
+    string? Remarks,
+    string CreatedBy,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>关键供应商管控设置响应 DTO</summary>
+public record CriticalSupplierSettingDto(
+    string Id,
+    string MaterialCode,
+    string MaterialName,
+    int ControlLevel,
+    bool RequiresFullInspection,
+    bool RequiresOnSiteAudit,
+    int AuditIntervalMonths,
+    bool RequiresSpcDataSubmission,
+    bool RequiresComplianceReport,
+    bool IsActive,
+    string? Remarks,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>创建供应商请求体</summary>
+public record CreateSupplierBody(
+    string SupplierCode,
+    string SupplierName,
+    string MaterialCategory,
+    string MaterialCodes,
+    bool IsCritical,
+    string? ShortName,
+    string? ContactPerson,
+    string? ContactPhone,
+    string? ContactEmail,
+    string? IsoCertification,
+    string? Remarks);
+
+/// <summary>更新供应商请求体</summary>
+public record UpdateSupplierBody(
+    string? ShortName,
+    string? ContactPerson,
+    string? ContactPhone,
+    string? ContactEmail,
+    string? MaterialCategory,
+    string? MaterialCodes,
+    bool? IsCritical,
+    string? IsoCertification,
+    DateTimeOffset? IsoExpiryDate,
+    string? Remarks);
+
+/// <summary>创建评分卡请求体</summary>
+public record CreateScoreCardBody(
+    string Period,
+    double IncomingQualityScore,
+    string IncomingQualityData,
+    double OnTimeDeliveryScore,
+    string OnTimeDeliveryData,
+    double EightDResponseScore,
+    string EightDResponseData,
+    double PpapPassRateScore,
+    string PpapPassRateData,
+    double PriceCompetitivenessScore,
+    string PriceCompetitivenessData,
+    string EvaluatedBy,
+    string? Remarks);
+
+/// <summary>创建 PPAP 文档请求体</summary>
+public record CreatePpapBody(
+    string MaterialCode,
+    string MaterialName,
+    int PpapLevel,
+    string CreatedBy,
+    DateTimeOffset? ExpiryDate,
+    string? Remarks);
+
+/// <summary>批准 PPAP 请求体</summary>
+public record ApprovePpapBody(string ApprovedBy);
+
+/// <summary>拒绝 PPAP 请求体</summary>
+public record RejectPpapBody(string Reason);
+
+/// <summary>创建关键管控设置请求体</summary>
+public record CreateCriticalSettingBody(
+    string MaterialCode,
+    string MaterialName,
+    int ControlLevel,
+    bool RequiresFullInspection,
+    bool RequiresOnSiteAudit,
+    int AuditIntervalMonths,
+    bool RequiresSpcDataSubmission,
+    bool RequiresComplianceReport,
+    string? Remarks);
+
+/// <summary>更新供应商等级请求体</summary>
+public record UpdateTierBody(string Tier);
+
+// ═══════════════════════════════════════════
+// M09 排程管理相关 DTO (T3.10-T3.13)
+// ═══════════════════════════════════════════
+
+/// <summary>排程响应 DTO</summary>
+public record ScheduleDto(
+    string Id,
+    string OrderId,
+    string OrderNumber,
+    string ProductCode,
+    int PlannedQuantity,
+    string EquipmentCode,
+    int Station,
+    string Shift,
+    string ScheduleDate,
+    DateTimeOffset PlannedStartAt,
+    DateTimeOffset PlannedEndAt,
+    double StandardMinutes,
+    double ChangeoverMinutes,
+    string Status,
+    string RushType,
+    string? RushReason,
+    short Priority,
+    string? Remarks,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>甘特图任务 DTO</summary>
+public record GanttTaskDto(
+    string Id,
+    string Name,
+    string StartDate,
+    string EndDate,
+    double Duration,
+    string DurationUnit,
+    int PercentDone,
+    string EquipmentCode,
+    string AssignedTo,
+    string Cls,
+    string Status,
+    short Priority);
+
+/// <summary>甘特图依赖 DTO</summary>
+public record GanttDependencyDto(string Id, string From, string To, string Type);
+
+/// <summary>甘特图资源 DTO</summary>
+public record GanttResourceDto(string Id, string Name, int Station);
+
+/// <summary>甘特图数据响应 DTO</summary>
+public record GanttDataDto(
+    List<GanttTaskDto> Tasks,
+    List<GanttDependencyDto> Dependencies,
+    List<GanttResourceDto> Resources);
+
+/// <summary>产能利用率 DTO</summary>
+public record CapacityUtilizationDto(
+    string EquipmentCode,
+    string EquipmentName,
+    double UtilizationPercent,
+    int ScheduledCount);
+
+/// <summary>排程冲突 DTO</summary>
+public record ScheduleConflictDto(
+    string Description,
+    string Severity,
+    string EquipmentCode,
+    DateTimeOffset StartAt,
+    DateTimeOffset EndAt,
+    string? ConflictingScheduleId);
+
+/// <summary>紧急插单结果 DTO</summary>
+public record RushOrderResultDto(
+    ScheduleDto Schedule,
+    List<ScheduleConflictDto> Conflicts);
+
+/// <summary>插单请求体</summary>
+public record InsertRushOrderBody(
+    string OrderId,
+    string EquipmentCode,
+    string RushType,
+    double StandardMinutes,
+    double ChangeoverMinutes,
+    string? RushReason);

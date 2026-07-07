@@ -48,7 +48,7 @@ public class ProductionOrderCommandHandlerTests
         var repo = new FakeProductionOrderRepository();
         var order = CreateOrder("WO-20260701-0001");
         await repo.AddAsync(order);
-        var handler = new ReleaseOrderHandler(repo);
+        var handler = new ReleaseOrderHandler(repo, new FakeSapOrderSyncRepo());
 
         var released = await handler.ExecuteAsync(new ReleaseOrderCommand(order.Id), default);
 
@@ -234,6 +234,15 @@ public class ProductionOrderCommandHandlerTests
     /// Fake Routing 仓储用于测试。
     /// hasRouting=true 时返回兼容的 Routing 数据，false 时返回 null（模拟 DB 无数据）。
     /// </summary>
+    private sealed class FakeSapOrderSyncRepo : ISapOrderSyncRecordRepository
+    {
+        public Task AddAsync(SapOrderSyncRecord record, CancellationToken ct = default) => Task.CompletedTask;
+        public Task AddRangeAsync(IEnumerable<SapOrderSyncRecord> records, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<List<SapOrderSyncRecord>> GetPendingSyncAsync(CancellationToken ct = default) => Task.FromResult(new List<SapOrderSyncRecord>());
+        public Task<List<SapOrderSyncRecord>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default) => Task.FromResult(new List<SapOrderSyncRecord>());
+        public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(1);
+    }
+
     private sealed class FakeRoutingRepository : IRoutingRepository
     {
         private readonly Routing? _routing;

@@ -21,7 +21,7 @@ public class CompleteOrderHandlerTests
     public async Task Execute_WhenInProgress_ShouldCompleteAndCreateReceipt()
     {
         var (order, repos) = CreateInProgressOrder();
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var result = await handler.ExecuteAsync(
             new CompleteOrderCommand(order.Id, 95, 5, "REV-001"), default);
@@ -62,7 +62,7 @@ public class CompleteOrderHandlerTests
             50, "REV-OLD", DateTimeOffset.UtcNow.AddDays(-1));
         repos.Receipts.AddExisting(existing);
 
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var result = await handler.ExecuteAsync(
             new CompleteOrderCommand(order.Id, 95, 5, "REV-001"), default);
@@ -84,7 +84,7 @@ public class CompleteOrderHandlerTests
     public async Task Execute_WhenOrderNotFound_ShouldThrow()
     {
         var repos = new CompleteRepos(null);
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
             () => handler.ExecuteAsync(
@@ -100,7 +100,7 @@ public class CompleteOrderHandlerTests
     {
         var order = CreateOrder();
         var repos = new CompleteRepos(order);
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.ExecuteAsync(
@@ -119,7 +119,7 @@ public class CompleteOrderHandlerTests
         var order = CreateOrder();
         order.Release();
         var repos = new CompleteRepos(order);
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.ExecuteAsync(
@@ -136,7 +136,7 @@ public class CompleteOrderHandlerTests
     public async Task Execute_WhenTotalQuantityExceedsPlanned_ShouldThrow()
     {
         var (order, repos) = CreateInProgressOrder();  // Planned = 100
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.ExecuteAsync(
@@ -154,7 +154,7 @@ public class CompleteOrderHandlerTests
     public async Task Execute_WhenAllGood_ShouldCompleteWithFullQuantity()
     {
         var (order, repos) = CreateInProgressOrder();  // Planned = 100
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var result = await handler.ExecuteAsync(
             new CompleteOrderCommand(order.Id, 100, 0, "REV-001"), default);
@@ -175,7 +175,7 @@ public class CompleteOrderHandlerTests
     public async Task Execute_WhenAllDefective_ShouldCompleteWithZeroQualified()
     {
         var (order, repos) = CreateInProgressOrder();  // Planned = 100
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var result = await handler.ExecuteAsync(
             new CompleteOrderCommand(order.Id, 0, 100, "REV-001"), default);
@@ -196,7 +196,7 @@ public class CompleteOrderHandlerTests
     public async Task Execute_WhenZeroQuantities_ShouldComplete()
     {
         var (order, repos) = CreateInProgressOrder();  // Planned = 100
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         var result = await handler.ExecuteAsync(
             new CompleteOrderCommand(order.Id, 0, 0, "REV-001"), default);
@@ -215,7 +215,7 @@ public class CompleteOrderHandlerTests
     public async Task Execute_WhenNegativeDefectiveQuantity_ShouldThrow()
     {
         var (order, repos) = CreateInProgressOrder();
-        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, Logger);
+        var handler = new CompleteOrderHandler(repos.Orders, repos.Receipts, repos.SapOrderSync, Logger);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => handler.ExecuteAsync(
@@ -249,11 +249,13 @@ public class CompleteOrderHandlerTests
     {
         public FakeOrderRepository Orders { get; }
         public FakeGoodsReceiptRepository Receipts { get; }
+        public FakeSapOrderSyncRecordRepository SapOrderSync { get; }
 
         public CompleteRepos(ProductionOrder? order)
         {
             Orders = new FakeOrderRepository(order);
             Receipts = new FakeGoodsReceiptRepository();
+            SapOrderSync = new FakeSapOrderSyncRecordRepository();
         }
     }
 
@@ -338,5 +340,30 @@ public class CompleteOrderHandlerTests
             SaveChangesCallCount++;
             return Task.FromResult(1);
         }
+    }
+
+    private sealed class FakeSapOrderSyncRecordRepository : ISapOrderSyncRecordRepository
+    {
+        public List<SapOrderSyncRecord> AddedRecords { get; } = [];
+
+        public Task AddAsync(SapOrderSyncRecord record, CancellationToken ct = default)
+        {
+            AddedRecords.Add(record);
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IEnumerable<SapOrderSyncRecord> records, CancellationToken ct = default)
+        {
+            AddedRecords.AddRange(records);
+            return Task.CompletedTask;
+        }
+
+        public Task<List<SapOrderSyncRecord>> GetPendingSyncAsync(CancellationToken ct = default)
+            => Task.FromResult(AddedRecords.Where(r => !r.SapSynced).ToList());
+
+        public Task<List<SapOrderSyncRecord>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default)
+            => Task.FromResult(AddedRecords.Where(r => r.OrderId == orderId).ToList());
+
+        public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(1);
     }
 }

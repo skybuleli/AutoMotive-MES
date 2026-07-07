@@ -18,7 +18,7 @@ public class CloseOrderHandlerTests
     public async Task Execute_WhenCompleted_ShouldClose()
     {
         var (order, repo) = CreateCompletedOrder();
-        var handler = new CloseOrderHandler(repo);
+        var handler = new CloseOrderHandler(repo, new FakeSapOrderSyncRepo());
 
         var result = await handler.ExecuteAsync(new CloseOrderCommand(order.Id), default);
 
@@ -35,7 +35,7 @@ public class CloseOrderHandlerTests
     public async Task Execute_WhenOrderNotFound_ShouldThrow()
     {
         var repo = new FakeCloseOrderRepository(null);
-        var handler = new CloseOrderHandler(repo);
+        var handler = new CloseOrderHandler(repo, new FakeSapOrderSyncRepo());
 
         await Assert.ThrowsAsync<KeyNotFoundException>(
             () => handler.ExecuteAsync(new CloseOrderCommand(Ulid.NewUlid()), default));
@@ -51,7 +51,7 @@ public class CloseOrderHandlerTests
         var order = CreateOrder();
         // Created — 不可关闭
         var repo = new FakeCloseOrderRepository(order);
-        var handler = new CloseOrderHandler(repo);
+        var handler = new CloseOrderHandler(repo, new FakeSapOrderSyncRepo());
 
         Assert.False(order.CanClose);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -71,7 +71,7 @@ public class CloseOrderHandlerTests
         order.Release();
         order.Start();
         var repo = new FakeCloseOrderRepository(order);
-        var handler = new CloseOrderHandler(repo);
+        var handler = new CloseOrderHandler(repo, new FakeSapOrderSyncRepo());
 
         Assert.False(order.CanClose);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -93,7 +93,7 @@ public class CloseOrderHandlerTests
         order.Complete(100, 0, DateTimeOffset.UtcNow);
         order.Close();  // → Closed
         var repo = new FakeCloseOrderRepository(order);
-        var handler = new CloseOrderHandler(repo);
+        var handler = new CloseOrderHandler(repo, new FakeSapOrderSyncRepo());
 
         Assert.False(order.CanClose);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
@@ -114,7 +114,7 @@ public class CloseOrderHandlerTests
         order.Start();
         order.Complete(0, 100, DateTimeOffset.UtcNow);  // 全数不良，但状态仍为 Completed
         var repo = new FakeCloseOrderRepository(order);
-        var handler = new CloseOrderHandler(repo);
+        var handler = new CloseOrderHandler(repo, new FakeSapOrderSyncRepo());
 
         var result = await handler.ExecuteAsync(new CloseOrderCommand(order.Id), default);
 
@@ -146,6 +146,15 @@ public class CloseOrderHandlerTests
     // ═══════════════════════════════════════════════════════════
     //  Fake 仓储
     // ═══════════════════════════════════════════════════════════
+
+    private sealed class FakeSapOrderSyncRepo : ISapOrderSyncRecordRepository
+    {
+        public Task AddAsync(SapOrderSyncRecord record, CancellationToken ct = default) => Task.CompletedTask;
+        public Task AddRangeAsync(IEnumerable<SapOrderSyncRecord> records, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<List<SapOrderSyncRecord>> GetPendingSyncAsync(CancellationToken ct = default) => Task.FromResult(new List<SapOrderSyncRecord>());
+        public Task<List<SapOrderSyncRecord>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default) => Task.FromResult(new List<SapOrderSyncRecord>());
+        public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(1);
+    }
 
     private sealed class FakeCloseOrderRepository : IProductionOrderRepository
     {

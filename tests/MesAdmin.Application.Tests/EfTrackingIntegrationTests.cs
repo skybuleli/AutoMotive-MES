@@ -1,13 +1,16 @@
+using MesAdmin.Infrastructure.Data.Repositories;
+using MesAdmin.Infrastructure.Caching;
+using MesAdmin.Infrastructure.Sap;
+using MesAdmin.Infrastructure.RealTime;
+using MesAdmin.Application.Features.Quality;
+using MesAdmin.Infrastructure.Data;
+using MesAdmin.Domain.Models;
+using MesAdmin.Application.Interfaces;
+using MesAdmin.Application.Features.ProductionOrders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using MesAdmin.Application.Features.ProductionOrders;
-using MesAdmin.Application.Interfaces;
-using MesAdmin.Domain.Models;
-using MesAdmin.Infrastructure.Data;
-using MesAdmin.Infrastructure.Data.Repositories;
-using MesAdmin.Application.Features.Quality;
-using MesAdmin.Infrastructure.RealTime;
 using Microsoft.Extensions.Logging;
+using Testcontainers.PostgreSql;
 
 namespace MesAdmin.Application.Tests;
 
@@ -53,7 +56,8 @@ public class EfTrackingIntegrationTests
             new CreateOrderCommand("ESP-9.0", "BOM-IT-1", Ulid.NewUlid(), 10, (short)1), default);
 
         // 放行（同一 scope 内，模拟真实请求）
-        var releaseHandler = new ReleaseOrderHandler(orders);
+        var sapSyncRepo = scope.ServiceProvider.GetRequiredService<ISapOrderSyncRecordRepository>();
+        var releaseHandler = new ReleaseOrderHandler(orders, sapSyncRepo);
         var released = await releaseHandler.ExecuteAsync(new ReleaseOrderCommand(order.Id), default);
         Assert.Equal(OrderStatus.Released, released.Status);
 
@@ -76,7 +80,8 @@ public class EfTrackingIntegrationTests
         var order = await createHandler.ExecuteAsync(
             new CreateOrderCommand("ESP-9.1", "BOM-IT-2", Ulid.NewUlid(), 5, (short)1), default);
 
-        await new ReleaseOrderHandler(orders).ExecuteAsync(new ReleaseOrderCommand(order.Id), default);
+        var sapSyncRepo2 = scope.ServiceProvider.GetRequiredService<ISapOrderSyncRecordRepository>();
+        await new ReleaseOrderHandler(orders, sapSyncRepo2).ExecuteAsync(new ReleaseOrderCommand(order.Id), default);
 
         // 开工：StartOrderHandler 只发布事件，实际状态推进由 Saga 负责。
         // 此处模拟 Saga 行为（跟踪查询 → Start → SaveChanges），验证同一 scope 内不冲突。
@@ -87,13 +92,14 @@ public class EfTrackingIntegrationTests
 
         // 完工
         var goodsReceipts = scope.ServiceProvider.GetRequiredService<IGoodsReceiptRepository>();
-        var completeHandler = new CompleteOrderHandler(orders, goodsReceipts, NullLogger<CompleteOrderHandler>.Instance);
+        var sapOrderSyncRepo = scope.ServiceProvider.GetRequiredService<ISapOrderSyncRecordRepository>();
+        var completeHandler = new CompleteOrderHandler(orders, goodsReceipts, sapOrderSyncRepo, NullLogger<CompleteOrderHandler>.Instance);
         var completed = await completeHandler.ExecuteAsync(
             new CompleteOrderCommand(order.Id, 5, 0, "TEST-REVIEWER"), default);
         Assert.Equal(OrderStatus.Completed, completed.Status);
 
         // 关闭
-        var closeHandler = new CloseOrderHandler(orders);
+        var closeHandler = new CloseOrderHandler(orders, sapOrderSyncRepo);
         var closed = await closeHandler.ExecuteAsync(new CloseOrderCommand(order.Id), default);
         Assert.Equal(OrderStatus.Closed, closed.Status);
     }
@@ -150,18 +156,40 @@ public class EfTrackingIntegrationTests
 }
 
 /// <summary>
-/// 数据库测试夹具：共享一个 ServiceProvider，连接到开发环境 PostgreSQL。
+/// TX.2 — 数据库测试夹具：使用 Testcontainers PostgreSQL 17 启动独立容器。
+/// 每个测试类集合共享一个容器（[Collection("DatabaseIntegration")] 顺序执行），
 /// 每个测试方法用独立 scope（独立 DbContext），模拟真实 HTTP 请求。
+///
+/// ⚠ 启动容器约需 5-15 秒（首次拉取镜像），后续测试复用容器，速度显著提升。
 /// </summary>
 public class DatabaseFixture : IAsyncLifetime
 {
-    public ServiceProvider Services { get; }
+    private PostgreSqlContainer? _container;
+
+    public ServiceProvider Services { get; private set; } = null!;
 
     public DatabaseFixture()
     {
+        // ServiceProvider 在 InitializeAsync 中构建
+    }
+
+    public async Task InitializeAsync()
+    {
+        // ── 1. 启动 Testcontainers PostgreSQL ──
+        _container = new PostgreSqlBuilder()
+            .WithImage("postgres:17-alpine")
+            .WithDatabase("automes_test")
+            .WithUsername("mes")
+            .WithPassword("mes_dev_password")
+            .WithCleanUp(true)
+            .Build();
+
+        await _container.StartAsync();
+
+        // ── 2. 构建 DI 容器 ──
         var services = new ServiceCollection();
         services.AddDbContext<MesDbContext>(opt =>
-            opt.UseNpgsql("Host=localhost;Port=5432;Database=automes_test;Username=mes;Password=mes_dev_password"));
+            opt.UseNpgsql(_container.GetConnectionString()));
 
         // 仓储注册：全生命周期（T1.x - T1.17）
         services.AddScoped<IProductionOrderRepository, ProductionOrderRepository>();
@@ -198,29 +226,31 @@ public class DatabaseFixture : IAsyncLifetime
         // 工艺路线仓储（T3.1/T3.2 M07）
         services.AddScoped<IRoutingRepository, RoutingRepository>();
 
+        // T1.11 BOM 内存缓存
+        services.AddSingleton<IBomCache, BomCache>();
+
+        // SAP 集成仓储（T3.14）
+        services.AddScoped<ISapOrderSyncRecordRepository, SapOrderSyncRecordRepository>();
+
         // 无日志 Provider（测试中 ILogger<T> 可正常解析，输出丢弃）
         services.AddLogging(b => b.ClearProviders());
 
         Services = services.BuildServiceProvider();
-    }
 
-    public async Task InitializeAsync()
-    {
-        // 应用所有 migration
+        // ── 3. 应用 Migration + 种子数据 ──
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
-        await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync();
 
-        // 种子 BOM + 物料库存数据（幂等：已存在则跳过）
         var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
         var logger = loggerFactory.CreateLogger("DatabaseFixture");
         await MesDataSeeder.SeedAsync(Services, logger);
     }
 
-    public Task DisposeAsync()
+    public async Task DisposeAsync()
     {
         Services.Dispose();
-        return Task.CompletedTask;
+        if (_container is not null)
+            await _container.DisposeAsync();
     }
 }

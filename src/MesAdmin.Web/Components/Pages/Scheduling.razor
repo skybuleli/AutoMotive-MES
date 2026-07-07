@@ -1,0 +1,567 @@
+@page "/scheduling"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+@inject MesApiClient Api
+
+<PageTitle>生产排程 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">M09 · Production Scheduling</MudText>
+                <MudText Typo="Typo.h4">生产排程管理</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">甘特图排程 · 产能管理 · 紧急插单 · 有限产能引擎</MudText>
+            </MudStack>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadAllAsync()" Size="Size.Small" />
+        </MudStack>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudPaper Class="pa-4" Style="border-radius:12px;">
+        <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
+                 CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
+
+            @* ═══════════════════════════════════════════
+               Tab 1: 甘特图排程
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="甘特图" Icon="@Icons.Material.Filled.Assignment">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudTextField @bind-Value="_dateFrom" Label="开始日期" Variant="Variant.Outlined" Dense
+                                      Style="min-width:140px;" />
+                        <MudTextField @bind-Value="_dateTo" Label="结束日期" Variant="Variant.Outlined" Dense
+                                      Style="min-width:140px;" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Search" OnClick="LoadGanttDataAsync">
+                            加载排程
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.FlashOn" OnClick="() => _showRushDialog = true">
+                            紧急插单
+                        </MudButton>
+                    </MudStack>
+
+                    @if (_isLoading && _ganttData is null)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">加载甘特图数据...</MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <div id="gantt-container" style="width:100%; height:500px; border-radius:12px;"></div>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 2: 排程列表
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="排程列表" Icon="@Icons.Material.Filled.ListAlt">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudTextField @bind-Value="_scheduleFilterEquipment" Label="设备编码" Variant="Variant.Outlined" Dense
+                                      Style="min-width:140px;" />
+                        <MudSelect T="string" Label="状态筛选" Variant="Variant.Outlined" Dense
+                                   @bind-Value="_scheduleFilterStatus" Style="min-width:120px;">
+                            <MudSelectItem Value="@StatusAll">全部</MudSelectItem>
+                            <MudSelectItem Value="@StatusScheduled">已排程</MudSelectItem>
+                            <MudSelectItem Value="@StatusInProgress">执行中</MudSelectItem>
+                            <MudSelectItem Value="@StatusCompleted">已完成</MudSelectItem>
+                            <MudSelectItem Value="@StatusCancelled">已取消</MudSelectItem>
+                        </MudSelect>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Info" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Search" OnClick="LoadScheduleListAsync">
+                            查询
+                        </MudButton>
+                    </MudStack>
+
+                    @if (_isLoading && _schedules.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        </MudStack>
+                    }
+                    else if (_schedules.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无排程数据</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">请先在甘特图页面创建排程或加载日期范围数据。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_schedules" Dense="true" Hover="true" Elevation="0" Class="module-card">
+                            <ColGroup>
+                                <col style="width:100px" />
+                                <col style="width:80px" />
+                                <col style="width:80px" />
+                                <col style="width:80px" />
+                                <col style="min-width:100px" />
+                                <col style="width:60px" />
+                                <col style="width:80px" />
+                                <col style="width:100px" />
+                                <col style="width:160px" />
+                            </ColGroup>
+                            <HeaderContent>
+                                <MudTh>工单号</MudTh>
+                                <MudTh>产品</MudTh>
+                                <MudTh>设备</MudTh>
+                                <MudTh>班次</MudTh>
+                                <MudTh>计划时间</MudTh>
+                                <MudTh>工时(h)</MudTh>
+                                <MudTh>优先级</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="工单"><MudText Typo="Typo.body2" Style="font-weight:600;">@context.OrderNumber</MudText></MudTd>
+                                <MudTd DataLabel="产品">@context.ProductCode</MudTd>
+                                <MudTd DataLabel="设备">@context.EquipmentCode</MudTd>
+                                <MudTd DataLabel="班次">@GetShiftLabel(context.Shift)</MudTd>
+                                <MudTd DataLabel="时间">
+                                    <MudText Typo="Typo.caption">
+                                        @context.PlannedStartAt.ToLocalTime().ToString("MM-dd HH:mm")
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="工时">@(context.StandardMinutes / 60.0).ToString("F1")</MudTd>
+                                <MudTd DataLabel="优先级">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(context.Priority >= 3 ? Color.Error : context.Priority >= 2 ? Color.Warning : Color.Info)"
+                                             Variant="Variant.Outlined">
+                                        @(context.Priority >= 3 ? "紧急" : context.Priority >= 2 ? "较高" : "正常")
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@GetStatusColor(context.Status)"
+                                             Variant="Variant.Outlined">
+                                        @GetStatusLabel(context.Status)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudStack Row Spacing="1">
+                                        @if (context.Status == "Scheduled" && context.RushType == "None")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success"
+                                                       OnClick="() => StartScheduleAsync(context)">
+                                                开始
+                                            </MudButton>
+                                        }
+                                        @if (context.Status == "InProgress")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                       OnClick="() => CompleteScheduleAsync(context)">
+                                                完成
+                                            </MudButton>
+                                        }
+                                        @if (context.Status != "Completed" && context.Status != "Cancelled")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                                       OnClick="() => CancelScheduleAsync(context)">
+                                                取消
+                                            </MudButton>
+                                        }
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 3: 产能利用率
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="产能利用率" Icon="@Icons.Material.Filled.Speed">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudTextField @bind-Value="_capacityDate" Label="查询日期" Variant="Variant.Outlined" Dense
+                                  Style="min-width:140px;" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Search" OnClick="LoadCapacityAsync">
+                        查询
+                    </MudButton>
+
+                    @if (_isLoading && _capacityUtilization.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        </MudStack>
+                    }
+                    else if (_capacityUtilization.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Speed" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无产能数据</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <div class="inventory-grid">
+                            @foreach (var cap in _capacityUtilization)
+                            {
+                                <MudPaper Class="glass-kpi-card">
+                                    <MudStack Spacing="2">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.subtitle2" Style="font-weight:600;">@cap.EquipmentCode</MudText>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@GetUtilizationColor(cap.UtilizationPercent)"
+                                                     Variant="Variant.Outlined">
+                                                @cap.UtilizationPercent.ToString("F1")%
+                                            </MudChip>
+                                        </MudStack>
+                                        <MudText Typo="Typo.body2">@cap.EquipmentName</MudText>
+                                        <MudProgressLinear Value="@(Math.Min(cap.UtilizationPercent, 100))"
+                                                           Color="@GetUtilizationColor(cap.UtilizationPercent)" Max="100" />
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+        </MudTabs>
+    </MudPaper>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   对话框: 紧急插单
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showRushDialog" FullWidth="true" MaxWidth="MaxWidth.Small">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">紧急插单</MudText>
+            <MudTextField @bind-Value="_rushOrderId" Label="工单 Id *" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_rushEquipmentCode" Label="设备编码 *" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudSelect T="string" Label="插单类型" Variant="Variant.Outlined" @bind-Value="_rushType">
+                <MudSelectItem Value="@RushTypeOemUrgent">OEM 紧急插单</MudSelectItem>
+                <MudSelectItem Value="@RushTypeQualityRework">质量返工</MudSelectItem>
+                <MudSelectItem Value="@RushTypeMaintenance">设备维护</MudSelectItem>
+            </MudSelect>
+            <MudNumericField T="double" @bind-Value="_rushStandardMinutes" Label="标准工时 (分钟)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+            <MudNumericField T="double" @bind-Value="_rushChangeoverMinutes" Label="换型时间 (分钟)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+            <MudTextField @bind-Value="_rushReason" Label="插单原因" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showRushDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                   Disabled="@(string.IsNullOrWhiteSpace(_rushOrderId) || string.IsNullOrWhiteSpace(_rushEquipmentCode) || _rushStandardMinutes <= 0)"
+                   OnClick="InsertRushOrderAsync">
+            确认插单
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+<script src="~/js/gantt-interop.js"></script>
+
+@code {
+    private int _activeTab;
+    private bool _isLoading, _isError;
+    private string? _message;
+
+    // ── 甘特图 ──
+    private string _dateFrom = DateTimeOffset.UtcNow.AddDays(-1).ToString("yyyy-MM-dd");
+    private string _dateTo = DateTimeOffset.UtcNow.AddDays(7).ToString("yyyy-MM-dd");
+    private object? _ganttData;
+
+    // ── 排程列表 ──
+    private const string StatusAll = "";
+    private const string StatusScheduled = "Scheduled";
+    private const string StatusInProgress = "InProgress";
+    private const string StatusCompleted = "Completed";
+    private const string StatusCancelled = "Cancelled";
+    private string _scheduleFilterEquipment = string.Empty;
+    private string _scheduleFilterStatus = string.Empty;
+    private List<ScheduleDto> _schedules = [];
+
+    // ── 产能 ──
+    private string _capacityDate = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd");
+    private List<CapacityUtilizationDto> _capacityUtilization = [];
+
+    // ── 紧急插单对话框 ──
+    private const string RushTypeOemUrgent = "OemUrgent";
+    private const string RushTypeQualityRework = "QualityRework";
+    private const string RushTypeMaintenance = "Maintenance";
+    private bool _showRushDialog;
+    private string _rushOrderId = string.Empty;
+    private string _rushEquipmentCode = string.Empty;
+    private string _rushType = RushTypeOemUrgent;
+    private double _rushStandardMinutes = 60;
+    private double _rushChangeoverMinutes = 15;
+    private string _rushReason = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            await LoadGanttDataAsync();
+            await LoadScheduleListAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载数据失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  甘特图
+    // ═══════════════════════════════════════════
+
+    private async Task LoadGanttDataAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _ganttData = await Api.GetGanttDataAsync(_dateFrom, _dateTo);
+            StateHasChanged();
+
+            if (_ganttData is not null)
+            {
+                await JSRuntime.InvokeVoidAsync("ganttInterop.init", "gantt-container", _ganttData);
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载甘特图数据失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  排程列表
+    // ═══════════════════════════════════════════
+
+    private async Task LoadScheduleListAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var equipment = string.IsNullOrWhiteSpace(_scheduleFilterEquipment) ? null : _scheduleFilterEquipment;
+            var status = string.IsNullOrWhiteSpace(_scheduleFilterStatus) ? null : _scheduleFilterStatus;
+            _schedules = await Api.GetSchedulesAsync(equipment, status, _dateFrom, _dateTo) ?? [];
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载排程列表失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  排程操作
+    // ═══════════════════════════════════════════
+
+    private async Task StartScheduleAsync(ScheduleDto schedule)
+    {
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.StartScheduleAsync(schedule.Id);
+            if (ok)
+            {
+                var idx = _schedules.FindIndex(s => s.Id == schedule.Id);
+                if (idx >= 0 && data is not null) _schedules[idx] = data;
+                _message = $"排程 {schedule.OrderNumber} 已开始执行";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"操作失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CompleteScheduleAsync(ScheduleDto schedule)
+    {
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.CompleteScheduleAsync(schedule.Id);
+            if (ok)
+            {
+                var idx = _schedules.FindIndex(s => s.Id == schedule.Id);
+                if (idx >= 0 && data is not null) _schedules[idx] = data;
+                _message = $"排程 {schedule.OrderNumber} 已完成";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"操作失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CancelScheduleAsync(ScheduleDto schedule)
+    {
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.CancelScheduleAsync(schedule.Id, "人工取消");
+            if (ok && data is not null)
+            {
+                var idx = _schedules.FindIndex(s => s.Id == schedule.Id);
+                if (idx >= 0) _schedules[idx] = data;
+                _message = $"排程 {schedule.OrderNumber} 已取消";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"操作失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  紧急插单
+    // ═══════════════════════════════════════════
+
+    private async Task InsertRushOrderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_rushOrderId) || string.IsNullOrWhiteSpace(_rushEquipmentCode))
+            return;
+
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.InsertRushOrderAsync(
+                _rushOrderId, _rushEquipmentCode, _rushType,
+                _rushStandardMinutes, _rushChangeoverMinutes, _rushReason);
+
+            if (ok && data is not null)
+            {
+                _showRushDialog = false;
+                _message = $"紧急插单成功：{data.Schedule.OrderNumber}";
+                if (data.Conflicts.Count > 0)
+                {
+                    _message += $"（{data.Conflicts.Count} 个冲突警告）";
+                }
+                _isError = data.Conflicts.Count > 0;
+                await LoadAllAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"插单失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  产能
+    // ═══════════════════════════════════════════
+
+    private async Task LoadCapacityAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _capacityUtilization = await Api.GetCapacityAsync(_capacityDate) ?? [];
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载产能数据失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  辅助方法
+    // ═══════════════════════════════════════════
+
+    private static string GetShiftLabel(string shift) => shift switch
+    {
+        "Morning" => "早班",
+        "Afternoon" => "中班",
+        "Night" => "晚班",
+        _ => shift
+    };
+
+    private static string GetStatusLabel(string status) => status switch
+    {
+        "Scheduled" => "已排程",
+        "InProgress" => "执行中",
+        "Completed" => "已完成",
+        "Cancelled" => "已取消",
+        _ => status
+    };
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Scheduled" => Color.Info,
+        "InProgress" => Color.Warning,
+        "Completed" => Color.Success,
+        "Cancelled" => Color.Default,
+        _ => Color.Default
+    };
+
+    private static Color GetUtilizationColor(double utilization) => utilization switch
+    {
+        >= 90 => Color.Error,
+        >= 75 => Color.Warning,
+        >= 50 => Color.Info,
+        _ => Color.Success
+    };
+}

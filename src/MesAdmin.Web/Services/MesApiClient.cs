@@ -300,6 +300,118 @@ public class MesApiClient
     public Task<(bool Ok, RoutingResponseDto? Data, int Status)> ReleaseRoutingAsync(string id, CancellationToken ct = default)
         => PostAsync<RoutingResponseDto>($"api/v1/routing/{id}/release", new { }, ct);
 
+    // ═══════════════════════════════════════════
+    // M08 SQE 供应商质量 API (T3.6-T3.8)
+    // ═══════════════════════════════════════════
+
+    /// <summary>查询供应商列表</summary>
+    public Task<List<SupplierDto>?> GetSuppliersAsync(string? category = null, bool? critical = null, CancellationToken ct = default)
+    {
+        var url = "api/v1/suppliers/suppliers";
+        var query = new List<string>();
+        if (category is not null) query.Add($"category={Uri.EscapeDataString(category)}");
+        if (critical == true) query.Add("critical=true");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return GetAsync<List<SupplierDto>>(url, ct);
+    }
+
+    /// <summary>查询供应商详情</summary>
+    public Task<SupplierDto?> GetSupplierAsync(string id, CancellationToken ct = default)
+        => GetAsync<SupplierDto>($"api/v1/suppliers/suppliers/{id}", ct);
+
+    /// <summary>创建供应商</summary>
+    public Task<(bool Ok, SupplierDto? Data, int Status)> CreateSupplierAsync(CreateSupplierBody body, CancellationToken ct = default)
+        => PostAsync<SupplierDto>("api/v1/suppliers/suppliers", body, ct);
+
+    /// <summary>更新供应商</summary>
+    public Task<(bool Ok, SupplierDto? Data, int Status)> UpdateSupplierAsync(string id, UpdateSupplierBody body, CancellationToken ct = default)
+        => PutAsync<SupplierDto>($"api/v1/suppliers/suppliers/{id}", body, ct);
+
+    /// <summary>更新供应商等级</summary>
+    public Task<(bool Ok, SupplierDto? Data, int Status)> UpdateSupplierTierAsync(string id, string tier, CancellationToken ct = default)
+        => PostAsync<SupplierDto>($"api/v1/suppliers/suppliers/{id}/update-tier", new UpdateTierBody(tier), ct);
+
+    /// <summary>创建评分卡</summary>
+    public Task<(bool Ok, SupplierScoreCardDto? Data, int Status)> CreateScoreCardAsync(string supplierId, CreateScoreCardBody body, CancellationToken ct = default)
+        => PostAsync<SupplierScoreCardDto>($"api/v1/suppliers/suppliers/{supplierId}/score", body, ct);
+
+    /// <summary>查询评分卡历史</summary>
+    public Task<List<SupplierScoreCardDto>?> GetScoreCardsAsync(string supplierId, CancellationToken ct = default)
+        => GetAsync<List<SupplierScoreCardDto>>($"api/v1/suppliers/suppliers/{supplierId}/scores", ct);
+
+    /// <summary>查询 PPAP 文档列表</summary>
+    public Task<List<PpapDocumentDto>?> GetPpapDocumentsAsync(string supplierId, CancellationToken ct = default)
+        => GetAsync<List<PpapDocumentDto>>($"api/v1/suppliers/suppliers/{supplierId}/ppap", ct);
+
+    /// <summary>创建 PPAP 文档</summary>
+    public Task<(bool Ok, PpapDocumentDto? Data, int Status)> CreatePpapDocumentAsync(string supplierId, CreatePpapBody body, CancellationToken ct = default)
+        => PostAsync<PpapDocumentDto>($"api/v1/suppliers/suppliers/{supplierId}/ppap", body, ct);
+
+    /// <summary>提交 PPAP 审批</summary>
+    public Task<(bool Ok, PpapDocumentDto? Data, int Status)> SubmitPpapAsync(string supplierId, string docId, CancellationToken ct = default)
+        => PostAsync<PpapDocumentDto>($"api/v1/suppliers/suppliers/{supplierId}/ppap/{docId}/submit", new { }, ct);
+
+    /// <summary>批准 PPAP</summary>
+    public Task<(bool Ok, PpapDocumentDto? Data, int Status)> ApprovePpapAsync(string supplierId, string docId, string approvedBy, CancellationToken ct = default)
+        => PostAsync<PpapDocumentDto>($"api/v1/suppliers/suppliers/{supplierId}/ppap/{docId}/approve", new ApprovePpapBody(approvedBy), ct);
+
+    /// <summary>拒绝 PPAP</summary>
+    public Task<(bool Ok, PpapDocumentDto? Data, int Status)> RejectPpapAsync(string supplierId, string docId, string reason, CancellationToken ct = default)
+        => PostAsync<PpapDocumentDto>($"api/v1/suppliers/suppliers/{supplierId}/ppap/{docId}/reject", new RejectPpapBody(reason), ct);
+
+    /// <summary>查询关键供应商管控设置</summary>
+    public Task<List<CriticalSupplierSettingDto>?> GetCriticalSettingsAsync(CancellationToken ct = default)
+        => GetAsync<List<CriticalSupplierSettingDto>>("api/v1/suppliers/critical-settings", ct);
+
+    /// <summary>创建关键供应商管控设置</summary>
+    public Task<(bool Ok, CriticalSupplierSettingDto? Data, int Status)> CreateCriticalSettingAsync(CreateCriticalSettingBody body, CancellationToken ct = default)
+        => PostAsync<CriticalSupplierSettingDto>("api/v1/suppliers/critical-settings", body, ct);
+
+    // ═══════════════════════════════════════════
+    // M09 排程管理 API (T3.10-T3.13)
+    // ═══════════════════════════════════════════
+
+    /// <summary>查询排程列表</summary>
+    public Task<List<ScheduleDto>?> GetSchedulesAsync(string? equipment = null, string? status = null, string? from = null, string? to = null, CancellationToken ct = default)
+    {
+        var url = "api/v1/scheduling/plans";
+        var query = new List<string>();
+        if (equipment is not null) query.Add($"equipment={Uri.EscapeDataString(equipment)}");
+        if (status is not null) query.Add($"status={Uri.EscapeDataString(status)}");
+        if (from is not null) query.Add($"from={Uri.EscapeDataString(from)}");
+        if (to is not null) query.Add($"to={Uri.EscapeDataString(to)}");
+        if (query.Count > 0) url += "?" + string.Join("&", query);
+        return GetAsync<List<ScheduleDto>>(url, ct);
+    }
+
+    /// <summary>查询甘特图数据</summary>
+    public Task<GanttDataDto?> GetGanttDataAsync(string from, string to, CancellationToken ct = default)
+        => GetAsync<GanttDataDto>($"api/v1/scheduling/gantt-data?from={Uri.EscapeDataString(from)}&to={Uri.EscapeDataString(to)}", ct);
+
+    /// <summary>查询产能利用率</summary>
+    public Task<List<CapacityUtilizationDto>?> GetCapacityAsync(string date, CancellationToken ct = default)
+        => GetAsync<List<CapacityUtilizationDto>>($"api/v1/scheduling/capacity?date={Uri.EscapeDataString(date)}", ct);
+
+    /// <summary>开始排程</summary>
+    public Task<(bool Ok, ScheduleDto? Data, int Status)> StartScheduleAsync(string id, CancellationToken ct = default)
+        => PostAsync<ScheduleDto>($"api/v1/scheduling/plans/{id}/start", new { }, ct);
+
+    /// <summary>完成排程</summary>
+    public Task<(bool Ok, ScheduleDto? Data, int Status)> CompleteScheduleAsync(string id, CancellationToken ct = default)
+        => PostAsync<ScheduleDto>($"api/v1/scheduling/plans/{id}/complete", new { }, ct);
+
+    /// <summary>取消排程</summary>
+    public Task<(bool Ok, ScheduleDto? Data, int Status)> CancelScheduleAsync(string id, string reason, CancellationToken ct = default)
+        => PostAsync<ScheduleDto>($"api/v1/scheduling/plans/{id}/cancel", new { Reason = reason }, ct);
+
+    /// <summary>紧急插单</summary>
+    public Task<(bool Ok, RushOrderResultDto? Data, int Status)> InsertRushOrderAsync(
+        string orderId, string equipmentCode, string rushType,
+        double standardMinutes, double changeoverMinutes, string? rushReason,
+        CancellationToken ct = default)
+        => PostAsync<RushOrderResultDto>("api/v1/scheduling/rush-order",
+            new InsertRushOrderBody(orderId, equipmentCode, rushType, standardMinutes, changeoverMinutes, rushReason), ct);
+
     private async Task AttachTokenAsync(HttpRequestMessage req)
     {
         try

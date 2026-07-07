@@ -8,6 +8,7 @@ using MesAdmin.Application.DependencyInjection;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Application.Features.Inventory;
 using MesAdmin.Application.Features.Routing;
+using MesAdmin.Application.Features.Scheduling;
 using MesAdmin.Application.Sagas;
 using MesAdmin.Infrastructure;
 using MesAdmin.Infrastructure.Data;
@@ -15,6 +16,8 @@ using MesAdmin.Infrastructure.DependencyInjection;
 using MesAdmin.Infrastructure.Hubs;
 using MesAdmin.Infrastructure.Logging;
 using MesAdmin.Infrastructure.Plc;
+using MesAdmin.Infrastructure.Sap;
+using MesAdmin.Infrastructure.Caching;
 using MesAdmin.Infrastructure.Workflows;
 using MesAdmin.Infrastructure.Security;
 using MesAdmin.Infrastructure.Reports;
@@ -106,6 +109,46 @@ builder.Services.AddScoped<IRoutingRepository, RoutingRepository>();
 
 // ── 防错三重校验（T3.3）──
 builder.Services.AddScoped<TripleCheckService>();
+
+// ── M09 排程管理 (T3.10-T3.13) ──
+builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
+builder.Services.AddScoped<ICapacityCalendarRepository, CapacityCalendarRepository>();
+builder.Services.AddScoped<SchedulingEngine>();
+
+// ── M08 SQE 供应商质量模块 (T3.6-T3.8) ──
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<ISupplierScoreCardRepository, SupplierScoreCardRepository>();
+builder.Services.AddScoped<IPpapDocumentRepository, PpapDocumentRepository>();
+builder.Services.AddScoped<ICriticalSupplierSettingRepository, CriticalSupplierSettingRepository>();
+
+// ── T1.11 BOM 内存缓存 ──
+builder.Services.AddSingleton<IBomCache, BomCache>();
+builder.Services.AddHostedService<BomCacheInitializationService>();
+
+// ── SAP 集成 T3.14-T3.17 ──
+builder.Services.AddScoped<ISapOrderSyncRecordRepository, SapOrderSyncRecordRepository>();
+builder.Services.AddSingleton<ISapClient>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var useRealSap = config.GetValue<bool>("Sap:UseRealClient", false);
+    if (useRealSap)
+    {
+        var factory = sp.GetRequiredService<IHttpClientFactory>();
+        var logger = sp.GetRequiredService<ILogger<HttpSapClient>>();
+        return new HttpSapClient(factory, config, logger);
+    }
+    var mockLogger = sp.GetRequiredService<ILogger<MockSapClient>>();
+    return new MockSapClient(mockLogger);
+});
+
+// T3.16: 拒单回写后台服务（Poll pending rejections → writeback SAP）
+builder.Services.AddHostedService<SapRejectionWritebackService>();
+// T3.14: 工单状态同步后台服务
+builder.Services.AddHostedService<SapOrderSyncService>();
+// T3.15: 库存同步后台服务
+builder.Services.AddHostedService<SapInventorySyncService>();
+// T3.17: 物料移动同步后台服务
+builder.Services.AddHostedService<SapMaterialMovementSyncService>();
 
 // ── ZLogger 结构化日志 ──
 builder.Logging.AddZLogger();

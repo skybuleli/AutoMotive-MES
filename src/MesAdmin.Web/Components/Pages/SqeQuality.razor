@@ -1,0 +1,1240 @@
+@page "/sqe"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject MesApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>SQE 供应商质量 - AutoMES</PageTitle>
+
+<MudStack Spacing="3" Class="oee-page">
+    <MudPaper Class="oee-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudStack Spacing="1">
+                <MudText Typo="Typo.overline" Class="section-kicker">M08 · SQE Supplier Quality</MudText>
+                <MudText Typo="Typo.h4">SQE 供应商质量管理</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">供应商评分卡 · PPAP 文档管理 · 关键物料管控</MudText>
+            </MudStack>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadAllAsync()" Size="Size.Small" />
+        </MudStack>
+    </MudPaper>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudPaper Class="pa-4" Style="border-radius:12px;">
+        <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
+                 CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
+
+            @* ═══════════════════════════════════════════
+               Tab 1: 供应商评分卡
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="供应商评分卡" Icon="@Icons.Material.Filled.Score">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="() => _showCreateSupplierDialog = true">
+                            新建供应商
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.Assessment"
+                                   OnClick="() => _showCreateScoreDialog = true"
+                                   Disabled="@(_selectedSupplier is null)">
+                            创建评分卡
+                        </MudButton>
+                        <MudSelect T="string" Label="分类筛选" Variant="Variant.Outlined" Dense
+                                   @bind-Value="_supplierCategoryFilter" @bind-Value:after="OnCategoryFilterChanged"
+                                   Style="min-width:140px;">
+                            @foreach (var cat in SupplierCategories)
+                            {
+                                <MudSelectItem Value="@cat">@cat</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSwitch @bind-Value="_showCriticalOnly" Color="Color.Error" Label="仅关键供应商"
+                                   @bind-Value:after="OnFilterChanged" />
+                    </MudStack>
+
+                    @if (_isLoading && _suppliers.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">加载供应商数据...</MudText>
+                        </MudStack>
+                    }
+                    else if (_filteredSuppliers.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无供应商数据</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">请点击「新建供应商」创建供应商主数据。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <div class="inventory-grid">
+                            @foreach (var supplier in _filteredSuppliers)
+                            {
+                                <MudPaper Class="@GetSupplierCardClass(supplier)"
+                                          Style="@GetSupplierCardStyle(supplier)"
+                                          @onclick="() => SelectSupplier(supplier)">
+                                    <MudStack Spacing="2">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                                <span class="status-dot @GetSupplierStatusDot(supplier)"></span>
+                                                <MudText Typo="Typo.subtitle2" Style="font-weight:600;">@supplier.SupplierCode</MudText>
+                                            </MudStack>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@GetSupplierTierColor(supplier.Tier)"
+                                                     Variant="Variant.Outlined">
+                                                @GetTierLabel(supplier.Tier)
+                                            </MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2">@supplier.SupplierName</MudText>
+                                        <MudText Typo="Typo.caption" Class="kpi-label">@supplier.MaterialCategory</MudText>
+
+                                        <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">综合评分</MudText>
+                                                <MudText Typo="Typo.h4" Color="@GetScoreColor(supplier.LatestScore)">
+                                                    @supplier.LatestScore.ToString("F1")
+                                                </MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">联系人</MudText>
+                                                <MudText Typo="Typo.body2">@(supplier.ContactPerson ?? "-")</MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">电话</MudText>
+                                                <MudText Typo="Typo.body2">@(supplier.ContactPhone ?? "-")</MudText>
+                                            </MudStack>
+                                        </MudStack>
+
+                                        @if (supplier.IsCritical)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                                     Class="mt-1" Style="align-self:flex-start;">
+                                                关键供应商
+                                            </MudChip>
+                                        }
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+
+                    @* 选中供应商的评分卡历史 *@
+                    @if (_selectedSupplier is not null && _scoreCards.Count > 0)
+                    {
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600; margin-top:16px;">
+                            @_selectedSupplier.SupplierCode 评分历史
+                        </MudText>
+                        <MudTable Items="@_scoreCards" Dense="true" Hover="true" Elevation="0" Class="module-card">
+                            <HeaderContent>
+                                <MudTh>期间</MudTh>
+                                <MudTh>质量(30%)</MudTh>
+                                <MudTh>交付(25%)</MudTh>
+                                <MudTh>8D(20%)</MudTh>
+                                <MudTh>PPAP(15%)</MudTh>
+                                <MudTh>价格(10%)</MudTh>
+                                <MudTh>加权总分</MudTh>
+                                <MudTh>评分人</MudTh>
+                                <MudTh>时间</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="期间"><MudText Typo="Typo.body2" Style="font-weight:600;">@context.Period</MudText></MudTd>
+                                <MudTd DataLabel="质量">@context.IncomingQualityScore.ToString("F1")</MudTd>
+                                <MudTd DataLabel="交付">@context.OnTimeDeliveryScore.ToString("F1")</MudTd>
+                                <MudTd DataLabel="8D">@context.EightDResponseScore.ToString("F1")</MudTd>
+                                <MudTd DataLabel="PPAP">@context.PpapPassRateScore.ToString("F1")</MudTd>
+                                <MudTd DataLabel="价格">@context.PriceCompetitivenessScore.ToString("F1")</MudTd>
+                                <MudTd DataLabel="总分">
+                                    <MudText Typo="Typo.body2" Color="@GetScoreColor(context.WeightedTotal)" Style="font-weight:600;">
+                                        @context.WeightedTotal.ToString("F1")
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="评分人">@context.EvaluatedBy</MudTd>
+                                <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 2: PPAP 文档管理
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="PPAP 文档" Icon="@Icons.Material.Filled.Description">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudSelect T="string" Label="选择供应商" Variant="Variant.Outlined" Dense
+                                   @bind-Value="_ppapSupplierFilter" @bind-Value:after="LoadPpapDocumentsAsync"
+                                   Style="min-width:200px;">
+
+                            @foreach (var s in _suppliers)
+                            {
+                                <MudSelectItem Value="@s.Id">@s.SupplierCode — @s.SupplierName</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="() => _showCreatePpapDialog = true">
+                            新建 PPAP
+                        </MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                                       OnClick="LoadPpapDocumentsAsync" Size="Size.Small" />
+                    </MudStack>
+
+                    @if (_isLoading && _ppapDocuments.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        </MudStack>
+                    }
+                    else if (_ppapDocuments.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无 PPAP 文档</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_ppapDocuments" Dense="true" Hover="true" Elevation="0" Class="module-card">
+                            <ColGroup>
+                                <col style="width:100px" />
+                                <col style="width:80px" />
+                                <col style="width:100px" />
+                                <col style="min-width:120px" />
+                                <col style="width:80px" />
+                                <col style="width:80px" />
+                                <col style="width:80px" />
+                                <col style="width:120px" />
+                                <col style="width:160px" />
+                            </ColGroup>
+                            <HeaderContent>
+                                <MudTh>供应商</MudTh>
+                                <MudTh>等级</MudTh>
+                                <MudTh>物料编码</MudTh>
+                                <MudTh>物料名称</MudTh>
+                                <MudTh>版本</MudTh>
+                                <MudTh>提交日期</MudTh>
+                                <MudTh>到期日</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="供应商"><MudText Typo="Typo.body2" Style="font-weight:600;">@context.SupplierCode</MudText></MudTd>
+                                <MudTd DataLabel="等级">Lv.@context.PpapLevel</MudTd>
+                                <MudTd DataLabel="物料">@context.MaterialCode</MudTd>
+                                <MudTd DataLabel="名称"><MudText Typo="Typo.caption">@context.MaterialName</MudText></MudTd>
+                                <MudTd DataLabel="版本">@context.Version</MudTd>
+                                <MudTd DataLabel="提交">@(context.SubmittedAt?.ToLocalTime().ToString("MM-dd") ?? "-")</MudTd>
+                                <MudTd DataLabel="到期">
+                                    @if (context.ExpiryDate.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="@(context.ExpiryDate < DateTimeOffset.UtcNow ? Color.Error : Color.Default)">
+                                            @context.ExpiryDate.Value.ToLocalTime().ToString("yyyy-MM-dd")
+                                        </MudText>
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@GetPpapStatusColor(context.Status)"
+                                             Variant="Variant.Outlined">
+                                        @GetPpapStatusLabel(context.Status)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudStack Row Spacing="1">
+                                        @if (context.Status == "Draft")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning"
+                                                       OnClick="() => SubmitPpapAsync(context)">
+                                                提交
+                                            </MudButton>
+                                        }
+                                        else if (context.Status == "Submitted")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Success"
+                                                       OnClick="() => OpenApprovePpapDialog(context)">
+                                                批准
+                                            </MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                                       OnClick="() => OpenRejectPpapDialog(context)">
+                                                拒绝
+                                            </MudButton>
+                                        }
+                                        else if (context.Status == "Rejected")
+                                        {
+                                            <MudText Typo="Typo.caption" Class="kpi-label">@(context.RejectionReason ?? "-")</MudText>
+                                        }
+                                        else if (context.Status == "Approved")
+                                        {
+                                            <MudText Typo="Typo.caption" Class="kpi-label">批准: @(context.ApprovedBy ?? "-")</MudText>
+                                        }
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 3: 关键物料管控设置
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="关键物料管控" Icon="@Icons.Material.Filled.Shield">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="() => _showCreateSettingDialog = true">
+                            新建管控设置
+                        </MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                                       OnClick="LoadCriticalSettingsAsync" Size="Size.Small" />
+                    </MudStack>
+
+                    @if (_isLoading && _criticalSettings.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        </MudStack>
+                    }
+                    else if (_criticalSettings.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Shield" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无关键物料管控设置</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">电磁阀/压力传感器/PCB 板材等高优先级物料需设置管控等级。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <div class="inventory-grid">
+                            @foreach (var setting in _criticalSettings)
+                            {
+                                <MudPaper Class="glass-kpi-card" Style="@(setting.ControlLevel >= 3 ? "border-left:4px solid var(--mud-palette-error);" : "border-left:4px solid var(--mud-palette-warning);")">
+                                    <MudStack Spacing="2">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                                <span class="status-dot alarm" style="width:10px;height:10px;"></span>
+                                                <MudText Typo="Typo.subtitle2" Style="font-weight:600;">@setting.MaterialCode</MudText>
+                                            </MudStack>
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@(setting.ControlLevel >= 3 ? Color.Error : Color.Warning)"
+                                                     Variant="Variant.Filled">
+                                                管控 Lv.@setting.ControlLevel
+                                            </MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2">@setting.MaterialName</MudText>
+                                        <MudStack Row Spacing="2" Class="kpi-label" Wrap="Wrap.Wrap">
+                                            <MudChip T="bool" Size="Size.Small" Variant="Variant.Outlined"
+                                                     Color="@(setting.RequiresFullInspection ? Color.Success : Color.Default)">
+                                                100% 检验
+                                            </MudChip>
+                                            <MudChip T="bool" Size="Size.Small" Variant="Variant.Outlined"
+                                                     Color="@(setting.RequiresOnSiteAudit ? Color.Success : Color.Default)">
+                                                现场审核
+                                            </MudChip>
+                                            <MudChip T="bool" Size="Size.Small" Variant="Variant.Outlined"
+                                                     Color="@(setting.RequiresSpcDataSubmission ? Color.Success : Color.Default)">
+                                                SPC 数据
+                                            </MudChip>
+                                            <MudChip T="bool" Size="Size.Small" Variant="Variant.Outlined"
+                                                     Color="@(setting.RequiresComplianceReport ? Color.Success : Color.Default)">
+                                                RoHS/REACH
+                                            </MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.caption" Class="kpi-label">
+                                            审核频率：每 @setting.AuditIntervalMonths 月
+                                        </MudText>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+        </MudTabs>
+    </MudPaper>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   对话框: 新建供应商
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreateSupplierDialog" FullWidth="true" MaxWidth="MaxWidth.Small">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建供应商</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="6"><MudTextField @bind-Value="_newSupplier.SupplierCode" Label="供应商编码 *" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_newSupplier.SupplierName" Label="供应商名称 *" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_newSupplier.ShortName" Label="简称" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6">
+                    <MudSelect T="string" Label="物料类别 *" Variant="Variant.Outlined" @bind-Value="_newSupplier.MaterialCategory">
+                        @foreach (var cat in SupplierCategories)
+                        {
+                            <MudSelectItem Value="@cat">@cat</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12"><MudTextField @bind-Value="_newSupplier.MaterialCodes" Label="供应物料编码（逗号分隔）" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_newSupplier.ContactPerson" Label="联系人" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_newSupplier.ContactPhone" Label="联系电话" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_newSupplier.ContactEmail" Label="邮箱" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_newSupplier.IsoCertification" Label="ISO 认证" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="12">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudSwitch @bind-Value="_newSupplier.IsCritical" Color="Color.Error" Label="关键供应商" />
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreateSupplierDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(!IsSupplierFormValid)"
+                   OnClick="CreateSupplierAsync">
+            创建
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 创建评分卡
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreateScoreDialog" FullWidth="true" MaxWidth="MaxWidth.Medium">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">创建供应商评分卡</MudText>
+            @if (_selectedSupplier is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedSupplier.SupplierCode — @_selectedSupplier.SupplierName</MudText>
+
+                <MudTextField @bind-Value="_newCard.Period" Label="评分期间 (如 2026-Q3)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudGrid Spacing="2">
+                    <MudItem xs="6">
+                        <MudNumericField T="double" @bind-Value="_newCard.IncomingQualityScore" Label="来料合格率 (30%)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="100" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField T="double" @bind-Value="_newCard.OnTimeDeliveryScore" Label="交货准时率 (25%)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="100" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField T="double" @bind-Value="_newCard.EightDResponseScore" Label="8D 响应 (20%)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="100" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField T="double" @bind-Value="_newCard.PpapPassRateScore" Label="PPAP 通过率 (15%)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="100" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField T="double" @bind-Value="_newCard.PriceCompetitivenessScore" Label="价格竞争力 (10%)"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="100" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudTextField @bind-Value="_newCard.EvaluatedBy" Label="评分人 *" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_newCard.Remarks" Label="备注" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                    </MudItem>
+                </MudGrid>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreateScoreDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(!IsScoreCardFormValid)"
+                   OnClick="CreateScoreCardAsync">
+            创建评分卡
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 新建 PPAP 文档
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreatePpapDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建 PPAP 文档</MudText>
+            <MudSelect T="string" Label="选择供应商 *" Variant="Variant.Outlined" @bind-Value="_newPpapSupplierId">
+                @foreach (var s in _suppliers)
+                {
+                    <MudSelectItem Value="@s.Id">@s.SupplierCode — @s.SupplierName</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="_newPpapMaterialCode" Label="物料编码 *" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_newPpapMaterialName" Label="物料名称 *" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="int" @bind-Value="_newPpapLevel" Label="PPAP 等级 (1-5)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="5" />
+            <MudTextField @bind-Value="_newPpapCreatedBy" Label="创建人 *" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudTextField @bind-Value="_newPpapRemarks" Label="备注" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreatePpapDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(string.IsNullOrWhiteSpace(_newPpapSupplierId) || string.IsNullOrWhiteSpace(_newPpapMaterialCode))"
+                   OnClick="CreatePpapAsync">
+            创建
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 批准 PPAP 确认
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showApprovePpapDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">批准 PPAP 文档</MudText>
+            @if (_selectedPpap is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedPpap.SupplierCode · @_selectedPpap.MaterialCode</MudText>
+                <MudTextField @bind-Value="_approvePpapBy" Label="批准人 *" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showApprovePpapDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(string.IsNullOrWhiteSpace(_approvePpapBy))"
+                   OnClick="ApprovePpapAsync">
+            确认批准
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 拒绝 PPAP
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showRejectPpapDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">拒绝 PPAP 文档</MudText>
+            @if (_selectedPpap is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedPpap.SupplierCode · @_selectedPpap.MaterialCode</MudText>
+                <MudTextField @bind-Value="_rejectPpapReason" Label="拒绝原因 *" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showRejectPpapDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error"
+                   Disabled="@(string.IsNullOrWhiteSpace(_rejectPpapReason))"
+                   OnClick="RejectPpapAsync">
+            确认拒绝
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 新建管控设置
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreateSettingDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建关键物料管控设置</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="6"><MudTextField @bind-Value="_newSetting.MaterialCode" Label="物料编码 *" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6"><MudTextField @bind-Value="_newSetting.MaterialName" Label="物料名称 *" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="6">
+                    <MudSelect T="int" Label="管控等级" Variant="Variant.Outlined" @bind-Value="_newSetting.ControlLevel">
+                        <MudSelectItem Value="1">Lv.1 一般管控</MudSelectItem>
+                        <MudSelectItem Value="2">Lv.2 加强管控</MudSelectItem>
+                        <MudSelectItem Value="3">Lv.3 最高管控</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudNumericField T="int" @bind-Value="_newSetting.AuditIntervalMonths" Label="审核间隔 (月)"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="24" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudSwitch @bind-Value="_newSetting.RequiresFullInspection" Color="Color.Primary" Label="100% 来料检验" />
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudSwitch @bind-Value="_newSetting.RequiresOnSiteAudit" Color="Color.Primary" Label="现场审核" />
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudSwitch @bind-Value="_newSetting.RequiresSpcDataSubmission" Color="Color.Primary" Label="SPC 数据提交" />
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudSwitch @bind-Value="_newSetting.RequiresComplianceReport" Color="Color.Primary" Label="RoHS/REACH 报告" />
+                    </MudStack>
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_newSetting.Remarks" Label="备注" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreateSettingDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(string.IsNullOrWhiteSpace(_newSetting.MaterialCode) || string.IsNullOrWhiteSpace(_newSetting.MaterialName))"
+                   OnClick="CreateCriticalSettingAsync">
+            创建
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly string[] SupplierCategories = ["ECU芯片", "电磁阀", "PCB板材", "传感器", "紧固件", "密封件"];
+
+    private int _activeTab;
+    private bool _isLoading, _isError;
+    private string? _message;
+
+    // ── 供应商列表 ──
+    private List<SupplierDto> _suppliers = [];
+    private List<SupplierDto> _filteredSuppliers = [];
+    private string _supplierCategoryFilter = string.Empty;
+    private bool _showCriticalOnly;
+    private SupplierDto? _selectedSupplier;
+
+    // ── 评分卡 ──
+    private List<SupplierScoreCardDto> _scoreCards = [];
+    private bool _showCreateScoreDialog;
+    private readonly ScoreCardForm _newCard = new();
+
+    // ── PPAP ──
+    private string _ppapSupplierFilter = string.Empty;
+    private List<PpapDocumentDto> _ppapDocuments = [];
+    private bool _showCreatePpapDialog;
+    private string _newPpapSupplierId = string.Empty;
+    private string _newPpapMaterialCode = string.Empty;
+    private string _newPpapMaterialName = string.Empty;
+    private int _newPpapLevel = 3;
+    private string _newPpapCreatedBy = string.Empty;
+    private string _newPpapRemarks = string.Empty;
+    private PpapDocumentDto? _selectedPpap;
+    private bool _showApprovePpapDialog, _showRejectPpapDialog;
+    private string _approvePpapBy = string.Empty;
+    private string _rejectPpapReason = string.Empty;
+
+    // ── 关键物料管控 ──
+    private List<CriticalSupplierSettingDto> _criticalSettings = [];
+    private bool _showCreateSettingDialog;
+    private readonly CriticalSettingForm _newSetting = new();
+
+    // ── 新建供应商 ──
+    private bool _showCreateSupplierDialog;
+    private readonly SupplierForm _newSupplier = new();
+
+    private bool IsSupplierFormValid =>
+        !string.IsNullOrWhiteSpace(_newSupplier.SupplierCode)
+        && !string.IsNullOrWhiteSpace(_newSupplier.SupplierName)
+        && !string.IsNullOrWhiteSpace(_newSupplier.MaterialCategory);
+
+    private bool IsScoreCardFormValid =>
+        _selectedSupplier is not null
+        && !string.IsNullOrWhiteSpace(_newCard.Period)
+        && !string.IsNullOrWhiteSpace(_newCard.EvaluatedBy)
+        && _newCard.IncomingQualityScore >= 0 && _newCard.IncomingQualityScore <= 100
+        && _newCard.OnTimeDeliveryScore >= 0 && _newCard.OnTimeDeliveryScore <= 100
+        && _newCard.EightDResponseScore >= 0 && _newCard.EightDResponseScore <= 100
+        && _newCard.PpapPassRateScore >= 0 && _newCard.PpapPassRateScore <= 100
+        && _newCard.PriceCompetitivenessScore >= 0 && _newCard.PriceCompetitivenessScore <= 100;
+
+    // ═══════════════════════════════════════════
+    // 页面初始化
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            _suppliers = await Api.GetSuppliersAsync() ?? [];
+            _criticalSettings = await Api.GetCriticalSettingsAsync() ?? [];
+            ApplySupplierFilter();
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载数据失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 供应商筛选
+    // ═══════════════════════════════════════════
+
+    private void ApplySupplierFilter()
+    {
+        var query = _suppliers.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_supplierCategoryFilter))
+        {
+            query = query.Where(s => s.MaterialCategory == _supplierCategoryFilter);
+        }
+
+        if (_showCriticalOnly)
+        {
+            query = query.Where(s => s.IsCritical);
+        }
+
+        _filteredSuppliers = query.ToList();
+    }
+
+    private void OnCategoryFilterChanged()
+    {
+        ApplySupplierFilter();
+    }
+
+    private void OnFilterChanged()
+    {
+        ApplySupplierFilter();
+    }
+
+    private async Task OnActiveTabChanged(int index)
+    {
+        _activeTab = index;
+        if (index == 1 && _ppapDocuments.Count == 0)
+        {
+            await LoadPpapDocumentsAsync();
+        }
+        else if (index == 2 && _criticalSettings.Count == 0)
+        {
+            // Already loaded in LoadAllAsync
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 供应商操作
+    // ═══════════════════════════════════════════
+
+    private void SelectSupplier(SupplierDto supplier)
+    {
+        _selectedSupplier = supplier;
+        _ = LoadScoreCardsAsync();
+    }
+
+    private async Task CreateSupplierAsync()
+    {
+        if (!IsSupplierFormValid) return;
+        _isLoading = true;
+        try
+        {
+            var body = new CreateSupplierBody(
+                _newSupplier.SupplierCode, _newSupplier.SupplierName,
+                _newSupplier.MaterialCategory, _newSupplier.MaterialCodes,
+                _newSupplier.IsCritical, _newSupplier.ShortName,
+                _newSupplier.ContactPerson, _newSupplier.ContactPhone,
+                _newSupplier.ContactEmail, _newSupplier.IsoCertification, null);
+
+            var (ok, data, _) = await Api.CreateSupplierAsync(body);
+            if (ok && data is not null)
+            {
+                _showCreateSupplierDialog = false;
+                _newSupplier.Clear();
+                _suppliers.Add(data);
+                _message = $"供应商 {data.SupplierCode} 创建成功";
+                _isError = false;
+                ApplySupplierFilter();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"创建供应商失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 评分卡操作
+    // ═══════════════════════════════════════════
+
+    private async Task LoadScoreCardsAsync()
+    {
+        if (_selectedSupplier is null) return;
+        _isLoading = true;
+        try
+        {
+            _scoreCards = await Api.GetScoreCardsAsync(_selectedSupplier.Id) ?? [];
+        }
+        catch
+        {
+            _scoreCards = [];
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateScoreCardAsync()
+    {
+        if (_selectedSupplier is null || !IsScoreCardFormValid) return;
+        _isLoading = true;
+        try
+        {
+            var body = new CreateScoreCardBody(
+                _newCard.Period,
+                _newCard.IncomingQualityScore, _newCard.IncomingQualityData,
+                _newCard.OnTimeDeliveryScore, _newCard.OnTimeDeliveryData,
+                _newCard.EightDResponseScore, _newCard.EightDResponseData,
+                _newCard.PpapPassRateScore, _newCard.PpapPassRateData,
+                _newCard.PriceCompetitivenessScore, _newCard.PriceCompetitivenessData,
+                _newCard.EvaluatedBy, _newCard.Remarks);
+
+            var (ok, data, _) = await Api.CreateScoreCardAsync(_selectedSupplier.Id, body);
+            if (ok && data is not null)
+            {
+                _showCreateScoreDialog = false;
+                _newCard.Clear();
+                _scoreCards.Insert(0, data);
+                _message = $"评分卡创建成功（加权总分：{data.WeightedTotal:F1}）";
+                _isError = false;
+
+                // 刷新供应商列表以更新评分
+                var idx = _suppliers.FindIndex(s => s.Id == _selectedSupplier.Id);
+                if (idx >= 0)
+                {
+                    var updated = await Api.GetSupplierAsync(_selectedSupplier.Id);
+                    if (updated is not null)
+                    {
+                        _suppliers[idx] = updated;
+                        _selectedSupplier = updated;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"创建评分卡失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // PPAP 操作
+    // ═══════════════════════════════════════════
+
+    private async Task LoadPpapDocumentsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_ppapSupplierFilter))
+            {
+                _ppapDocuments = await Api.GetPpapDocumentsAsync(_ppapSupplierFilter) ?? [];
+            }
+            else
+            {
+                // Load all PPAPs by iterating suppliers (or use a server-side all endpoint)
+                _ppapDocuments = [];
+                foreach (var s in _suppliers)
+                {
+                    var docs = await Api.GetPpapDocumentsAsync(s.Id) ?? [];
+                    _ppapDocuments.AddRange(docs);
+                }
+                _ppapDocuments = _ppapDocuments.OrderByDescending(d => d.CreatedAt).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载 PPAP 文档失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreatePpapAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newPpapSupplierId) || string.IsNullOrWhiteSpace(_newPpapMaterialCode))
+            return;
+
+        _isLoading = true;
+        try
+        {
+            var body = new CreatePpapBody(
+                _newPpapMaterialCode, _newPpapMaterialName, _newPpapLevel,
+                _newPpapCreatedBy, null, _newPpapRemarks);
+
+            var (ok, data, _) = await Api.CreatePpapDocumentAsync(_newPpapSupplierId, body);
+            if (ok && data is not null)
+            {
+                _showCreatePpapDialog = false;
+                _newPpapSupplierId = "";
+                _newPpapMaterialCode = "";
+                _newPpapMaterialName = "";
+                _newPpapLevel = 3;
+                _newPpapCreatedBy = "";
+                _newPpapRemarks = "";
+                _ppapDocuments.Insert(0, data);
+                _message = $"PPAP 文档创建成功";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"创建 PPAP 文档失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SubmitPpapAsync(PpapDocumentDto doc)
+    {
+        _isLoading = true;
+        try
+        {
+            var supplierId = doc.SupplierId;
+            var (ok, data, _) = await Api.SubmitPpapAsync(supplierId, doc.Id);
+            if (ok && data is not null)
+            {
+                var idx = _ppapDocuments.FindIndex(d => d.Id == doc.Id);
+                if (idx >= 0) _ppapDocuments[idx] = data;
+                _message = $"PPAP 文档已提交审批";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"提交 PPAP 失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenApprovePpapDialog(PpapDocumentDto doc)
+    {
+        _selectedPpap = doc;
+        _approvePpapBy = "";
+        _showApprovePpapDialog = true;
+    }
+
+    private async Task ApprovePpapAsync()
+    {
+        if (_selectedPpap is null || string.IsNullOrWhiteSpace(_approvePpapBy)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.ApprovePpapAsync(_selectedPpap.SupplierId, _selectedPpap.Id, _approvePpapBy);
+            if (ok && data is not null)
+            {
+                _showApprovePpapDialog = false;
+                var idx = _ppapDocuments.FindIndex(d => d.Id == _selectedPpap.Id);
+                if (idx >= 0) _ppapDocuments[idx] = data;
+                _message = $"PPAP 文档已批准";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"批准 PPAP 失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenRejectPpapDialog(PpapDocumentDto doc)
+    {
+        _selectedPpap = doc;
+        _rejectPpapReason = "";
+        _showRejectPpapDialog = true;
+    }
+
+    private async Task RejectPpapAsync()
+    {
+        if (_selectedPpap is null || string.IsNullOrWhiteSpace(_rejectPpapReason)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.RejectPpapAsync(_selectedPpap.SupplierId, _selectedPpap.Id, _rejectPpapReason);
+            if (ok && data is not null)
+            {
+                _showRejectPpapDialog = false;
+                var idx = _ppapDocuments.FindIndex(d => d.Id == _selectedPpap.Id);
+                if (idx >= 0) _ppapDocuments[idx] = data;
+                _message = $"PPAP 文档已拒绝";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"拒绝 PPAP 失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 关键物料管控操作
+    // ═══════════════════════════════════════════
+
+    private async Task LoadCriticalSettingsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _criticalSettings = await Api.GetCriticalSettingsAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            _message = $"加载管控设置失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateCriticalSettingAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newSetting.MaterialCode) || string.IsNullOrWhiteSpace(_newSetting.MaterialName))
+            return;
+
+        _isLoading = true;
+        try
+        {
+            var body = new CreateCriticalSettingBody(
+                _newSetting.MaterialCode, _newSetting.MaterialName,
+                _newSetting.ControlLevel, _newSetting.RequiresFullInspection,
+                _newSetting.RequiresOnSiteAudit, _newSetting.AuditIntervalMonths,
+                _newSetting.RequiresSpcDataSubmission, _newSetting.RequiresComplianceReport,
+                _newSetting.Remarks);
+
+            var (ok, data, _) = await Api.CreateCriticalSettingAsync(body);
+            if (ok && data is not null)
+            {
+                _showCreateSettingDialog = false;
+                _newSetting.Clear();
+                _criticalSettings.Add(data);
+                _message = $"物料 {data.MaterialCode} 管控设置已创建";
+                _isError = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = $"创建管控设置失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 样式/标签辅助方法
+    // ═══════════════════════════════════════════
+
+    private static string GetTierLabel(string tier) => tier switch
+    {
+        "Preferred" => "优选",
+        "Qualified" => "合格",
+        "Conditional" => "待改进",
+        "Disqualified" => "不合格",
+        _ => tier
+    };
+
+    private static Color GetSupplierTierColor(string tier) => tier switch
+    {
+        "Preferred" => Color.Success,
+        "Qualified" => Color.Info,
+        "Conditional" => Color.Warning,
+        "Disqualified" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetSupplierStatusDot(SupplierDto s)
+    {
+        if (!s.IsActive) return "alarm";
+        return s.Tier switch
+        {
+            "Preferred" => "running",
+            "Qualified" => "running",
+            "Conditional" => "idle",
+            "Disqualified" => "alarm",
+            _ => "idle"
+        };
+    }
+
+    private static Color GetScoreColor(double score) => score switch
+    {
+        >= 90 => Color.Success,
+        >= 70 => Color.Info,
+        >= 50 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private string GetSupplierCardClass(SupplierDto s)
+    {
+        var cls = "glass-kpi-card";
+        if (s == _selectedSupplier)
+            cls += " selected-card";
+        return cls;
+    }
+
+    private static string GetSupplierCardStyle(SupplierDto s)
+    {
+        if (!s.IsActive) return "opacity:0.6;";
+        return s.Tier switch
+        {
+            "Preferred" => "border-left:4px solid var(--mud-palette-success);",
+            "Qualified" => "",
+            "Conditional" => "border-left:4px solid var(--mud-palette-warning);",
+            "Disqualified" => "border-left:4px solid var(--mud-palette-error);",
+            _ => ""
+        };
+    }
+
+    private static string GetPpapStatusLabel(string status) => status switch
+    {
+        "Draft" => "草稿",
+        "Submitted" => "待审批",
+        "Approved" => "已批准",
+        "Rejected" => "已拒绝",
+        "Expired" => "已过期",
+        _ => status
+    };
+
+    private static Color GetPpapStatusColor(string status) => status switch
+    {
+        "Draft" => Color.Default,
+        "Submitted" => Color.Warning,
+        "Approved" => Color.Success,
+        "Rejected" => Color.Error,
+        "Expired" => Color.Default,
+        _ => Color.Default
+    };
+
+    // ═══════════════════════════════════════════
+    // 表单模型
+    // ═══════════════════════════════════════════
+
+    public class SupplierForm
+    {
+        public string SupplierCode { get; set; } = string.Empty;
+        public string SupplierName { get; set; } = string.Empty;
+        public string? ShortName { get; set; }
+        public string MaterialCategory { get; set; } = "电磁阀";
+        public string MaterialCodes { get; set; } = string.Empty;
+        public string? ContactPerson { get; set; }
+        public string? ContactPhone { get; set; }
+        public string? ContactEmail { get; set; }
+        public string? IsoCertification { get; set; }
+        public bool IsCritical { get; set; }
+
+        public void Clear()
+        {
+            SupplierCode = ""; SupplierName = ""; ShortName = null;
+            MaterialCategory = "电磁阀"; MaterialCodes = "";
+            ContactPerson = null; ContactPhone = null; ContactEmail = null;
+            IsoCertification = null; IsCritical = false;
+        }
+    }
+
+    public class ScoreCardForm
+    {
+        public string Period { get; set; } = DateTimeOffset.UtcNow.ToString("yyyy-MM");
+        public double IncomingQualityScore { get; set; } = 85;
+        public string IncomingQualityData { get; set; } = string.Empty;
+        public double OnTimeDeliveryScore { get; set; } = 90;
+        public string OnTimeDeliveryData { get; set; } = string.Empty;
+        public double EightDResponseScore { get; set; } = 80;
+        public string EightDResponseData { get; set; } = string.Empty;
+        public double PpapPassRateScore { get; set; } = 90;
+        public string PpapPassRateData { get; set; } = string.Empty;
+        public double PriceCompetitivenessScore { get; set; } = 70;
+        public string PriceCompetitivenessData { get; set; } = string.Empty;
+        public string EvaluatedBy { get; set; } = string.Empty;
+        public string? Remarks { get; set; }
+
+        public void Clear()
+        {
+            Period = DateTimeOffset.UtcNow.ToString("yyyy-MM");
+            IncomingQualityScore = 85; OnTimeDeliveryScore = 90;
+            EightDResponseScore = 80; PpapPassRateScore = 90;
+            PriceCompetitivenessScore = 70; EvaluatedBy = "";
+            Remarks = null;
+        }
+    }
+
+    public class CriticalSettingForm
+    {
+        public string MaterialCode { get; set; } = string.Empty;
+        public string MaterialName { get; set; } = string.Empty;
+        public int ControlLevel { get; set; } = 3;
+        public bool RequiresFullInspection { get; set; } = true;
+        public bool RequiresOnSiteAudit { get; set; } = true;
+        public int AuditIntervalMonths { get; set; } = 6;
+        public bool RequiresSpcDataSubmission { get; set; } = true;
+        public bool RequiresComplianceReport { get; set; } = true;
+        public string? Remarks { get; set; }
+
+        public void Clear()
+        {
+            MaterialCode = ""; MaterialName = "";
+            ControlLevel = 3; RequiresFullInspection = true;
+            RequiresOnSiteAudit = true; AuditIntervalMonths = 6;
+            RequiresSpcDataSubmission = true; RequiresComplianceReport = true;
+            Remarks = null;
+        }
+    }
+}

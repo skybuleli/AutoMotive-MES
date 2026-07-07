@@ -148,7 +148,7 @@ public class FullLifecycleE2ETest
         Assert.All(orderSapRecords, s => Assert.Equal("261", s.MovementType));
 
         // ── Step 5: 关闭工单 (T1.3) ──
-        var closeHandler = new CloseOrderHandler(orderRepo);
+        var closeHandler = new CloseOrderHandler(orderRepo, sp.GetRequiredService<ISapOrderSyncRecordRepository>());
         var closed = await closeHandler.ExecuteAsync(new CloseOrderCommand(order.Id), default);
 
         Assert.Equal(OrderStatus.Closed, closed.Status);
