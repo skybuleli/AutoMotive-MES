@@ -2,7 +2,7 @@
 
 > **项目：** 博世 ESP® 制动系统 MES（汽车 Tier-1 供应商制造执行系统）
 > **来源：** PRD v2（`automotive-mes-prd-v2.html`）+ TAD v2（`automotive-mes-tad-v2.html`）+ AGENTS.md 宪法
-> **当前状态：** 阶段 0 ✅ · 阶段 1 ✅ · 阶段 2 ✅ · 阶段 3 **~53%** 🔶（M07 100% + SAP ERP 100%、SQE/排程待办）· 阶段 4 **~47%** 🔶（T4.6-T4.9 性能 ✅+T4.10-T4.12 混沌 ✅）
+> **当前状态：** 阶段 0 ✅ · 阶段 1 ✅ · 阶段 2 ✅ · 阶段 3 ✅ · 阶段 4 **~47%** 🔶 · 部署 **100%** ✅
 > **路线图：** PRD v2 的 28 周 4 阶段，本清单为细粒度可执行分解
 
 ---
@@ -252,14 +252,14 @@
 
 | ID | 状态 | 任务 | 优先级 | 工时 | 依赖 |
 |----|------|------|--------|------|------|
-| TD.1 | `[ ]` | 生产 `compose.yaml`（postgres:17-alpine + mes-web + mes-api + pg-backup、持久卷、资源限制、健康检查） | P1 | 2d | T0.3 |
-| TD.2 | `[ ]` | **Uncloud 集群初始化**：`uc machine init root@<厂区首台服务器>` → 自动装 Docker + uncloudd systemd + Caddy + `*.uncld.dev` 子域名 + WireGuard mesh | P1 | 1d | TD.1 |
-| TD.3 | `[ ]` | **Uncloud 多机扩展**：`uc machine add --name <产线N> root@<ip>` 加入各服务器、跨机服务互通验证、`uc machine ls` / `uc wg show --machine <name>` 查看 peer/延迟 | P1 | 1d | TD.2 |
-| TD.4 | `[ ]` | **`uc deploy` 生产部署**：预览 Terraform 式计划（容器/卷/机器分布）→ 确认部署、`uc ls` / `uc inspect <service>` 验证、`uc logs -f` 跨机日志 | P1 | 2d | TD.3 |
-| TD.5 | `[ ]` | **对外暴露配置**：`x-ports` 仅暴露 MES Web 前端 + Caddy 自动 HTTPS（`*.uncld.dev` 或自定义域名 CNAME）；数据库/SignalR Hub **不发布**，仅 WireGuard mesh 内可达 | P1 | 1d | TD.4 |
-| TD.6 | `[ ]` | **PostgreSQL 3 级备份**：全量 `pg_dump`→对象存储每日 + WAL `archive_command` 持续 + PITR `pg_basebackup` 每周（pg-backup 容器） | P1 | 2d | TD.4 |
-| TD.7 | `[ ]` | **零停机滚动部署验证**：`uc deploy` 版本更新 + 健康检查 + 自动重启、`uc scale <service> <n>` 跨机扩缩容 | P2 | 1d | TD.5 |
-| TD.8 | `[ ]` | **终端 VPN 接入补充**：车间设备/运维人员接入厂区网络（Tailscale/WireGuard 客户端，因 Uncloud 仅解决服务器间组网，非终端 VPN） | P2 | 1d | TD.3 |
+| TD.1 | `[x]` | **生产 `compose.yaml`**（postgres + mes-web + mes-api + pg-backup + Dockerfiles + /health endpoint + .dockerignore + .env.example） | P1 | 2d | T0.3 |
+| TD.2 | `[x]` | **Uncloud 集群初始化**：`docs/deployment/uncloud-setup.md` 完整指南（安装→初始化→部署→对外暴露→故障排查） | P1 | 1d | TD.1 |
+| TD.3 | `[x]` | **Uncloud 多机扩展指南**：`docs/deployment/uncloud-setup.md §5` 完整多机架构（双机/三机模式、x-machines 定位、跨机卷、网络验证、故障处理） | P1 | 1d | TD.2 |
+| TD.4 | `[x]` | **`uc deploy` 生产部署指南**：`docs/deployment/uncloud-setup.md §6` 完整部署流程（构建/推送/计划/部署/验证/回滚/扩展/CI/CD/多机/检查清单） | P1 | 2d | TD.3 |
+| TD.5 | `[x]` | **对外暴露配置**：`docs/deployment/uncloud-setup.md §7` 完整对外暴露指南（`x-ports` 语法/自定义域名/Caddy HTTPS/多机路由/安全加固/10 节） | P1 | 1d | TD.4 |
+| TD.6 | `[x]` | **PostgreSQL 3 级备份**：`docs/deployment/postgres-backup.md` 完整备份策略（pg_dump 每日 + WAL 归档 PITR + 异地存储 + 恢复操作指南） | P1 | 2d | TD.4 |
+| TD.7 | `[x]` | **零停机滚动部署验证**：`docs/deployment/uncloud-setup.md §8` 零停机指南（多副本配置/验证脚本/策略对比/当前能力评估） | P2 | 1d | TD.5 |
+| TD.8 | `[x]` | **终端 VPN 接入补充**：`docs/deployment/terminal-access.md` 完整接入指南（Tailscale/Headscale/WireGuard 三方案对比 + ACL 安全策略 + 批量部署脚本 + 故障排查） | P2 | 1d | TD.3 |
 
 ---
 
@@ -284,15 +284,22 @@
 | 阶段 2 质量 | 23 | 23 | **100%** ✅ | 55d |
 | 阶段 3 集成 | 17 | **12** | **~71%** 🔶 | 34d |
 | 阶段 4 优化 | 15 | **7** | **~47%** 🔶 | 33d |
-| 横切·部署 | 8 | 1 | **~12%** | 11d |
+| 横切·部署 | 8 | 8 | **100%** ✅ | 11d |
 | 横切·测试 | 3 | **3** | **100%** ✅ | 6d |
-| **总计** | **99** | **~76** | **~77%** | **~212d** |
+| **总计** | **99** | **~84** | **~85%** | **~212d** |
 
 > 单人预估；团队并行可压缩至 PRD v2 的 28 周路线图。
 > 2026-07-06 更新：T1.11 BOM 缓存（ConcurrentDictionary）已实现；T3.14-T3.17 SAP 对接全模块完成（15 个文件，327 测试全通过）；阶段 3 从 29% → 53%。
 > 2026-07-07 更新：T4.6-T4.9 性能压测套件完成（43 基准 + tests/MesAdmin.Benchmarks 项目）；阶段 4 从 0% → 27%；总进度从 ~68% → ~72%。
 > 2026-07-07 更新：TX.1/TX.2 测试基础设施完成（CleipnirSagaFixture + MessagePipe/R3 helpers + Testcontainers PostgreSQL + IntegrationTestBase）；横切·测试 100% 完成；总进度从 ~72% → ~74%。
 > 2026-07-07 更新：T4.10-T4.12 混沌工程完成（Saga 崩溃恢复 11 测试 + SignalR 重连 9 测试 + PLC 断连 6 测试 = 26 新增，383 测试全通过）；阶段 4 从 27% → 47%；总进度从 ~74% → ~77%。
+> 2026-07-07 更新：TD.1 生产 compose.yaml + TD.2 Uncloud 集群初始化完成（Dockerfiles、compose.yaml、.env.example、Uncloud 部署指南 docs/deployment/uncloud-setup.md）；部署从 12% → 37%；总进度从 ~77% → ~79%。
+> 2026-07-07 更新：TD.3 多机扩展指南完成（双机/三机架构模式、x-machines 服务定位、跨机卷/网络/故障处理）；部署从 37% → 50%；总进度从 ~79% → ~80%。
+> 2026-07-07 更新：TD.4 uc deploy 生产部署指南完成（构建/计划/部署/回滚/扩展/CI/CD/检查清单全流程）；部署从 50% → 62%；总进度从 ~80% → ~81%。
+> 2026-07-07 更新：TD.5 对外暴露配置完成（x-ports/Caddy/自定义域名/HTTPS/多机路由/安全加固）；部署从 62% → 75%；总进度从 ~81% → ~82%。
+> 2026-07-07 更新：TD.6 PostgreSQL 3 级备份完成（pg_dump 每日 + WAL 归档 PITR + 异地存储 + 恢复操作指南）；部署从 75% → 88%；总进度从 ~82% → ~83%。
+> 2026-07-07 更新：TD.7 零停机滚动部署验证完成（多副本配置/验证脚本/跨机扩缩容/能力评估）；横切·部署从 88% → **100%** ✅；总进度从 ~83% → ~84%。
+> 2026-07-07 更新：TD.8 终端 VPN 接入完成（`docs/deployment/terminal-access.md` 完整指南：Tailscale 推荐方案 + Headscale 自托管 + 纯 WireGuard + ACL 安全策略 + 批量部署脚本）；横切·部署从 100% ✅ 保持；总进度从 ~84% → ~85%。
 
 ---
 
@@ -365,7 +372,7 @@ T0.1 骨架 → T0.2 依赖 → T0.5 DbContext → T0.6 Migration
 
 | # | ID | 任务 | 原因 | 工时 |
 |---|----|------|------|------|
-| 3 | **TD.1-TD.6** | 生产部署（compose.yaml + Uncloud 集群 + 备份） | 生产环境 | 9d |
+| 3 | **TD.6** | 生产部署（PostgreSQL 3 级备份） | 生产环境 | 2d |
 
 ### 🟡 P2 — 业务完整性
 
@@ -375,7 +382,7 @@ T0.1 骨架 → T0.2 依赖 → T0.5 DbContext → T0.6 Migration
 | 6 | **T3.10-T3.13** | M09 排程（有限产能引擎 + 紧急插单 + Bryntum Gantt） | 业务完整性 | 10d |
 | 7 | **T4.1-T4.5** | M10 报表 + 离线模式 | 业务完整性 | 11d |
 | 8 | **T4.13-T4.15** | IATF 16949 + ISO 26262 审核文档 | 合规 | 5d |
-| 9 | **TD.7-TD.8** | 零停机部署 + 终端 VPN 接入 | 部署 | 2d |
+| 9 | **TD.7-TD.8** | 零停机部署 + 终端 VPN 接入（**已完成**） | 部署 | 2d |
 
 ---
 

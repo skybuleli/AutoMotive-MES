@@ -1,0 +1,36 @@
+# ── .NET ──
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+*.userprefs
+*.cache
+*.log
+TestResults/
+[Bb]uild[Ll]og.*
+
+# ── NuGet ──
+*.nupkg
+*.snupkg
+.nuget/
+
+# ── IDE ──
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+
+# ── Docker ──
+docker/data/
+docker/volumes/
+
+# ── 环境与密钥 ──
+.env
+.env.*
+*.pem
+*.key
+
+# ── 测试项目（运行时不需要）──
+tests/

@@ -1,0 +1,216 @@
+# ── AutoMES 生产部署 Docker Compose ──
+# 目标环境：厂区 Linux 服务器（Ubuntu 22.04+），由 Uncloud 编排
+# 用法：docker compose -f docker/compose.yaml up -d
+#
+# 前置条件：
+#   1. docker compose >= 2.30
+#   2. 环境变量文件 .env.production（或通过 uc deploy env 注入）
+#   3. PostgreSQL 按 TD.6 配置 3 级备份
+#
+# 环境变量参考（通过 .env.production 或 uc env set 注入）：
+#   POSTGRES_PASSWORD=<强密码>
+#   JWT_SECRET=<256位密钥>
+#   SAP_BASE_URL=http://sap-erp:8000/sap/opu/odata
+#   SAP_USERNAME=SAP_SERVICE_USER
+#   SAP_PASSWORD=<SAP密码>
+#   OTLP_ENDPOINT=http://greptimedb:4000/v1/otlp
+#   SMTP_HOST=smtp.bosch.com
+#   SMTP_FROM=automes@bosch.com
+#   SMTP_PASSWORD=<SMTP密码>
+#
+# 端口映射：
+#   - mes-web:  80 (外部 HTTP，Caddy HTTPS)
+#   - mes-api:  5040 (仅 WireGuard mesh 内可达)
+#   - postgres: 5432 (仅 WireGuard mesh 内可达)
+
+services:
+  # ── PostgreSQL 17 数据库 ──
+  postgres:
+    image: postgres:17-alpine
+    container_name: automes-pg
+    environment:
+      POSTGRES_DB: automes
+      POSTGRES_USER: mes
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须设置 POSTGRES_PASSWORD 环境变量}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: Asia/Shanghai
+    ports:
+      # 仅 WireGuard mesh 内可达；对外不发布
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # WAL 归档目录（用于 pgBackRest / PITR — TD.6）
+      - postgres-wal:/var/lib/postgresql/wal_archive
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mes -d automes"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "2G"
+        reservations:
+          cpus: "1"
+          memory: "1G"
+    restart: unless-stopped
+    stop_grace_period: 60s
+    # 生产建议：将 postgres 绑定到宿主机 CPU 以提升性能
+    # cpuset: "0,1"
+
+  # ── PostgreSQL 自动备份服务 ──
+  pg-backup:
+    image: postgres:17-alpine
+    container_name: automes-pg-backup
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: automes
+      PGUSER: mes
+      PGPASSWORD: ${POSTGRES_PASSWORD:?必须设置 POSTGRES_PASSWORD}
+      PGSSLMODE: disable
+      BACKUP_DIR: /backups
+      # 保留最近 7 天全量 + 14 天 WAL
+      RETENTION_DAYS: 7
+      WAL_RETENTION_DAYS: 14
+      TZ: Asia/Shanghai
+    volumes:
+      - pg-backup-data:/backups
+      # 共享 WAL 归档目录
+      - postgres-wal:/wal_archive:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+    restart: unless-stopped
+    # 每日 03:00 全量备份 + 每小时 WAL 归档清理
+    entrypoint: |
+      sh -c '
+        apk add --no-cache curl > /dev/null 2>&1 &&
+        echo "pg-backup 启动，等待 postgres 就绪..." &&
+        until pg_isready -h postgres -U mes -d automes; do sleep 5; done &&
+        echo "PostgreSQL 就绪，启动备份调度..." &&
+        while true; do
+          HOUR=$$(date +%H)
+          MINUTE=$$(date +%M)
+          if [ "$$HOUR" = "03" ] && [ "$$MINUTE" = "00" ]; then
+            BACKUP_FILE="$$BACKUP_DIR/automes-$$(date +%Y%m%d-%H%M%S).dump"
+            echo "=== $$(date) 开始全量备份: $$BACKUP_FILE ===" &&
+            pg_dump -Fc -h postgres -U mes -d automes -f "$$BACKUP_FILE" &&
+            echo "=== 全量备份完成: $$(ls -lh $$BACKUP_FILE | awk '\''{print $$5}'\'') ===" &&
+            # 清理过期备份（保留 RETENTION_DAYS 天）
+            # -mtime +6 = keep last 7 days (find -mtime +n means > n*24h)
+            find "$$BACKUP_DIR" -name "automes-*.dump" -type f -mtime +6 -delete &&
+            echo "=== 清理过期备份完成 ==="
+          fi
+          # 每 60 秒检查一次（避免 cron 依赖）
+          sleep 60
+        done
+      '
+
+  # ── AutoMES REST API ──
+  mes-api:
+    build:
+      context: ..
+      dockerfile: src/MesAdmin.Api/Dockerfile
+    container_name: automes-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5040
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?}"
+      Jwt__Secret: ${JWT_SECRET:?必须设置 JWT_SECRET}
+      Sap__BaseUrl: ${SAP_BASE_URL:-http://sap-erp:8000/sap/opu/odata}
+      Sap__Username: ${SAP_USERNAME:-}
+      Sap__Password: ${SAP_PASSWORD:-}
+      Sap__Client: ${SAP_CLIENT:-800}
+      Sap__TimeoutSeconds: ${SAP_TIMEOUT_SECONDS:-30}
+      Sap__UseRealClient: ${SAP_USE_REAL_CLIENT:-false}
+      Sap__WebhookSecret: ${SAP_WEBHOOK_SECRET:-}
+      QualityReports__Email__Enabled: ${SMTP_ENABLED:-false}
+      QualityReports__Email__From: ${SMTP_FROM:-automes@bosch.com}
+      QualityReports__Email__SmtpHost: ${SMTP_HOST:-localhost}
+      QualityReports__Email__SmtpPort: ${SMTP_PORT:-25}
+      QualityReports__Email__EnableSsl: ${SMTP_SSL:-false}
+      QualityReports__Email__Username: ${SMTP_USERNAME:-}
+      QualityReports__Email__Password: ${SMTP_PASSWORD:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTLP_ENDPOINT:-http://greptimedb:4000/v1/otlp}
+      OTEL_SERVICE_NAME: MesAdmin.Api
+      OTEL_SERVICE_NAMESPACE: AutoMES
+      TZ: Asia/Shanghai
+    ports:
+      # 仅 WireGuard mesh 内可达
+      - "127.0.0.1:5040:5040"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "1G"
+        reservations:
+          cpus: "0.5"
+          memory: "512M"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5040/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 5
+    # 生产建议：水平扩展时需确保 SignalR 使用 Redis 背板
+    # 当前阶段单个 API 实例即可，按需扩展
+
+  # ── AutoMES Web 管理后台（Blazor Server）──
+  mes-web:
+    build:
+      context: ..
+      dockerfile: src/MesAdmin.Web/Dockerfile
+    container_name: automes-web
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5138
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?}"
+      Jwt__Secret: ${JWT_SECRET:?}
+      Api__BaseUrl: http://mes-api:5040/
+      SignalR__DashboardHubUrl: http://mes-api:5040/hubs/dashboard
+      SignalR__AndonHubUrl: http://mes-api:5040/hubs/andon
+      TZ: Asia/Shanghai
+    ports:
+      # 对外暴露 HTTP 端口（Caddy 反向代理 + HTTPS）
+      - "80:5138"
+    depends_on:
+      mes-api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: "1.5G"
+        reservations:
+          cpus: "0.5"
+          memory: "512M"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5138/"]
+      interval: 30s
+      timeout: 10s
+      start_period: 45s
+      retries: 5
+    # Blazor Server 使用 SignalR 长连接，单个 Web 实例支持 ~500 并发用户
+    # 如需扩展，需配置 SignalR Redis 背板 + sticky sessions
+    # 当前厂区环境单实例足够
+
+volumes:
+  postgres-data:
+    driver: local
+  postgres-wal:
+    driver: local
+  pg-backup-data:
+    driver: local

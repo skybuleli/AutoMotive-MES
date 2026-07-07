@@ -186,6 +186,15 @@ using (var scope = app.Services.CreateScope())
     await MesDataSeeder.SeedAsync(app.Services, app.Services.GetRequiredService<ILogger<Program>>());
 }
 
+// ── 健康检查端点（所有环境，用于 Docker HEALTHCHECK）──
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "healthy",
+    service = "MesAdmin.Api",
+    timestamp = DateTime.UtcNow
+}))
+    .ExcludeFromDescription();   // 不出现在 Swagger 文档中
+
 // ── 中间件管道 ──
 app.UseAuthentication();
 app.UseAuthorization();
