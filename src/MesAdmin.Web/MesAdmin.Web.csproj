@@ -21,6 +21,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
     <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+    <NoWarn>MUD0002</NoWarn>
   </PropertyGroup>
 
 </Project>

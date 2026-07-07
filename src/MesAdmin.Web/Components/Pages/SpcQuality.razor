@@ -539,8 +539,6 @@
     private string _selectedCharCode = "TOR-M6";
     private List<SpcSampleDto> _spcSamples = [];
     private List<SpcAlertDto> _spcAlerts = [];
-    private bool _chartInitialized;
-
     private static readonly string[] CharacteristicOptions =
         ["TOR-M6", "TOR-M8", "HYD-01", "HYD-02", "HYD-03", "ELE-01", "ELE-02", "DIM-01"];
 
@@ -659,7 +657,6 @@
 
         await JSRuntime.InvokeVoidAsync("spcCharts.initXbarRChart", "xbarChart", chartData);
         await JSRuntime.InvokeVoidAsync("spcCharts.initRChart", "rChart", chartData);
-        _chartInitialized = true;
     }
 
     // ═══════════════════════════════════════════════════════════════

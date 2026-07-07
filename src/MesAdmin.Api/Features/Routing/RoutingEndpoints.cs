@@ -71,7 +71,7 @@ public class GetActiveRoutingEndpoint : MesEndpointWithoutRequest<RoutingRespons
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var productCode = Query<string>("productCode");
+        var productCode = Query<string>("productCode")!;
         if (string.IsNullOrWhiteSpace(productCode))
         {
             AddError("productCode", "产品编码不能为空");

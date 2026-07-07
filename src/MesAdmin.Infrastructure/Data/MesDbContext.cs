@@ -57,6 +57,9 @@ public class MesDbContext : DbContext
     // ── SAP 工单同步记录 (T3.14) ──
     public DbSet<SapOrderSyncRecord> SapOrderSyncRecords => Set<SapOrderSyncRecord>();
 
+    // ── 终端离线同步记录 (T4.4) ──
+    public DbSet<OfflineSyncRecord> OfflineSyncRecords => Set<OfflineSyncRecord>();
+
     // ═══════════════════════════════════════════════════════════
     //  M08 SQE 供应商质量模块实体配置 (T3.6-T3.8)
     // ═══════════════════════════════════════════════════════════
@@ -893,6 +896,35 @@ public class MesDbContext : DbContext
             b.Property(s => s.Remarks).HasMaxLength(256);
             b.Property(s => s.CreatedAt).HasColumnType("timestamptz");
             b.Property(s => s.UpdatedAt).HasColumnType("timestamptz");
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        //  T4.4 终端离线同步记录
+        // ═══════════════════════════════════════════════════════════
+
+        // ── offline_sync_records 表 ──
+        modelBuilder.Entity<OfflineSyncRecord>(b =>
+        {
+            b.ToTable("offline_sync_records");
+            b.HasKey(r => r.Id);
+            b.Property(r => r.Id).HasConversion<UlidToGuidConverter>();
+            b.Property(r => r.TerminalId).HasMaxLength(32).IsRequired();
+            b.HasIndex(r => r.TerminalId).HasDatabaseName("idx_offline_terminal");
+            b.Property(r => r.OperationType).HasMaxLength(32).IsRequired();
+            b.HasIndex(r => r.OperationType).HasDatabaseName("idx_offline_op_type");
+            b.Property(r => r.EntityType).HasMaxLength(32).IsRequired();
+            b.HasIndex(r => r.EntityType).HasDatabaseName("idx_offline_entity_type");
+            b.Property(r => r.EntityId).HasMaxLength(64);
+            b.HasIndex(r => r.EntityId).HasDatabaseName("idx_offline_entity_id");
+            b.Property(r => r.Status).HasMaxLength(16).IsRequired();
+            b.HasIndex(r => r.Status).HasDatabaseName("idx_offline_status");
+            b.Property(r => r.ErrorMessage).HasMaxLength(512);
+            b.Property(r => r.ConflictResolution).HasMaxLength(16);
+            b.Property(r => r.OperationTimestamp).HasColumnType("timestamptz");
+            b.Property(r => r.CreatedAt).HasColumnType("timestamptz");
+            b.HasIndex(r => r.CreatedAt).HasDatabaseName("idx_offline_created_at");
+            b.Property(r => r.LastAttemptAt).HasColumnType("timestamptz");
+            b.Property(r => r.SyncedAt).HasColumnType("timestamptz");
         });
 
         // ═══════════════════════════════════════════════════════════

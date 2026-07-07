@@ -301,9 +301,9 @@ public class ChannelBackpressureTests
             {
                 // 正常关闭
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is InvalidOperationException or ChannelClosedException)
             {
-                // 异常被捕获，不应扩散
+                // 预期异常被捕获，不应扩散
             }
         });
 

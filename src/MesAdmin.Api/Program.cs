@@ -22,6 +22,7 @@ using MesAdmin.Infrastructure.Workflows;
 using MesAdmin.Infrastructure.Security;
 using MesAdmin.Infrastructure.Reports;
 using MesAdmin.Infrastructure.RealTime;
+using MesAdmin.Infrastructure.Sync;
 using MesAdmin.Infrastructure.Data.Repositories;
 using FluentEmail.Smtp;
 using OpenTelemetry.Exporter;
@@ -89,6 +90,29 @@ builder.Services.AddFluentEmail(builder.Configuration["QualityReports:Email:From
 builder.Services.AddSingleton<PdfReportGenerator>();
 builder.Services.AddSingleton<QualityReportService>();
 builder.Services.AddHostedService<QualityReportService>(sp => sp.GetRequiredService<QualityReportService>());
+
+// ── 报表引擎服务（T4.1 + T4.2）──
+builder.Services.AddSingleton<OeeReportStore>();
+builder.Services.AddSingleton<ReportDataSourceService>();
+builder.Services.AddSingleton<ReportEngineService>();
+
+// ── OEE 日报定时推送（T4.2）──
+builder.Services.AddSingleton<OeeDailyBackgroundService>();
+builder.Services.AddHostedService<OeeDailyBackgroundService>(sp => sp.GetRequiredService<OeeDailyBackgroundService>());
+
+// ── 综合月报定时推送（T4.3）──
+builder.Services.AddSingleton<MonthlyBackgroundService>();
+builder.Services.AddHostedService<MonthlyBackgroundService>(sp => sp.GetRequiredService<MonthlyBackgroundService>());
+
+// ── T4.4 离线缓存同步 ──
+builder.Services.AddScoped<IOfflineSyncRepository, OfflineSyncRepository>();
+builder.Services.AddSingleton<OfflineSyncService>();
+builder.Services.AddHostedService<OfflineCacheBackgroundService>();
+
+// ── T4.5 断网重连自动同步 ──
+builder.Services.AddSingleton<SagaReconciliationService>();
+builder.Services.AddSingleton<OfflineReplayService>();
+builder.Services.AddHostedService<ReconnectionBackgroundService>();
 
 // ── 100% 在线液压测试管道（T2.6）──
 builder.Services.AddScoped<IHydraulicTestRepository, HydraulicTestRepository>();

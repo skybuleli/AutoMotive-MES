@@ -265,7 +265,7 @@ public class ConsumeSparePartEndpoint : MesEndpoint<ConsumeSparePartRequest, Spa
             ThrowIfAnyErrors();
         }
 
-        if (!part.Consume(req.Quantity))
+        if (!part!.Consume(req.Quantity))
         {
             AddError($"备件库存不足，当前库存 {part.CurrentQuantity}，需求 {req.Quantity}");
             ThrowIfAnyErrors();
@@ -489,7 +489,7 @@ public class CreatePurchaseRequestEndpoint : MesEndpoint<CreatePurchaseRequestRe
             ThrowIfAnyErrors();
         }
 
-        var quantity = req.Quantity ?? part.SuggestedPurchaseQuantity;
+        var quantity = req.Quantity ?? part!.SuggestedPurchaseQuantity;
         var pr = PurchaseRequest.Create(
             Ulid.NewUlid(),
             partId,

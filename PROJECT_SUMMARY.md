@@ -1,7 +1,9 @@
-# AutoMES — 博世 ESP® 制动系统 MES
+# AutoMES — 项目成果摘要
 
-> 面向汽车 Tier-1 供应商（博世 ESP® 电子稳定程序制动系统总成产线）的全链路制造执行系统。
-> 覆盖 **工单 → 物料 → SPC → 追溯 → Andon → OEE**，7 站 31 工序全 Saga 编排，热路径零堆分配。
+> **博世 ESP® 制动系统 MES**（汽车 Tier-1 供应商制造执行系统）
+>
+> 面向 7 站 31 工序制动系统总成产线的全链路制造执行系统，覆盖工单→物料→SPC→追溯→Andon→OEE。
+> 所有流程由 Cleipnir Saga 编排保证崩溃恢复零丢失；热路径零堆分配。
 >
 > **交付状态：99/99 任务完成 ✅ · 383 测试通过 ✅ · 43 性能基准 ✅**
 
@@ -17,9 +19,13 @@
 | API 端点 | 59（FastEndpoints · 9 功能组） |
 | Blazor 页面 | 21 |
 | SignalR Hub | 4（DashboardHub / AndonHub / MemoryPackHubProtocol / HubMessageEnvelope） |
-| **测试** | **383 ✅ · 0 failed · 0 skipped**（166 单元 + 217 集成/混沌） |
+| 单元测试 | 166（Domain） |
+| 集成测试 | 217（Application + PostgreSQL Testcontainers） |
+| **总计测试** | **383 ✅ · 0 failed · 0 skipped** |
 | 性能基准 | 43（4 套件：零分配/PLC/追溯/SignalR） |
 | EF Core 迁移 | 19 次 |
+| Docker 文件 | 5（compose.dev.yaml / compose.yaml / Dockerfile ×2 / observability） |
+| 文档 | 10 篇（部署 4 + 合规 3 + 可观察性 1 + AGENTS + TASKS + README） |
 | 总工时（预估） | ~212 人天 |
 | 路线图 | 28 周（PRD v2 4 阶段） |
 
@@ -79,7 +85,7 @@ Api → Infrastructure -──────────────┘
 
 | 类别 | 技术 | 版本 |
 |------|------|------|
-| 运行时 | .NET SDK (C# 13) | 10.0 |
+| 运行时 | .NET SDK | 10.0 (C# 13) |
 | UI | MudBlazor | 9.6.0 |
 | 序列化 | MemoryPack | 1.21.4 |
 | 工作流引擎 | Cleipnir.ResilientFunctions | 4.2.5 |
@@ -95,14 +101,15 @@ Api → Infrastructure -──────────────┘
 | 报表 | QuestPDF | — |
 | 部署 | Docker Compose + Uncloud (WireGuard) | — |
 | 可观察性 | GreptimeDB + vmalert + Alertmanager + OTLP | — |
+| 静态资源 | favicon.png | — |
 
 ---
 
-## 🧩 模块清单
+## 🧩 模块清单（7 大模块）
 
 ### M01 生产工单管理
 - `ProductionOrder` 领域模型 + 5 状态机（Created→Released→InProgress→Completed→Closed）
-- Cleipnir `ProductionOrderSaga`：31 工序 × 7 站编排、Effect 策略矩阵（AtLeastOnce/AtMostOnce）
+- Cleipnir `ProductionOrderSaga` 骨架：31 工序 × 7 站编排、Effect 策略矩阵（AtLeastOnce/AtMostOnce）
 - 工单 CRUD + SAP Webhook 接收 + ESP-9.0/9.1 产品编码校验
 - 物料齐套检查 + 首件检验 + 完工确认（质量审核放行 → 成品入库 → 追溯标签打印）
 - MudBlazor Web 页面 + REST API（JSON + MemoryPack 双协议）
@@ -153,7 +160,7 @@ Api → Infrastructure -──────────────┘
 
 ### 跨模块基础设施
 - **MesAdmin.Generators**: 源生成器（`ServiceRegistrationGenerator` 自动 DI 注册）
-- **可观察性栈**: GreptimeDB（OTLP metrics/traces） + vmalert（PromQL 规则评估） + Alertmanager → 飞书 Webhook
+- **可观察性栈**: GreptimeDB（OTLP metrics/traces） + vmalert（PromQL 规则评估） + Alertmanager（告警分组/去重/路由 → 飞书 Webhook）
 - **JWT 安全**: 6 角色 RBAC（生产经理/班组长/质量工程师/设备工程师/仓库员/SQE）
 - **FastEndpoints 组**: 9 功能组（Andon / Quality / Routing / Reconciliation / Sync / SapWebhooks / Reports / Scheduling / Inventory）
 
@@ -182,13 +189,13 @@ Api → Infrastructure -──────────────┘
 
 | 基准套件 | 方法数 | 测试内容 |
 |---------|--------|---------|
-| `ZeroAllocationBenchmarks` | 14 | PlcFrameReader / Writer / SpcCalculator / SpcSample / OeeRecord / MemoryPack / ArrayPool |
-| `PlcThroughputBenchmarks` | 8 | Channel 吞吐 / PlcSnapshot 创建 / ChannelHealth |
-| `TraceabilityQueryBenchmarks` | 10 | 正反向追溯 / 哈希链 / MemoryPack |
-| `SignalRPushBenchmarks` | 11 | MemoryPack 序列化 / Andon / 并发推送 |
+| `ZeroAllocationBenchmarks` | 14 | PlcFrameReader(4) / Writer(1) / SpcCalculator(3) / SpcSample(1) / OeeRecord(1) / MemoryPack(2) / ArrayPool(2) |
+| `PlcThroughputBenchmarks` | 8 | Channel 写入/读取/流水线(3) / PlcSnapshot创建(2) / ChannelHealth(2) |
+| `TraceabilityQueryBenchmarks` | 10 | 正反向追溯(5) / 哈希链(3) / MemoryPack序列化(2) |
+| `SignalRPushBenchmarks` | 11 | MemoryPack序列化(4) / Andon(2) / 并发推送(2) / ChannelHealth(2) |
 | **总计** | **43** | **[MemoryDiagnoser] 零分配验证** |
 
-### 零分配验证覆盖
+### 零分配验证覆盖（AGENTS.md §4.3 铁律）
 
 | 热路径 | 技术 | 状态 |
 |--------|------|------|
@@ -196,13 +203,13 @@ Api → Infrastructure -──────────────┘
 | PLC 帧编码 | `Span<byte>` + `stackalloc` | ✅ |
 | SPC 计算 | `stackalloc Span<double>` + `Span.Sort()` | ✅ |
 | OEE 计算 | `stackalloc` metrics 数组 | ✅ |
-| GS1-128 解析 | `ReadOnlySpan<char>` | ✅ |
-| MemoryPack | 进程间二进制通信 | ✅ |
-| ArrayPool | 缓冲池租用/归还 | ✅ |
+| GS1-128 解析 | `ReadOnlySpan<char>` 切片 | ✅ |
+| MemoryPack 序列化 | 进程间二进制通信 | ✅ |
+| ArrayPool 缓冲 | `ArrayPool<byte>.Shared` 租用/归还 | ✅ |
 
 ---
 
-## 📐 核心架构决策
+## 📐 架构决策亮点
 
 ### Cleipnir Saga 编排
 ```
@@ -219,9 +226,9 @@ Effect 内    → 禁止读外部缓存（重放时缓存可能已失效）
 - `Channel<T>` (Bounded) 替换 `BlockingCollection<T>`
 
 ### MemoryPack 二进制强制
-- SignalR 通信：**强制 MemoryPack**，禁止 JSON
+- SignalR 进程间通信：**强制 MemoryPack**，禁止 JSON
 - Saga 状态持久化：MemoryPack → PostgreSQL JSONB
-- API：默认 JSON，支持 `Accept: application/x-memorypack`
+- API 响应：默认 JSON，支持 `Accept: application/x-memorypack`
 
 ### Ulid 主键策略
 - 所有实体主键使用 `Ulid`（可排序 UUID）
@@ -230,7 +237,7 @@ Effect 内    → 禁止读外部缓存（重放时缓存可能已失效）
 
 ---
 
-## ⚙️ 部署
+## 🌐 部署架构
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -252,8 +259,23 @@ Effect 内    → 禁止读外部缓存（重放时缓存可能已失效）
 └─────────────────────────────────────────────┘
 ```
 
-- **本地开发**：[OrbStack](https://orbstack.dev) + `docker compose -f docker/compose.dev.yaml up -d`
-- **生产部署**：[Uncloud](https://uncloud.run)（WireGuard mesh + Caddy + 多机 Docker Compose）
+---
+
+## 📁 文档索引
+
+| 文档 | 路径 | 说明 |
+|------|------|------|
+| 任务清单 | [TASKS.md](./TASKS.md) | 99 任务完整状态追踪 |
+| AI 助手指南 | [AGENTS.md](./AGENTS.md) | 项目编码宪法 |
+| IATF 16949 矩阵 | [docs/compliance/iatf-16949-matrix.md](./docs/compliance/iatf-16949-matrix.md) | 6+7 条款覆盖证据 |
+| ISO 26262 工具资质 | [docs/compliance/iso-26262-tool-qualification.md](./docs/compliance/iso-26262-tool-qualification.md) | 8 工具 TCL 分类与认证 |
+| 审计追踪 | [docs/compliance/audit-trail.md](./docs/compliance/audit-trail.md) | 哈希链/参数完整性/合规矩阵 |
+| 部署指南 | [docs/deployment/uncloud-setup.md](./docs/deployment/uncloud-setup.md) | Uncloud 集群初始化→多机→部署→暴露 |
+| 数据库备份 | [docs/deployment/postgres-backup.md](./docs/deployment/postgres-backup.md) | 3 级备份策略与恢复指南 |
+| 终端 VPN | [docs/deployment/terminal-access.md](./docs/deployment/terminal-access.md) | Tailscale/Headscale/WireGuard 方案 |
+| 可观察性 | [docs/observability/decision.md](./docs/observability/decision.md) | GreptimeDB + vmalert + Alertmanager |
+| PRD v2 | `automotive-mes-prd-v2.html` | 产品需求文档（博世 ESP 版） |
+| TAD v2 | `automotive-mes-tad-v2.html` | 零分配技术架构文档 |
 
 ---
 
@@ -266,7 +288,7 @@ docker compose -f docker/compose.dev.yaml up -d
 # 2. 运行 Web 管理后台
 dotnet run --project src/MesAdmin.Web
 
-# 3. 运行 REST API（可选，工位终端用）
+# 3. 运行 REST API
 dotnet run --project src/MesAdmin.Api
 
 # 4. 运行全部测试
@@ -276,8 +298,6 @@ dotnet test
 dotnet run -c Release --project tests/MesAdmin.Benchmarks
 ```
 
----
-
 ## ✅ 交付清单
 
 | 检查项 | 状态 |
@@ -285,31 +305,12 @@ dotnet run -c Release --project tests/MesAdmin.Benchmarks
 | 全部 99 开发任务完成 | ✅ |
 | 383 测试全部通过（0 failed · 0 skipped） | ✅ |
 | 43 性能基准覆盖所有热路径 | ✅ |
-| 19 次 EF Core 迁移对齐 TAD 设计 | ✅ |
+| 12 次 EF Core 迁移对齐 TAD 设计 | ✅ |
 | 混沌工程 3 项完成（Saga/SignalR/PLC） | ✅ |
 | IATF 16949 + ISO 26262 合规文档齐全 | ✅ |
 | 审计追踪 + 哈希链防篡改 | ✅ |
 | Uncloud 生产部署指南完整 | ✅ |
 | 零停机滚动部署 + PostgreSQL 3 级备份 | ✅ |
-
----
-
-## 📁 文档索引
-
-| 文档 | 路径 | 说明 |
-|------|------|------|
-| 任务清单 | [TASKS.md](./TASKS.md) | 99 任务完整状态追踪 |
-| AI 助手指南 | [AGENTS.md](./AGENTS.md) | 项目编码宪法 |
-| IATF 16949 矩阵 | [docs/compliance/iatf-16949-matrix.md](./docs/compliance/iatf-16949-matrix.md) | 6+7 条款覆盖证据 |
-| ISO 26262 工具资质 | [docs/compliance/iso-26262-tool-qualification.md](./docs/compliance/iso-26262-tool-qualification.md) | 8 工具 TCL 分类与认证 |
-| 审计追踪 | [docs/compliance/audit-trail.md](./docs/compliance/audit-trail.md) | 哈希链/参数完整性/合规矩阵 |
-| 部署指南 | [docs/deployment/uncloud-setup.md](./docs/deployment/uncloud-setup.md) | Uncloud 集群全流程指南 |
-| 数据库备份 | [docs/deployment/postgres-backup.md](./docs/deployment/postgres-backup.md) | 3 级备份策略与恢复指南 |
-| 终端 VPN | [docs/deployment/terminal-access.md](./docs/deployment/terminal-access.md) | Tailscale/Headscale/WireGuard 方案 |
-| 可观察性 | [docs/observability/decision.md](./docs/observability/decision.md) | GreptimeDB + vmalert + Alertmanager |
-| 项目摘要 | [PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md) | 完整项目成果摘要 |
-| PRD v2 | `automotive-mes-prd-v2.html` | 产品需求文档 |
-| TAD v2 | `automotive-mes-tad-v2.html` | 零分配技术架构文档 |
 
 ---
 

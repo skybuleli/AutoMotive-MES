@@ -43,6 +43,7 @@ public sealed class CleipnirSagaFixture
         string functionTypeId,
         Func<TParam, Workflow, Task> sagaExecute,
         InMemoryFunctionStore? existingStore = null)
+        where TParam : notnull
     {
         var store = existingStore ?? new InMemoryFunctionStore();
         await store.Initialize();

@@ -6,9 +6,10 @@ using QuestPDF.Infrastructure;
 namespace MesAdmin.Infrastructure.Reports;
 
 /// <summary>
-/// 质量报表 PDF 生成器（T2.9）。
-/// 使用 QuestPDF 生成专业格式的质量日报/周报/月报 PDF。
-/// 包含：表头 + 产量KPI + 不良品分布表 + SPC Cpk 汇总 + 供应商质量（月报）+ 质量成本（月报）。
+/// 报表 PDF 生成器（T2.9 原有 + T4.1 通用模板渲染增强）。
+/// 支持两种渲染模式：
+/// 1. 原有 QualityReportData 渲染（向后兼容）
+/// 2. 通用 ReportRenderData + ReportTemplate 渲染（模板驱动）
 /// </summary>
 public sealed class PdfReportGenerator
 {
@@ -17,7 +18,11 @@ public sealed class PdfReportGenerator
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
-    /// <summary>生成质量报表 PDF 字节数组</summary>
+    // ═══════════════════════════════════════════════════════════
+    //  原有渲染（质量报表专用，向后兼容）
+    // ═══════════════════════════════════════════════════════════
+
+    /// <summary>生成质量报表 PDF 字节数组（T2.9 原有）</summary>
     public byte[] GenerateReportPdf(QualityReportData data)
     {
         var periodLabel = data.Period switch
@@ -36,35 +41,77 @@ public sealed class PdfReportGenerator
                 page.Margin(20);
                 page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Inter Tight"));
 
-                // ── 表头 ──
                 page.Header().Element(h => BuildHeader(h, data, periodLabel));
+                page.Content().Column(col =>
+                {
+                    col.Spacing(10);
+                    col.Item().Element(e => BuildYieldSection(e, data));
+                    if (data.DefectDistribution.Count > 0)
+                        col.Item().Element(e => BuildDefectSection(e, data));
+                    if (data.SpcSummaries.Count > 0)
+                        col.Item().Element(e => BuildSpcSection(e, data));
+                    if (data.SupplierSummaries?.Count > 0)
+                        col.Item().Element(e => BuildSupplierSection(e, data));
+                    if (data.QualityCosts is not null)
+                        col.Item().Element(e => BuildCostSection(e, data));
+                    col.Item().Element(e => BuildEightDSection(e, data));
+                });
+
+                page.Footer().AlignCenter().Text(text =>
+                {
+                    text.Span("AutoMES 博世 ESP 质量管理系统 · ").FontSize(8).FontColor(Colors.Grey.Medium);
+                    text.Span($"生成时间 {data.GeneratedAt.ToLocalTime():yyyy-MM-dd HH:mm}").FontSize(8).FontColor(Colors.Grey.Medium);
+                });
+            });
+        }).GeneratePdf();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  通用模板渲染（T4.1）
+    // ═══════════════════════════════════════════════════════════
+
+    /// <summary>根据模板和数据生成通用 PDF 报告</summary>
+    public byte[] RenderTemplate(ReportTemplate template, ReportRenderData data)
+    {
+        return Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(20);
+                page.DefaultTextStyle(x => x.FontSize(10).FontFamily("Inter Tight"));
+
+                // ── 表头 ──
+                page.Header().Element(h => BuildGenericHeader(h, data));
 
                 // ── 内容 ──
                 page.Content().Column(col =>
                 {
                     col.Spacing(10);
 
-                    // 产量概览 KPI
-                    col.Item().Element(e => BuildYieldSection(e, data));
+                    foreach (var section in template.Sections)
+                    {
+                        switch (section.Layout)
+                        {
+                            case SectionLayout.KpiRow:
+                                if (data.KpiCards.TryGetValue(section.DataSourceKey ?? section.Id, out var kpiCards) && kpiCards.Count > 0)
+                                    col.Item().Element(e => BuildKpiRowSection(e, section.Title, kpiCards));
+                                break;
 
-                    // 不良品分布
-                    if (data.DefectDistribution.Count > 0)
-                        col.Item().Element(e => BuildDefectSection(e, data));
+                            case SectionLayout.Table:
+                                if (data.Tables.TryGetValue(section.DataSourceKey ?? section.Id, out var rows) && rows.Count > 0)
+                                {
+                                    var columns = data.TableColumns.GetValueOrDefault(section.DataSourceKey ?? section.Id, []);
+                                    col.Item().Element(e => BuildTableSection(e, section.Title, columns, rows));
+                                }
+                                break;
 
-                    // SPC 能力汇总
-                    if (data.SpcSummaries.Count > 0)
-                        col.Item().Element(e => BuildSpcSection(e, data));
-
-                    // 供应商质量（月度）
-                    if (data.SupplierSummaries?.Count > 0)
-                        col.Item().Element(e => BuildSupplierSection(e, data));
-
-                    // 质量成本（月度）
-                    if (data.QualityCosts is not null)
-                        col.Item().Element(e => BuildCostSection(e, data));
-
-                    // 8D 闭环
-                    col.Item().Element(e => BuildEightDSection(e, data));
+                            case SectionLayout.Text:
+                                if (data.Texts.TryGetValue(section.DataSourceKey ?? section.Id, out var text))
+                                    col.Item().Element(e => BuildTextSection(e, section.Title, text));
+                                break;
+                        }
+                    }
                 });
 
                 // ── 页脚 ──
@@ -76,6 +123,103 @@ public sealed class PdfReportGenerator
             });
         }).GeneratePdf();
     }
+
+    // ═══════════════════════════════════════════════════════════
+    //  通用模板渲染辅助方法
+    // ═══════════════════════════════════════════════════════════
+
+    private static void BuildGenericHeader(IContainer container, ReportRenderData data)
+    {
+        container.Column(col =>
+        {
+            col.Spacing(4);
+            col.Item().Row(row =>
+            {
+                row.RelativeItem().AlignLeft().Text("AutoMES 质量管理系统").FontSize(16).Bold();
+                row.RelativeItem().AlignRight().Text(data.Title).FontSize(14).Bold().FontColor(Colors.Blue.Medium);
+            });
+            col.Item().LineHorizontal(1).LineColor(Colors.Blue.Medium);
+            col.Item().Text($"报告范围：{data.StartDate.ToLocalTime():yyyy-MM-dd HH:mm} — {data.EndDate.ToLocalTime():yyyy-MM-dd HH:mm}")
+                .FontSize(9).FontColor(Colors.Grey.Medium);
+        });
+    }
+
+    private static void BuildKpiRowSection(IContainer container, string title, List<KpiCard> cards)
+    {
+        container.Column(col =>
+        {
+            col.Spacing(4);
+            col.Item().Text(title).FontSize(12).Bold();
+            col.Item().Row(row =>
+            {
+                foreach (var card in cards)
+                {
+                    KpiCell(row.RelativeItem(), card.Label, card.Value, card.Color);
+                }
+            });
+        });
+    }
+
+    private static void BuildTableSection(IContainer container, string title, List<TableColumnDef> columns, List<TableRow> rows)
+    {
+        if (columns.Count == 0) return;
+
+        container.Column(col =>
+        {
+            col.Spacing(4);
+            col.Item().Text(title).FontSize(12).Bold();            col.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        foreach (var colDef in columns)
+                        {
+                            c.RelativeColumn((float)colDef.WidthRatio);
+                        }
+                    });
+
+                    // 表头
+                    table.Header(h =>
+                    {
+                        foreach (var colDef in columns)
+                        {
+                            h.Cell().Background(Colors.Blue.Darken2).Padding(3)
+                                .Text(colDef.Header).FontColor(Colors.White).FontSize(9).Bold();
+                        }
+                    });
+
+                    // 数据行
+                    foreach (var row in rows)
+                    {
+                        foreach (var colDef in columns)
+                        {
+                            var cellValue = row.Cells.GetValueOrDefault(colDef.DataKey, "");
+                            var cellColor = (colDef.ColorKey != null && row.Cells.TryGetValue(colDef.ColorKey, out var color))
+                                ? color
+                                : null;
+
+                            var cell = table.Cell().Padding(2);
+                            var text = cell.Text(cellValue).FontSize(8);
+                            if (colDef.IsBold) text.Bold();
+                            if (cellColor != null) text.FontColor(cellColor);
+                        }
+                    }
+                });
+        });
+    }
+
+    private static void BuildTextSection(IContainer container, string title, string text)
+    {
+        container.Column(col =>
+        {
+            col.Spacing(4);
+            col.Item().Text(title).FontSize(12).Bold();
+            col.Item().Text(text).FontSize(10);
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  原有质量报表渲染辅助方法（保留，向后兼容）
+    // ═══════════════════════════════════════════════════════════
 
     private static void BuildHeader(IContainer container, QualityReportData data, string periodLabel)
     {
@@ -99,8 +243,6 @@ public sealed class PdfReportGenerator
         {
             col.Spacing(4);
             col.Item().Text("一、产量与合格率").FontSize(12).Bold();
-
-            // KPI 卡片行
             col.Item().Row(row =>
             {
                 KpiCell(row.RelativeItem(), "检验总数", data.TotalInspections.ToString("N0"), Colors.Blue.Darken1);
@@ -109,41 +251,6 @@ public sealed class PdfReportGenerator
                 KpiCell(row.RelativeItem(), "一次合格率", $"{data.FirstPassYield:F1}%",
                     data.FirstPassYield >= 98 ? Colors.Green.Medium : Colors.Red.Medium);
                 KpiCell(row.RelativeItem(), "NCR", data.TotalNcrs.ToString("N0"), Colors.Orange.Medium);
-            });
-
-            col.Item().Table(table =>
-            {
-                table.ColumnsDefinition(c =>
-                {
-                    c.RelativeColumn();
-                    c.RelativeColumn();
-                    c.RelativeColumn();
-                    c.RelativeColumn();
-                    c.RelativeColumn();
-                });
-
-                table.Header(h =>
-                {
-                    h.Cell().Background(Colors.Blue.Darken2).Padding(3).Text("指标").FontColor(Colors.White).FontSize(9).Bold();
-                    h.Cell().Background(Colors.Blue.Darken2).Padding(3).Text("数值").FontColor(Colors.White).FontSize(9).Bold();
-                    h.Cell().Background(Colors.Blue.Darken2).Padding(3).Text("指标").FontColor(Colors.White).FontSize(9).Bold();
-                    h.Cell().Background(Colors.Blue.Darken2).Padding(3).Text("数值").FontColor(Colors.White).FontSize(9).Bold();
-                    h.Cell().Background(Colors.Blue.Darken2).Padding(3).Text("指标").FontColor(Colors.White).FontSize(9).Bold();
-                });
-
-                // 两行三列的数据格
-                table.Cell().Padding(2).Text("检验总数").FontSize(8);
-                table.Cell().Padding(2).Text(data.TotalInspections.ToString("N0")).FontSize(8).Bold();
-                table.Cell().Padding(2).Text("合格数").FontSize(8);
-                table.Cell().Padding(2).Text(data.PassedInspections.ToString("N0")).FontSize(8).Bold().FontColor(Colors.Green.Medium);
-                table.Cell().Padding(2).Text("不合格数").FontSize(8);
-                table.Cell().Padding(2).Text(data.FailedInspections.ToString("N0")).FontSize(8).Bold().FontColor(Colors.Red.Medium);
-                table.Cell().Padding(2).Text("一次合格率").FontSize(8);
-                table.Cell().Padding(2).Text($"{data.FirstPassYield:F1}%").FontSize(8).Bold();
-                table.Cell().Padding(2).Text("未关闭 NCR").FontSize(8);
-                table.Cell().Padding(2).Text(data.OpenNcrs.ToString("N0")).FontSize(8).Bold().FontColor(Colors.Orange.Medium);
-                table.Cell().Padding(2).Text("").FontSize(8);
-                table.Cell().Padding(2).Text("").FontSize(8);
             });
         });
     }
@@ -315,6 +422,10 @@ public sealed class PdfReportGenerator
             });
         });
     }
+
+    // ═══════════════════════════════════════════════════════════
+    //  通用样式组件
+    // ═══════════════════════════════════════════════════════════
 
     private static void KpiCell(IContainer container, string label, string value, string color)
     {
