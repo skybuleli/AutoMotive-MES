@@ -4,6 +4,8 @@
 > 覆盖 **工单 → 物料 → SPC → 追溯 → Andon → OEE**，7 站 31 工序全 Saga 编排，热路径零堆分配。
 >
 > **交付状态：99/99 任务完成 ✅ · 383 测试通过 ✅ · 43 性能基准 ✅**
+>
+> [![CI](https://github.com/skybuleli/AutoMotive-MES/actions/workflows/ci.yml/badge.svg)](https://github.com/skybuleli/AutoMotive-MES/actions/workflows/ci.yml)
 
 ---
 

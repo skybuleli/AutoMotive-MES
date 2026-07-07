@@ -1,0 +1,225 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: "10.0.x"
+
+jobs:
+  ###########################################################################
+  #  Job 1: Build & Lint
+  ###########################################################################
+  build:
+    name: Build & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: preview
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (fail on warnings except MUD0002)
+        run: dotnet build --no-restore -warnaserror -warnnotaserror:MUD0002
+
+  ###########################################################################
+  #  Job 2: Unit Tests (Domain)
+  ###########################################################################
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: preview
+
+      - name: Restore & Build
+        run: |
+          dotnet restore
+          dotnet build --no-restore
+
+      - name: Run Domain Tests
+        run: dotnet test tests/MesAdmin.Domain.Tests/ --no-build --verbosity normal
+        timeout-minutes: 5
+
+  ###########################################################################
+  #  Job 3: Integration Tests (with PostgreSQL Testcontainers)
+  #  GitHub Actions runners have Docker pre-installed, so Testcontainers
+  #  works out of the box without Docker-in-Docker configuration.
+  ###########################################################################
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: preview
+
+      - name: Restore & Build
+        run: |
+          dotnet restore
+          dotnet build --no-restore
+
+      - name: Run Integration Tests
+        run: dotnet test tests/MesAdmin.Application.Tests/ --no-build --verbosity normal
+        timeout-minutes: 15
+
+  ###########################################################################
+  #  Job 4: Benchmark Comparison (PR only)
+  #  Runs benchmarks on both the merge-base (main) and PR HEAD,
+  #  then posts a comparison comment.
+  ###########################################################################
+  benchmarks:
+    name: Benchmarks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history for git merge-base
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: preview
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build Benchmarks (Release)
+        run: dotnet build tests/MesAdmin.Benchmarks/ -c Release --no-restore
+
+      - name: Run Benchmarks on Merge-Base (Baseline)
+        id: baseline
+        continue-on-error: true
+        run: |
+          MERGE_BASE=$(git merge-base origin/main HEAD)
+          git checkout $MERGE_BASE
+          dotnet build tests/MesAdmin.Benchmarks/ -c Release --no-restore 2>&1
+          dotnet run -c Release --project tests/MesAdmin.Benchmarks/ \
+            --filter '*ZeroAllocation*' \
+            --job short \
+            --exporters json \
+            --output "${{ runner.temp }}/benchmarks-base.json" \
+            2>&1 | tee benchmark-base.log
+          echo "baseline_run=true" >> $GITHUB_OUTPUT
+
+      - name: Run Benchmarks on PR HEAD
+        id: pr_head
+        continue-on-error: true
+        run: |
+          git checkout HEAD
+          dotnet build tests/MesAdmin.Benchmarks/ -c Release --no-restore 2>&1
+          dotnet run -c Release --project tests/MesAdmin.Benchmarks/ \
+            --filter '*ZeroAllocation*' \
+            --job short \
+            --exporters json \
+            --output "${{ runner.temp }}/benchmarks-pr.json" \
+            2>&1 | tee benchmark-pr.log
+          echo "pr_run=true" >> $GITHUB_OUTPUT
+
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            BenchmarkDotNet.Artifacts/
+            benchmark-base.log
+            benchmark-pr.log
+          retention-days: 30
+
+      - name: Comment Benchmark Comparison
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Read baseline log
+            let baselineSummary = '*Not available*';
+            try {
+              const baseLog = fs.readFileSync('benchmark-base.log', 'utf8');
+              const baseLines = baseLog.split('\n').filter(l =>
+                l.match(/^\s*\d+\.\d+\s+(ns|us|ms)/) || l.includes('Allocated')
+              ).slice(0, 15);
+              if (baseLines.length) baselineSummary = '```\n' + baseLines.join('\n') + '\n```';
+            } catch {}
+
+            // Read PR log
+            let prSummary = '*Not available*';
+            try {
+              const prLog = fs.readFileSync('benchmark-pr.log', 'utf8');
+              const prLines = prLog.split('\n').filter(l =>
+                l.match(/^\s*\d+\.\d+\s+(ns|us|ms)/) || l.includes('Allocated')
+              ).slice(0, 15);
+              if (prLines.length) prSummary = '```\n' + prLines.join('\n') + '\n```';
+            } catch {}
+
+            const body = `## ⚡ Benchmark Comparison (Zero Allocation)\n\n` +
+              `**Baseline:** \`${context.payload.pull_request?.base?.ref || 'main'}\` (merge-base)\n\n` +
+              `**PR:** #${context.payload.pull_request?.number}\n\n` +
+              `### Baseline Results\n${baselineSummary}\n\n` +
+              `### PR Results\n${prSummary}\n\n` +
+              `> ℹ️ Only the 14 ZeroAllocation benchmarks run in CI (quick check). ` +
+              `Run full 43-benchmark suite locally:\n` +
+              `> \`dotnet run -c Release --project tests/MesAdmin.Benchmarks/\``;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  ###########################################################################
+  #  Job 5: Code Quality Check (PR only)
+  ###########################################################################
+  code-quality:
+    name: Code Quality
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: preview
+
+      - name: Restore & Build
+        run: |
+          dotnet restore
+          dotnet build 2>&1 | tee build-output.log
+
+      - name: Check Warnings
+        run: |
+          WARN_COUNT=$(grep -cE 'warning CS|warning MUD' build-output.log || true)
+          echo "Warning count: $WARN_COUNT"
+          if [ "$WARN_COUNT" -gt 0 ]; then
+            echo "::warning::$WARN_COUNT warnings found. Please review build-output.log"
+          fi
+
+      - name: Upload Build Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build-output.log
+          retention-days: 7
