@@ -23,6 +23,7 @@ using MesAdmin.Infrastructure.Security;
 using MesAdmin.Infrastructure.Reports;
 using MesAdmin.Infrastructure.RealTime;
 using MesAdmin.Infrastructure.Sync;
+using MesAdmin.Infrastructure.Notifications;
 using MesAdmin.Infrastructure.Data.Repositories;
 using FluentEmail.Smtp;
 using OpenTelemetry.Exporter;
@@ -173,6 +174,13 @@ builder.Services.AddHostedService<SapOrderSyncService>();
 builder.Services.AddHostedService<SapInventorySyncService>();
 // T3.17: 物料移动同步后台服务
 builder.Services.AddHostedService<SapMaterialMovementSyncService>();
+
+// ── 飞书机器人通知服务（P2 外部通知集成：Andon L2/L3 升级推送）──
+builder.Services.AddSingleton<IFeishuNotificationService, FeishuNotificationService>();
+builder.Services.AddHttpClient("FeishuBot", client =>
+{
+    client.DefaultRequestHeaders.Add("User-Agent", "AutoMES/1.0");
+});
 
 // ── ZLogger 结构化日志 ──
 builder.Logging.AddZLogger();

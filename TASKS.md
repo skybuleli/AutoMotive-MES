@@ -157,7 +157,9 @@
 | T2.22 | `[x]` | ESP 专用报警检测（扭矩超差 M6/M8、泄漏超标、CAN 通信异常、工艺偏差）+ `andon-pulse` 脉冲动画 + `MudAlert` 通知 | P1 | 2d | T2.21 |
 | T2.23 | `[x]` | Andon 看板 Web 页面（实时报警列表 + 过滤栏 + L1/L2/L3 升级链可视化 + SignalR 实时推送 + 确认/解决/关闭对话框） | P1 | 2d | T2.22 |
 
-> **注：** 企业微信推送集成（T2.23 提及）未实现，留待 P2 外部通知集成专项。
+| T2.24 | `[x]` | **飞书外部通知集成**（P2 外部通知专项）：`IFeishuNotificationService` + `FeishuNotificationService`（自定义机器人 Webhook、interactive 卡片、severity→颜色映射、URL 脱敏、线程安全运行时更新、失败容错不抛异常）+ `AndonEscalationService` L2/L3 升级自动推送 + 3 REST API（GET/PUT settings、POST test）+ `AutoMesMetrics.RecordFeishuNotificationSent` 指标 + 15 单元测试全通过 | P2 | 2d | T2.20 |
+
+> **注：** T2.23 提及的企业微信推送已由 T2.24 飞书通知集成实现（自定义机器人 Webhook 方案）。
 
 ---
 
@@ -372,6 +374,7 @@ T0.1 骨架 → T0.2 依赖 → T0.5 DbContext → T0.6 Migration
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| **2026-07-09** | **v7.4** | **T2.24 飞书外部通知集成完成**（P2 外部通知专项）：`IFeishuNotificationService` + `FeishuNotificationService`（自定义机器人 Webhook + interactive 卡片 + severity→颜色映射 + URL 脱敏 + 线程安全运行时更新 + 失败容错）+ `AndonEscalationService` L2/L3 升级自动推送 + 3 REST API（GET/PUT settings、POST test）+ `AutoMesMetrics.RecordFeishuNotificationSent` 指标 + 15 单元测试全通过；解决方案 0 error · 0 warning；填补 TASKS.md 唯一遗留缺口（企业微信/外部通知） |
 | **2026-07-06** | **v7.0** | **T1.11 BOM 缓存 + T3.14-T3.17 SAP 对接全模块完成**：BOM 缓存（IBomCache + BomCache ConcurrentDictionary + 启动预热 + 缓存优先策略）已实现；SAP 全模块（ISapClient 抽象 + MockSapClient + HttpSapClient OData + 4 个后台服务 30s 轮询 + 2 个 API 端点 + EF Migration + DI 注册）均已构建通过，**327 测试全通过**；阶段 3 从 5/17(29%) → 9/17(53%)；总进度从 ~63% → ~68% |
 | **2026-07-07** | **v7.3** | **T4.10-T4.12 混沌工程完成**：Saga 崩溃恢复 11 测试（Scenarios 13-18）+ SignalR 自动重连 9 测试（HubConnection 真实客户端）+ PLC 断连 6 测试（断连/重连/循环/空闲）；删除旧 `SignalRReconnectTests.cs`；**383 测试全通过**；阶段 4 从 27% → 47%；总进度从 ~74% → ~77% |
 | **2026-07-07** | **v7.2** | **TX.1/TX.2 测试基础设施完成**：`tests/MesAdmin.Application.Tests/Infrastructure/` 目录（CleipnirSagaFixture + MessagePipeTestHelper + R3TestScheduler + IntegrationTestBase）；DatabaseFixture 升级为 Testcontainers PostgreSQL 17；17 验收测试全通过；横切·测试从 1/3 → 3/3 **100%**；总进度从 ~72% → ~74% |

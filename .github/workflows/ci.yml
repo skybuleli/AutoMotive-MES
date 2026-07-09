@@ -113,6 +113,7 @@ jobs:
         run: |
           MERGE_BASE=$(git merge-base origin/main HEAD)
           git checkout $MERGE_BASE
+          dotnet restore tests/MesAdmin.Benchmarks/
           dotnet build tests/MesAdmin.Benchmarks/ -c Release --no-restore 2>&1
           dotnet run -c Release --project tests/MesAdmin.Benchmarks/ \
             --filter '*ZeroAllocation*' \
@@ -127,6 +128,7 @@ jobs:
         continue-on-error: true
         run: |
           git checkout HEAD
+          dotnet restore tests/MesAdmin.Benchmarks/
           dotnet build tests/MesAdmin.Benchmarks/ -c Release --no-restore 2>&1
           dotnet run -c Release --project tests/MesAdmin.Benchmarks/ \
             --filter '*ZeroAllocation*' \
