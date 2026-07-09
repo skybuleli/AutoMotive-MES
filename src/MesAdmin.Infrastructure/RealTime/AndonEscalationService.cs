@@ -1,6 +1,7 @@
 using MesAdmin.Application.Observability;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
+using MesAdmin.Infrastructure.Notifications;
 using MessagePipe;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,6 +21,7 @@ public sealed class AndonEscalationService : IHostedService, IAsyncDisposable
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IAsyncPublisher<AndonEventEscalatedMessage> _publisher;
+    private readonly IFeishuNotificationService _feishu;
     private readonly ILogger<AndonEscalationService> _logger;
     private CancellationTokenSource? _cts;
     private Task? _scanTask;
@@ -36,10 +38,12 @@ public sealed class AndonEscalationService : IHostedService, IAsyncDisposable
     public AndonEscalationService(
         IServiceScopeFactory scopeFactory,
         IAsyncPublisher<AndonEventEscalatedMessage> publisher,
+        IFeishuNotificationService feishu,
         ILogger<AndonEscalationService> logger)
     {
         _scopeFactory = scopeFactory;
         _publisher = publisher;
+        _feishu = feishu;
         _logger = logger;
     }
 
@@ -105,6 +109,20 @@ public sealed class AndonEscalationService : IHostedService, IAsyncDisposable
                             ev.Id.ToString(),
                             ev.EscalationLevel,
                             ev.EscalatedAt ?? now), ct);
+
+                        // 🔔 P2 外部通知：L2/L3 升级时推送飞书报警卡片
+                        await _feishu.SendAndonAlertCardAsync(
+                            ev.EventNumber,
+                            ev.EquipmentCode,
+                            ev.Station,
+                            ev.AlarmType.ToString(),
+                            ev.Severity.ToString(),
+                            ev.Description,
+                            ev.EscalationLevel,
+                            ev.ProcessValue,
+                            ev.UpperLimit,
+                            ev.OccurredAt,
+                            ct);
                     }
                 }
             }

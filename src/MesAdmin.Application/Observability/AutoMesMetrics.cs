@@ -29,6 +29,8 @@ public static class AutoMesMetrics
         "automes_oee_value",
         ObserveOeeValues);
 
+    private static readonly Counter<long> FeishuNotificationsTotal = Meter.CreateCounter<long>("automes_feishu_notifications_total");
+
     private static long _plcChannelBacklog;
     private static readonly ObservableGauge<long> PlcChannelBacklogGauge = Meter.CreateObservableGauge(
         "automes_plc_channel_backlog",
@@ -76,6 +78,9 @@ public static class AutoMesMetrics
 
     public static void RecordAndonResponseObserved(double seconds, string station)
         => AndonResponseDurationObserved.Record(seconds, new KeyValuePair<string, object?>("station", station));
+
+    public static void RecordFeishuNotificationSent(bool success)
+        => FeishuNotificationsTotal.Add(1, new KeyValuePair<string, object?>("success", success));
 
     public static void RecordSignalRPushFailure(string hub, string messageType)
         => SignalRPushFailuresTotal.Add(1,
