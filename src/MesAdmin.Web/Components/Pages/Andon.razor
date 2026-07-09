@@ -342,79 +342,83 @@
 
     // ── SignalR 回调 ──
 
+    // SignalR 回调在线程池线程执行；所有对 _events 的修改必须经 InvokeAsync
+    // 切到电路（circuit）渲染同步上下文，避免与渲染时的枚举并发（竞态/集合被修改异常）。
     private void HandleAndonCreated(AndonEventCreatedMessage msg)
-    {
-        _events.Insert(0, new AndonEventDto(
-            msg.EventId, msg.EventNumber, msg.EquipmentCode, msg.Station,
-            msg.AlarmType.ToString(), msg.Severity.ToString(), msg.Status.ToString(),
-            0, msg.Description, msg.ProcessValue, msg.ProcessTag,
-            msg.UpperLimit, msg.LowerLimit, null, null, null, null, null, null,
-            null, null, null, null, msg.OccurredAt, msg.OccurredAt));
-        InvokeAsync(StateHasChanged);
-    }
+        => _ = InvokeAsync(() =>
+        {
+            _events.Insert(0, new AndonEventDto(
+                msg.EventId, msg.EventNumber, msg.EquipmentCode, msg.Station,
+                msg.AlarmType.ToString(), msg.Severity.ToString(), msg.Status.ToString(),
+                0, msg.Description, msg.ProcessValue, msg.ProcessTag,
+                msg.UpperLimit, msg.LowerLimit, null, null, null, null, null, null,
+                null, null, null, null, msg.OccurredAt, msg.OccurredAt));
+            StateHasChanged();
+        });
 
     private void HandleAndonEscalated(AndonEventEscalatedMessage msg)
-    {
-        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
-        if (ev is not null)
+        => _ = InvokeAsync(() =>
         {
-            _events[_events.IndexOf(ev)] = ev with
+            ReplaceEvent(msg.EventId, ev => ev with
             {
                 Status = msg.NewLevel == 2 ? "EscalatedL3" : "EscalatedL2",
                 EscalationLevel = msg.NewLevel,
-            };
-        }
-        _ = LoadStatsAsync();
-        InvokeAsync(StateHasChanged);
-    }
+            });
+            _ = LoadStatsAsync();
+            StateHasChanged();
+        });
 
     private void HandleAndonAcknowledged(AndonEventAcknowledgedMessage msg)
-    {
-        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
-        if (ev is not null)
+        => _ = InvokeAsync(() =>
         {
-            _events[_events.IndexOf(ev)] = ev with
+            ReplaceEvent(msg.EventId, ev => ev with
             {
                 Status = "Acknowledged",
                 AcknowledgedBy = msg.AcknowledgedBy,
                 AcknowledgedAt = msg.AcknowledgedAt,
-            };
-        }
-        _ = LoadStatsAsync();
-        InvokeAsync(StateHasChanged);
-    }
+            });
+            _ = LoadStatsAsync();
+            StateHasChanged();
+        });
 
     private void HandleAndonResolved(AndonEventResolvedMessage msg)
-    {
-        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
-        if (ev is not null)
+        => _ = InvokeAsync(() =>
         {
-            _events[_events.IndexOf(ev)] = ev with
+            ReplaceEvent(msg.EventId, ev => ev with
             {
                 Status = "Resolved",
                 ResolvedBy = msg.ResolvedBy,
                 Resolution = msg.Resolution,
                 ResolvedAt = msg.ResolvedAt,
-            };
-        }
-        _ = LoadStatsAsync();
-        InvokeAsync(StateHasChanged);
-    }
+            });
+            _ = LoadStatsAsync();
+            StateHasChanged();
+        });
 
     private void HandleAndonClosed(AndonEventClosedMessage msg)
-    {
-        var ev = _events.FirstOrDefault(e => e.Id == msg.EventId);
-        if (ev is not null)
+        => _ = InvokeAsync(() =>
         {
-            _events[_events.IndexOf(ev)] = ev with
+            ReplaceEvent(msg.EventId, ev => ev with
             {
                 Status = "Closed",
                 CloseRemarks = msg.CloseRemarks,
                 ClosedAt = msg.ClosedAt,
-            };
+            });
+            _ = LoadStatsAsync();
+            StateHasChanged();
+        });
+
+    /// <summary>按 Id 定位并替换事件（在渲染同步上下文内调用，单次遍历避免 IndexOf 二次查找竞态）。</summary>
+    private void ReplaceEvent(string eventId, Func<AndonEventDto, AndonEventDto> update)
+    {
+        for (var i = 0; i < _events.Count; i++)
+        {
+            if (_events[i].Id == eventId)
+            {
+                _events[i] = update(_events[i]);
+                return;
+            }
         }
-        _ = LoadStatsAsync();
-        InvokeAsync(StateHasChanged);
     }
 
     // ── 对话框操作 ──
@@ -520,13 +524,15 @@
         return $"{elapsed.Hours}h{elapsed.Minutes}min";
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
+        // 仅退订本组件的事件处理器；AndonHubClient 是应用级单例，
+        // 其连接生命周期不由页面组件管理（组件释放时不应释放共享单例连接）。
         AndonHub.OnAndonCreated -= HandleAndonCreated;
         AndonHub.OnAndonEscalated -= HandleAndonEscalated;
         AndonHub.OnAndonAcknowledged -= HandleAndonAcknowledged;
         AndonHub.OnAndonResolved -= HandleAndonResolved;
         AndonHub.OnAndonClosed -= HandleAndonClosed;
-        await AndonHub.DisposeAsync();
+        return ValueTask.CompletedTask;
     }
 }

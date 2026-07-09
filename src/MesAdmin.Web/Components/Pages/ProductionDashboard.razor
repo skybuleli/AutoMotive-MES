@@ -55,7 +55,7 @@
                 <MudStack Spacing="0">
                     <MudText Typo="Typo.caption" Class="kpi-label">设备数</MudText>
                     <MudText Typo="Typo.h4" Color="Color.Success" Style="font-weight:700;">
-                        @Hub.LatestOee.Count
+                        @_snapshot.Count
                     </MudText>
                     <MudText Typo="Typo.caption" Class="kpi-sub">在线设备</MudText>
                 </MudStack>
@@ -93,7 +93,7 @@
                         </MudStack>
                     </MudStack>
 
-                    @if (Hub.LatestOee.Count == 0)
+                    @if (_snapshot.Count == 0)
                     {
                         <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
                             <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
@@ -103,7 +103,7 @@
                     else
                     {
                         <div class="oee-grid">
-                            @foreach (var oee in Hub.LatestOee)
+                            @foreach (var oee in _snapshot)
                             {
                                 <MudPaper Class="glass-kpi-card pa-3" Style="min-width:0;">
                                     <MudStack Spacing="1">
@@ -317,6 +317,8 @@
     private int _countdown;
     private Timer? _timer;
     private readonly List<EnvDataItem> _envData = [];
+    // 线程安全快照：定时器周期性从 Hub 拉取，UI 与计算统一读此本地副本，避免跨线程枚举共享集合。
+    private IReadOnlyList<OeeRecord> _snapshot = [];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -326,6 +328,7 @@
         _loadedOnce = true;
         await Hub.StartAsync();
         _hubConnected = true;
+        _snapshot = Hub.Snapshot();
         await LoadSummaryAsync();
         StateHasChanged();
 
@@ -338,6 +341,7 @@
                 _countdown = 15;
                 await LoadSummaryAsync();
             }
+            _snapshot = Hub.Snapshot();
             UpdateEnvData();
             await InvokeAsync(StateHasChanged);
         }, null, 1000, 1000);
@@ -364,7 +368,7 @@
     private void UpdateEnvData()
     {
         _envData.Clear();
-        foreach (var oee in Hub.LatestOee)
+        foreach (var oee in _snapshot)
         {
             // 模拟环境/过程值：根据设备类型映射
             var (tag, unit, maxVal, isHighBad) = oee.EquipmentCode switch
@@ -392,8 +396,8 @@
     {
         get
         {
-            if (Hub.LatestOee.Count == 0) return 0;
-            return Hub.LatestOee.Average(o => o.Oee);
+            if (_snapshot.Count == 0) return 0;
+            return _snapshot.Average(o => o.Oee);
         }
     }
 

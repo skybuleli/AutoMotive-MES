@@ -12,6 +12,8 @@ public sealed class AndonHubClient : IAsyncDisposable
 {
     private readonly HubConnection _connection;
     private readonly ILogger<AndonHubClient> _logger;
+    private readonly SemaphoreSlim _startGate = new(1, 1);
+    private bool _disposed;
 
     public event Action<AndonEventCreatedMessage>? OnAndonCreated;
     public event Action<AndonEventEscalatedMessage>? OnAndonEscalated;
@@ -62,10 +64,14 @@ public sealed class AndonHubClient : IAsyncDisposable
 
     public async Task StartAsync(CancellationToken ct = default)
     {
-        if (_connection.State == HubConnectionState.Connected) return;
+        // 单例连接由多个页面电路（circuit）共享，串行化启动并防止对已释放连接调用。
+        if (_disposed || _connection.State == HubConnectionState.Connected) return;
 
+        await _startGate.WaitAsync(ct);
         try
         {
+            if (_disposed || _connection.State == HubConnectionState.Connected) return;
+
             await _connection.StartAsync(ct);
             _logger.LogInformation("Andon Hub 已连接：{Url}", _connection);
         }
@@ -73,10 +79,17 @@ public sealed class AndonHubClient : IAsyncDisposable
         {
             _logger.LogWarning(ex, "Andon Hub 连接失败（将在后台自动重连）");
         }
+        finally
+        {
+            _startGate.Release();
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed) return;
+        _disposed = true;
+        _startGate.Dispose();
         await _connection.DisposeAsync();
     }
 }
