@@ -120,6 +120,12 @@ public static class RealtimePipelineSetup
         services.AddSignalR();
         services.AddSingleton<Microsoft.AspNetCore.SignalR.Protocol.IHubProtocol, MemoryPackHubProtocol>();
 
+        // OEE 推送服务（订阅 PlcDataChanged → IHubContext 广播；不可在 Hub 内持有 Clients）
+        services.AddHostedService<OeePushService>();
+
+        // Andon 推送服务（订阅 5 类 Andon 消息 → IHubContext 广播）
+        services.AddHostedService<AndonPushService>();
+
         // Channel 健康度推送服务（10s 周期）
         services.AddHostedService<ChannelHealthPushService>();
 

@@ -19,29 +19,60 @@ namespace MesAdmin.Infrastructure.Hubs;
 /// </summary>
 public sealed class DashboardHub : Hub
 {
-    private readonly IAsyncSubscriber<PlcDataChanged> _subscriber;
     private readonly ILogger<DashboardHub> _logger;
-    private IDisposable? _subscription;
 
-    public DashboardHub(IAsyncSubscriber<PlcDataChanged> subscriber, ILogger<DashboardHub> logger)
+    public DashboardHub(ILogger<DashboardHub> logger)
     {
-        _subscriber = subscriber;
         _logger = logger;
     }
 
-    /// <summary>客户端连接时注册 OEE 更新订阅</summary>
-    public override async Task OnConnectedAsync()
+    public override Task OnConnectedAsync()
     {
-        await base.OnConnectedAsync();
         AutoMesMetrics.RecordSignalRConnected("dashboard");
         _logger.ZLogInformation($"DashboardHub 客户端连接：{Context.ConnectionId}");
+        return base.OnConnectedAsync();
+    }
 
-        // 订阅 PlcDataChanged 消息，推送给当前客户端
+    public override Task OnDisconnectedAsync(Exception? exception)
+    {
+        AutoMesMetrics.RecordSignalRDisconnected("dashboard");
+        _logger.ZLogInformation($"DashboardHub 客户端断开：{Context.ConnectionId}");
+        return base.OnDisconnectedAsync(exception);
+    }
+}
+
+/// <summary>
+/// OEE 推送服务（T2.15）。
+/// 单例后台服务订阅 MessagePipe PlcDataChanged，经 IHubContext 广播到所有客户端。
+///
+/// ⚠ 不可在 Hub 内订阅并持有 Clients/Context：Hub 实例是每次调用创建、方法返回即释放的瞬态对象，
+/// 若在 OnConnectedAsync 中捕获 Clients.Caller 供后续回调使用，回调触发时 Hub 已释放
+/// → ObjectDisposedException。正确做法是通过 IHubContext&lt;DashboardHub&gt; 从外部广播。
+/// </summary>
+public sealed class OeePushService : IHostedService, IDisposable
+{
+    private readonly IAsyncSubscriber<PlcDataChanged> _subscriber;
+    private readonly IHubContext<DashboardHub> _hubContext;
+    private readonly ILogger<OeePushService> _logger;
+    private IDisposable? _subscription;
+
+    public OeePushService(
+        IAsyncSubscriber<PlcDataChanged> subscriber,
+        IHubContext<DashboardHub> hubContext,
+        ILogger<OeePushService> logger)
+    {
+        _subscriber = subscriber;
+        _hubContext = hubContext;
+        _logger = logger;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
         _subscription = _subscriber.Subscribe(async (msg, ct) =>
         {
             try
             {
-                await Clients.Caller.SendAsync("OeeUpdated", msg.Oee, ct);
+                await _hubContext.Clients.All.SendAsync("OeeUpdated", msg.Oee, ct);
             }
             catch (Exception ex)
             {
@@ -49,16 +80,17 @@ public sealed class DashboardHub : Hub
                 _logger.ZLogError($"OEE 推送失败：{ex.Message}");
             }
         });
+        return Task.CompletedTask;
     }
 
-    public override Task OnDisconnectedAsync(Exception? exception)
+    public Task StopAsync(CancellationToken cancellationToken)
     {
         _subscription?.Dispose();
         _subscription = null;
-        AutoMesMetrics.RecordSignalRDisconnected("dashboard");
-        _logger.ZLogInformation($"DashboardHub 客户端断开：{Context.ConnectionId}");
-        return base.OnDisconnectedAsync(exception);
+        return Task.CompletedTask;
     }
+
+    public void Dispose() => _subscription?.Dispose();
 }
 
 /// <summary>
