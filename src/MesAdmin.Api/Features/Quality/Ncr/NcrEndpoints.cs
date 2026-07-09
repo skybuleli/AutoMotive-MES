@@ -78,7 +78,7 @@ public class ListNcrEndpoint : MesEndpointWithoutRequest<List<NcrResponse>>
     {
         Get("/ncr");
         Group<QualityGroup>();
-        Roles(MesRoles.QualityEngineer, MesRoles.ShiftLeader);
+        Roles(MesRoles.QualityEngineer, MesRoles.ShiftLeader, MesRoles.ProductionManager);
         Summary(s => s.Summary = "查询 NCR 列表（支持按状态筛选）");
     }
 

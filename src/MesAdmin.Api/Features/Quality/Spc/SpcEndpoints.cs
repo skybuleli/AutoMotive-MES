@@ -71,7 +71,7 @@ public class ListSpcSamplesEndpoint : MesEndpointWithoutRequest<List<SpcSampleRe
     {
         Get("/spc/samples");
         Group<QualityGroup>();
-        Roles(MesRoles.QualityEngineer, MesRoles.Technician, MesRoles.ShiftLeader);
+        Roles(MesRoles.QualityEngineer, MesRoles.Technician, MesRoles.ShiftLeader, MesRoles.ProductionManager);
         Summary(s => s.Summary = "查询 SPC 样本列表（支持按特性编码筛选）");
     }
 
@@ -108,7 +108,7 @@ public class ListSpcAlertsEndpoint : MesEndpointWithoutRequest<List<SpcRuleAlert
     {
         Get("/spc/alerts");
         Group<QualityGroup>();
-        Roles(MesRoles.QualityEngineer, MesRoles.ShiftLeader);
+        Roles(MesRoles.QualityEngineer, MesRoles.ShiftLeader, MesRoles.ProductionManager);
         Summary(s => s.Summary = "查询未确认的 SPC 判异告警");
     }
 

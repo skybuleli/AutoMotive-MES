@@ -172,7 +172,7 @@ public class ListEightDEndpoint : MesEndpointWithoutRequest<List<EightDReportRes
     {
         Get("/8d");
         Group<QualityGroup>();
-        Roles(MesRoles.QualityEngineer, MesRoles.ShiftLeader);
+        Roles(MesRoles.QualityEngineer, MesRoles.ShiftLeader, MesRoles.ProductionManager);
         Summary(s => s.Summary = "查询 8D 报告列表（支持按状态筛选）");
     }
 
