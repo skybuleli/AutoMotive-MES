@@ -21,8 +21,9 @@
                     <MudSelectItem Value="@("Created")">已创建</MudSelectItem>
                     <MudSelectItem Value="@("Released")">已放行</MudSelectItem>
                     <MudSelectItem Value="@("InProgress")">执行中</MudSelectItem>
-                    <MudSelectItem Value="@("Completed")">已完工</MudSelectItem>
-                    <MudSelectItem Value="@("Closed")">已关闭</MudSelectItem>
+                   <MudSelectItem Value="@("Completed")">已完工</MudSelectItem>
+                   <MudSelectItem Value="@("Closed")">已关闭</MudSelectItem>
+                   <MudSelectItem Value="@("Cancelled")">已取消</MudSelectItem>
                 </MudSelect>
                 <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ReloadAsync" Disabled="@_busy">刷新</MudButton>
             </MudStack>
@@ -176,6 +177,25 @@
             <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(!CanStart || _busy)" OnClick="StartAsync">开工</MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Success" Disabled="@(!CanComplete || _busy)" OnClick="CompleteAsync">完工</MudButton>
             <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="@(!CanClose || _busy)" OnClick="CloseAsync">关闭工单</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="@(!CanCancel || _busy)" OnClick="OpenCancelDialog">取消工单</MudButton>
+        </DialogActions>
+    </MudDialog>
+
+    <MudDialog @bind-Visible="_cancelDialogOpen">
+        <TitleContent>
+            <MudText Typo="Typo.h6">取消工单</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudText Typo="Typo.body2" Class="mb-3">
+                确认取消工单 @(_selected?.OrderNumber)？取消后不可恢复。
+            </MudText>
+            <MudTextField @bind-Value="_cancelReason" Label="取消原因" Variant="Variant.Outlined"
+                          Lines="2" MaxLength="256" Immediate="true" Placeholder="请填写取消原因（必填）" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Text" OnClick="@(() => _cancelDialogOpen = false)">返回</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Error"
+                       Disabled="@(_busy || string.IsNullOrWhiteSpace(_cancelReason))" OnClick="CancelAsync">确认取消</MudButton>
         </DialogActions>
     </MudDialog>
 </MudStack>
@@ -206,6 +226,8 @@
     private bool _isError;
     private bool _busy;
     private bool _detailDialogOpen;
+    private bool _cancelDialogOpen;
+    private string _cancelReason = string.Empty;
     private bool _loadedOnce;
     private int _page = 1;
     private int _totalOrders;
@@ -215,6 +237,7 @@
     private bool CanStart => _selectedDetail?.CanStart ?? false;
     private bool CanComplete => _selectedDetail?.CanComplete ?? false;
     private bool CanClose => _selectedDetail?.CanClose ?? false;
+    private bool CanCancel => _selectedDetail?.CanCancel ?? false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -339,6 +362,19 @@
     private async Task CompleteAsync() => await MutateSelectedPost("api/v1/orders/{id}/complete", new CompleteOrderBody(_completeQualified, _completeDefective));
     private async Task CloseAsync() => await MutateSelectedPost("api/v1/orders/{id}/close");
 
+    private void OpenCancelDialog()
+    {
+        _cancelReason = string.Empty;
+        _cancelDialogOpen = true;
+    }
+
+    private async Task CancelAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_cancelReason)) return;
+        await MutateSelectedPost("api/v1/orders/{id}/cancel", new CancelOrderBody(_cancelReason.Trim()));
+        _cancelDialogOpen = false;
+    }
+
     private async Task MutateSelectedAsync(string expected, string template, object? body = null)
     {
         if (_selected is null) return;
@@ -406,13 +442,13 @@
     private static string GetStatusLabel(string status) => status switch
     {
         "Created" => "已创建", "Released" => "已放行", "InProgress" => "执行中",
-        "Completed" => "已完工", "Closed" => "已关闭", _ => status
+        "Completed" => "已完工", "Closed" => "已关闭", "Cancelled" => "已取消", _ => status
     };
 
     private static Color GetStatusColor(string status) => status switch
     {
         "Created" => Color.Default, "Released" => Color.Info, "InProgress" => Color.Primary,
-        "Completed" => Color.Success, "Closed" => Color.Dark, _ => Color.Default
+        "Completed" => Color.Success, "Closed" => Color.Dark, "Cancelled" => Color.Error, _ => Color.Default
     };
 
     private sealed record RoutingOption(string Id, string Name);

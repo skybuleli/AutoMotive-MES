@@ -1,5 +1,6 @@
 using FastEndpoints;
 using MemoryPack;
+using MesAdmin.Application.Common;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
 
@@ -19,24 +20,28 @@ internal sealed class CreateOrderHandler(
     IWorkOrderOperationRepository operationRepo,
     IRoutingRepository routingRepo) : ICommandHandler<CreateOrderCommand, ProductionOrder>
 {
+    /// <summary>并发唯一冲突时的最大重试次数。</summary>
+    private const int MaxOrderNumberAttempts = 5;
+
     public async Task<ProductionOrder> ExecuteAsync(CreateOrderCommand cmd, CancellationToken ct)
     {
-        // 生成工单号 WO-yyyyMMdd-NNNN（基于当天前缀计数 + 碰撞检测）
-        var todayPrefix = $"WO-{DateTimeOffset.Now:yyyyMMdd}-";
+        // 工单号 WO-yyyyMMdd-NNNN：统一使用 UTC，与 CreatedAt 保持一致，避免跨时区错号。
+        var todayPrefix = $"WO-{DateTimeOffset.UtcNow:yyyyMMdd}-";
         var sequence = await orders.CountByOrderNumberPrefixAsync(todayPrefix, ct) + 1;
-        var orderNumber = $"{todayPrefix}{sequence:0000}";
 
-        while (await orders.GetByOrderNumberAsync(orderNumber, ct) is not null)
-        {
-            sequence++;
-            orderNumber = $"{todayPrefix}{sequence:0000}";
-        }
+        // ═══ P0 集成：优先从 Routing 表查询工艺路线，未找到则回退到硬编码默认值 ═══
+        // 预取放在重试循环外，避免并发冲突重试时重复查询。
+        var routing = await routingRepo.GetByIdAsync(cmd.RoutingId, ct);
+        var routingData = routing is not null && routing.Operations.Count > 0
+            ? routing.Operations.OrderBy(o => o.Sequence)
+                .Select(o => (o.Sequence, o.Station, o.OperationCode, o.OperationName))
+                .ToList()
+            : (IReadOnlyList<(int, int, string, string)>?)null;
 
-        // 领域不变量校验由 ProductionOrder.Create 内部保证（ValidateCreateInput），
-        // API 层 FluentValidation 负责 HTTP 契约格式校验，此处不重复验证。
+        // 领域不变量校验由 ProductionOrder.Create 内部保证（ValidateCreateInput）。
         var order = ProductionOrder.Create(
             Ulid.NewUlid(),
-            orderNumber,
+            $"{todayPrefix}{sequence:0000}",
             cmd.ProductCode,
             cmd.RoutingId,
             cmd.BomVersion,
@@ -46,22 +51,27 @@ internal sealed class CreateOrderHandler(
 
         await orders.AddAsync(order, ct);
 
-        // ═══ P0 集成：优先从 Routing 表查询工艺路线，未找到则回退到硬编码默认值 ═══
-        var routing = await routingRepo.GetByIdAsync(cmd.RoutingId, ct);
-        var routingData = routing is not null && routing.Operations.Count > 0
-            ? routing.Operations.OrderBy(o => o.Sequence)
-                .Select(o => (o.Sequence, o.Station, o.OperationCode, o.OperationName))
-                .ToList()
-            : null;
-
-        // 初始化 31 道工序记录
+        // 初始化 31 道工序记录（与工单同一事务提交）
         foreach (var (seq, station, code, name) in routingData ?? ProductionRoutings.Default)
         {
             var op = WorkOrderOperation.Create(order.Id, seq, station, code, name);
             await operationRepo.AddAsync(op, ct);
         }
 
-        await orders.SaveChangesAsync(ct);
-        return order;
+        // 并发安全：依赖 order_number 唯一索引 + 冲突重试，取代非原子的碰撞预检查询。
+        // 冲突时复用已跟踪实体（保持 Added 状态），仅递增序号后重新提交。
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await orders.SaveChangesAsync(ct);
+                return order;
+            }
+            catch (DuplicateOrderNumberException) when (attempt < MaxOrderNumberAttempts)
+            {
+                sequence++;
+                order.OrderNumber = $"{todayPrefix}{sequence:0000}";
+            }
+        }
     }
 }

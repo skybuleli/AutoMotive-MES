@@ -1,3 +1,4 @@
+using MesAdmin.Application.Common;
 using MesAdmin.Domain.Models;
 
 namespace MesAdmin.Application.Interfaces;
@@ -20,6 +21,17 @@ public interface IProductionOrderRepository
     Task AddAsync(ProductionOrder order, CancellationToken cancellationToken = default);
     void Update(ProductionOrder order);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 按多维过滤条件分页查询工单（工单号/产品编码/日期范围/状态）。
+    /// 默认实现回退到 status-only 查询；Infrastructure 层覆写为完整 SQL 过滤。
+    /// </summary>
+    Task<List<ProductionOrder>> GetPageAsync(OrderListFilter filter, int skip, int take, CancellationToken cancellationToken = default)
+        => GetPageAsync(filter.Status, skip, take, cancellationToken);
+
+    /// <summary>按多维过滤条件统计工单总数。默认实现回退到 status-only 统计。</summary>
+    Task<int> CountAsync(OrderListFilter filter, CancellationToken cancellationToken = default)
+        => CountAsync(filter.Status, cancellationToken);
 }
 
 /// <summary>

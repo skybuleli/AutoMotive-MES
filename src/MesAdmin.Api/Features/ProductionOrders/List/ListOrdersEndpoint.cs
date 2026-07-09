@@ -20,6 +20,10 @@ public class ListOrdersEndpoint : MesEndpointWithoutRequest<List<ProductionOrder
         var status = Query<string?>("status", isRequired: false);
         var page = Query<int?>("page", isRequired: false) ?? 1;
         var size = Query<int?>("size", isRequired: false) ?? 20;
+        var orderNumber = Query<string?>("orderNumber", isRequired: false);
+        var productCode = Query<string?>("productCode", isRequired: false);
+        var createdFrom = Query<DateTimeOffset?>("createdFrom", isRequired: false);
+        var createdTo = Query<DateTimeOffset?>("createdTo", isRequired: false);
 
         OrderStatus? filter = null;
         if (!string.IsNullOrWhiteSpace(status) && !status.Equals("all", StringComparison.OrdinalIgnoreCase))
@@ -28,7 +32,12 @@ public class ListOrdersEndpoint : MesEndpointWithoutRequest<List<ProductionOrder
                 filter = parsed;
         }
 
-        var result = await new ListOrdersQuery(filter, page, size).ExecuteAsync(ct);
+        var result = await new ListOrdersQuery(
+            filter, page, size,
+            OrderNumberContains: orderNumber,
+            ProductCode: productCode,
+            CreatedFrom: createdFrom,
+            CreatedTo: createdTo).ExecuteAsync(ct);
 
         HttpContext.Response.Headers["X-Total-Count"] = result.Total.ToString();
         Response = result.Items.Select(OrderMapper.ToSummary).ToList();

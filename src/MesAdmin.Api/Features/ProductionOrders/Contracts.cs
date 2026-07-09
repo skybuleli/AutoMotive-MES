@@ -27,7 +27,8 @@ public partial record ProductionOrderDetailResponse(
     bool CanRelease,
     bool CanStart,
     bool CanComplete,
-    bool CanClose);
+    bool CanClose,
+    bool CanCancel);
 
 [MemoryPackable]
 public partial record OperationResponse(
@@ -68,7 +69,8 @@ public static class OrderMapper
             order.CanRelease,
             order.CanStart,
             order.CanComplete,
-            order.CanClose);
+            order.CanClose,
+            order.CanCancel);
 
     public static OperationResponse ToOperationResponse(Domain.Models.WorkOrderOperation op)
         => new(

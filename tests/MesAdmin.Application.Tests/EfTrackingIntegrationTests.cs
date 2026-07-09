@@ -153,6 +153,43 @@ public class EfTrackingIntegrationTests
         Assert.Equal(stn04.Id, latestStn04!.Id);
         Assert.Equal(InventoryAlertLevel.Yellow, latestStn04.AlertLevel);
     }
+
+    // ═══════════════════════════════════════════
+    //  工单列表多维过滤（#3 完善）
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public async Task GetPage_WithFilter_ShouldFilterByOrderNumberProductAndDate()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var orders = scope.ServiceProvider.GetRequiredService<IProductionOrderRepository>();
+        var opRepo = scope.ServiceProvider.GetRequiredService<IWorkOrderOperationRepository>();
+        var routingRepo = scope.ServiceProvider.GetRequiredService<IRoutingRepository>();
+        var createHandler = new CreateOrderHandler(orders, opRepo, routingRepo);
+
+        var esp90 = await createHandler.ExecuteAsync(
+            new CreateOrderCommand("ESP-9.0", "BOM-FLT-1", Ulid.NewUlid(), 10, (short)1), default);
+        var esp91 = await createHandler.ExecuteAsync(
+            new CreateOrderCommand("ESP-9.1", "BOM-FLT-2", Ulid.NewUlid(), 10, (short)1), default);
+
+        // 按产品编码过滤（大小写不敏感）
+        var byProduct = await orders.GetPageAsync(
+            new Application.Common.OrderListFilter(ProductCode: "esp-9.1"), 0, 100, default);
+        Assert.Contains(byProduct, o => o.Id == esp91.Id);
+        Assert.DoesNotContain(byProduct, o => o.Id == esp90.Id);
+
+        // 按工单号子串过滤
+        var byNumber = await orders.GetPageAsync(
+            new Application.Common.OrderListFilter(OrderNumberContains: esp90.OrderNumber), 0, 100, default);
+        Assert.Single(byNumber);
+        Assert.Equal(esp90.Id, byNumber[0].Id);
+
+        // 按日期范围过滤（未来窗口应为空）
+        var future = DateTimeOffset.UtcNow.AddDays(1);
+        var countFuture = await orders.CountAsync(
+            new Application.Common.OrderListFilter(CreatedFrom: future), default);
+        Assert.Equal(0, countFuture);
+    }
 }
 
 /// <summary>

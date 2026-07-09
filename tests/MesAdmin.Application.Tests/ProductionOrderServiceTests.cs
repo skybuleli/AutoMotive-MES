@@ -1,3 +1,4 @@
+using MesAdmin.Application.Common;
 using MesAdmin.Application.Features.ProductionOrders;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
@@ -20,7 +21,7 @@ public class ProductionOrderCommandHandlerTests
         Assert.Equal("ESP-9.0", order.ProductCode);
         Assert.Equal("BOM-A", order.BomVersion);
         Assert.Equal(OrderStatus.Created, order.Status);
-        Assert.StartsWith($"WO-{DateTimeOffset.Now:yyyyMMdd}-", order.OrderNumber);
+        Assert.StartsWith($"WO-{DateTimeOffset.UtcNow:yyyyMMdd}-", order.OrderNumber);
         Assert.Single(repo.StoredOrders);
         Assert.Equal(1, repo.SaveChangesCallCount);
     }
@@ -56,6 +57,35 @@ public class ProductionOrderCommandHandlerTests
         // 跟踪查询模式：不再调用 Update()，SaveChanges 自动检测变更
         Assert.Equal(0, repo.UpdateCallCount);
         Assert.Equal(1, repo.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task CancelOrder_ShouldSetCancelledStatusAndReason()
+    {
+        var repo = new FakeProductionOrderRepository();
+        var order = CreateOrder("WO-20260701-0009");
+        await repo.AddAsync(order);
+        var handler = new CancelOrderHandler(repo, new FakeSapOrderSyncRepo());
+
+        var cancelled = await handler.ExecuteAsync(new CancelOrderCommand(order.Id, "客户撤单"), default);
+
+        Assert.Equal(OrderStatus.Cancelled, cancelled.Status);
+        Assert.Equal("客户撤单", cancelled.CancelReason);
+        Assert.Equal(1, repo.SaveChangesCallCount);
+    }
+
+    [Fact]
+    public async Task CancelOrder_ShouldRejectWhenInProgress()
+    {
+        var repo = new FakeProductionOrderRepository();
+        var order = CreateOrder("WO-20260701-0010");
+        order.Release();
+        order.Start();
+        await repo.AddAsync(order);
+        var handler = new CancelOrderHandler(repo, new FakeSapOrderSyncRepo());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => handler.ExecuteAsync(new CancelOrderCommand(order.Id, "too late"), default));
     }
 
     [Fact]
@@ -228,6 +258,65 @@ public class ProductionOrderCommandHandlerTests
         // 回退到硬编码时，工序名与生产路线定义一致
         var seq1 = opRepo.StoredOperations.First(o => o.Sequence == 1);
         Assert.Equal("上料扫码", seq1.OperationName);
+    }
+
+    // ═══════════════════════════════════════════
+    //  并发唯一冲突重试（#2 健壮性）
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public async Task CreateOrder_WhenOrderNumberConflicts_ShouldRetryWithIncrementedSequence()
+    {
+        // 首次提交抛唯一冲突，第二次成功 → 序号应从 0001 递增到 0002
+        var repo = new ConflictInjectingOrderRepository(conflictCount: 1);
+        var handler = new CreateOrderHandler(repo, new FakeWorkOrderOperationRepository(), new FakeRoutingRepository());
+
+        var order = await handler.ExecuteAsync(
+            new CreateOrderCommand("ESP-9.0", "BOM-A", Ulid.NewUlid(), 50, (short)1), default);
+
+        Assert.Equal(2, repo.SaveChangesCallCount);
+        Assert.EndsWith("-0002", order.OrderNumber);
+    }
+
+    [Fact]
+    public async Task CreateOrder_WhenConflictPersists_ShouldThrowAfterMaxAttempts()
+    {
+        // 持续冲突 → 5 次尝试后仍抛 DuplicateOrderNumberException
+        var repo = new ConflictInjectingOrderRepository(conflictCount: 99);
+        var handler = new CreateOrderHandler(repo, new FakeWorkOrderOperationRepository(), new FakeRoutingRepository());
+
+        await Assert.ThrowsAsync<DuplicateOrderNumberException>(
+            () => handler.ExecuteAsync(
+                new CreateOrderCommand("ESP-9.0", "BOM-A", Ulid.NewUlid(), 50, (short)1), default));
+
+        Assert.Equal(5, repo.SaveChangesCallCount);
+    }
+
+    /// <summary>SaveChanges 前 N 次抛 DuplicateOrderNumberException，之后成功——模拟并发唯一冲突。</summary>
+    private sealed class ConflictInjectingOrderRepository : IProductionOrderRepository
+    {
+        private readonly int _conflictCount;
+        public int SaveChangesCallCount { get; private set; }
+
+        public ConflictInjectingOrderRepository(int conflictCount) => _conflictCount = conflictCount;
+
+        public Task<int> SaveChangesAsync(CancellationToken ct = default)
+        {
+            SaveChangesCallCount++;
+            if (SaveChangesCallCount <= _conflictCount)
+                throw new DuplicateOrderNumberException("WO-CONFLICT");
+            return Task.FromResult(1);
+        }
+
+        public Task AddAsync(ProductionOrder order, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<int> CountByOrderNumberPrefixAsync(string prefix, CancellationToken ct = default) => Task.FromResult(0);
+        public Task<ProductionOrder?> GetByIdAsync(Ulid id, CancellationToken ct = default) => Task.FromResult<ProductionOrder?>(null);
+        public Task<ProductionOrder?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default) => Task.FromResult<ProductionOrder?>(null);
+        public Task<ProductionOrder?> GetByOrderNumberAsync(string orderNumber, CancellationToken ct = default) => Task.FromResult<ProductionOrder?>(null);
+        public Task<List<ProductionOrder>> GetAllAsync(CancellationToken ct = default) => Task.FromResult(new List<ProductionOrder>());
+        public Task<List<ProductionOrder>> GetPageAsync(OrderStatus? status, int skip, int take, CancellationToken ct = default) => Task.FromResult(new List<ProductionOrder>());
+        public Task<int> CountAsync(OrderStatus? status, CancellationToken ct = default) => Task.FromResult(0);
+        public void Update(ProductionOrder order) { }
     }
 
     /// <summary>

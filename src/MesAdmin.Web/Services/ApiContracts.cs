@@ -9,7 +9,7 @@ public record OrderSummary(
     DateTimeOffset CreatedAt, DateTimeOffset? CompletedAt);
 
 public record OrderDetail(
-    OrderSummary Order, bool CanRelease, bool CanStart, bool CanComplete, bool CanClose);
+    OrderSummary Order, bool CanRelease, bool CanStart, bool CanComplete, bool CanClose, bool CanCancel = false);
 
 public record OperationDto(
     string Id, string OrderId, int Sequence, int Station,
@@ -20,6 +20,7 @@ public record OperationDto(
 public record CreateOrderBody(string ProductCode, string BomVersion, string RoutingId, int PlannedQuantity, short Priority);
 public record ChangeStatusBody(string Status);
 public record CompleteOrderBody(int QualifiedQuantity, int DefectiveQuantity);
+public record CancelOrderBody(string Reason);
 public record ReportOperationBody(string OperatorId, string EquipmentId);
 
 public record TraceabilityLinkDto(
@@ -131,6 +132,7 @@ public static class OrderStatusNames
     public const string InProgress = "InProgress";
     public const string Completed = "Completed";
     public const string Closed = "Closed";
+    public const string Cancelled = "Cancelled";
 }
 
 // ═══════════════════════════════════════════

@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using MesAdmin.Application.Common;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
 
@@ -55,6 +57,43 @@ public class ProductionOrderRepository(MesDbContext db) : IProductionOrderReposi
         return query.CountAsync(ct);
     }
 
+    public Task<List<ProductionOrder>> GetPageAsync(OrderListFilter filter, int skip, int take, CancellationToken ct = default)
+        => ApplyFilter(db.ProductionOrders.AsNoTracking(), filter)
+            .OrderByDescending(order => order.CreatedAt)
+            .ThenByDescending(order => order.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+    public Task<int> CountAsync(OrderListFilter filter, CancellationToken ct = default)
+        => ApplyFilter(db.ProductionOrders.AsQueryable(), filter).CountAsync(ct);
+
+    private static IQueryable<ProductionOrder> ApplyFilter(IQueryable<ProductionOrder> query, OrderListFilter filter)
+    {
+        if (filter.Status is not null)
+            query = query.Where(order => order.Status == filter.Status);
+
+        if (!string.IsNullOrWhiteSpace(filter.OrderNumberContains))
+        {
+            var term = filter.OrderNumberContains.Trim();
+            query = query.Where(order => order.OrderNumber.Contains(term));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.ProductCode))
+        {
+            var code = filter.ProductCode.Trim().ToUpperInvariant();
+            query = query.Where(order => order.ProductCode == code);
+        }
+
+        if (filter.CreatedFrom is not null)
+            query = query.Where(order => order.CreatedAt >= filter.CreatedFrom);
+
+        if (filter.CreatedTo is not null)
+            query = query.Where(order => order.CreatedAt <= filter.CreatedTo);
+
+        return query;
+    }
+
     public Task<int> CountByOrderNumberPrefixAsync(string orderNumberPrefix, CancellationToken ct = default)
         => db.ProductionOrders.CountAsync(order => order.OrderNumber.StartsWith(orderNumberPrefix), ct);
 
@@ -64,6 +103,25 @@ public class ProductionOrderRepository(MesDbContext db) : IProductionOrderReposi
     public void Update(ProductionOrder order)
         => db.ProductionOrders.Update(order);
 
-    public Task<int> SaveChangesAsync(CancellationToken ct = default)
-        => db.SaveChangesAsync(ct);
+    public async Task<int> SaveChangesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            return await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsOrderNumberConflict(ex))
+        {
+            var conflictingNumber = db.ChangeTracker
+                .Entries<ProductionOrder>()
+                .Select(e => e.Entity.OrderNumber)
+                .FirstOrDefault() ?? string.Empty;
+            throw new DuplicateOrderNumberException(conflictingNumber);
+        }
+    }
+
+    /// <summary>判断是否为工单号唯一索引冲突（PostgreSQL SQLSTATE 23505）。</summary>
+    private static bool IsOrderNumberConflict(DbUpdateException ex)
+        => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
+           && pg.ConstraintName is not null
+           && pg.ConstraintName.Contains("OrderNumber", StringComparison.OrdinalIgnoreCase);
 }
