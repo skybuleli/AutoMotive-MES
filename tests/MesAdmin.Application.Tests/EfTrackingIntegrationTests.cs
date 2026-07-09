@@ -155,6 +155,31 @@ public class EfTrackingIntegrationTests
     }
 
     // ═══════════════════════════════════════════
+    //  SAP 工单同步表存在性（修复空迁移导致缺表）
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public async Task SapOrderSyncRecords_TableShouldExistAndBeQueryable()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
+
+        // 插入一条待同步记录（复现 SapOrderSyncService 的写入路径）
+        var record = SapOrderSyncRecord.Create(
+            Ulid.NewUlid(), "WO-SAP-0001", "SAP-ORD-0001", OrderStatus.Released);
+        db.SapOrderSyncRecords.Add(record);
+        await db.SaveChangesAsync();
+
+        // 复现后台服务的查询：WHERE NOT SapSynced ORDER BY CreatedAt
+        var pending = await db.SapOrderSyncRecords
+            .Where(r => !r.SapSynced)
+            .OrderBy(r => r.CreatedAt)
+            .ToListAsync();
+
+        Assert.Contains(pending, r => r.Id == record.Id);
+    }
+
+    // ═══════════════════════════════════════════
     //  工单列表多维过滤（#3 完善）
     // ═══════════════════════════════════════════
 
