@@ -23,7 +23,7 @@ public class ListSparePartsEndpoint : MesEndpointWithoutRequest<List<SparePartRe
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var filter = Query<string?>("filter");
+        var filter = Query<string?>("filter", isRequired: false);
         var repo = Resolve<ISparePartRepository>();
 
         List<SparePart> parts = filter switch
@@ -443,7 +443,7 @@ public class ListPurchaseRequestsEndpoint : MesEndpointWithoutRequest<List<Purch
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var status = Query<string?>("status");
+        var status = Query<string?>("status", isRequired: false);
         var repo = Resolve<IPurchaseRequestRepository>();
         var requests = await repo.GetListAsync(status, ct: ct);
         Response = requests.Select(SparePartMapper.ToPurchaseResponse).ToList();

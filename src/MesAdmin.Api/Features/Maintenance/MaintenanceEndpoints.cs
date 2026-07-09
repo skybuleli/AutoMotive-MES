@@ -46,12 +46,12 @@ public class ListOrdersEndpoint : MesEndpointWithoutRequest<List<MaintenanceOrde
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var equipmentCode = Query<string?>("equipmentCode");
-        var statusStr = Query<string?>("status");
-        var limit = Query<int?>("limit") ?? 50;
+        var equipmentCode = Query<string?>("equipmentCode", isRequired: false);
+        var statusStr = Query<string?>("status", isRequired: false);
+        var limit = Query<int?>("limit", isRequired: false) ?? 50;
 
-        MaintenanceOrderStatus? status = statusStr is not null
-            ? Enum.Parse<MaintenanceOrderStatus>(statusStr)
+        MaintenanceOrderStatus? status = Enum.TryParse<MaintenanceOrderStatus>(statusStr, true, out var parsed)
+            ? parsed
             : null;
 
         var repo = Resolve<IMaintenanceWorkOrderRepository>();

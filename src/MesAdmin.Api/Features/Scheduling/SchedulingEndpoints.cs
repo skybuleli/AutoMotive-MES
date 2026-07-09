@@ -25,10 +25,10 @@ public class ListSchedulesEndpoint : MesEndpointWithoutRequest<List<ScheduleResp
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var dateFrom = Query<string?>("from");
-        var dateTo = Query<string?>("to");
-        var equipment = Query<string?>("equipment");
-        var status = Query<string?>("status");
+        var dateFrom = Query<string?>("from", isRequired: false);
+        var dateTo = Query<string?>("to", isRequired: false);
+        var equipment = Query<string?>("equipment", isRequired: false);
+        var status = Query<string?>("status", isRequired: false);
 
         var repo = Resolve<IScheduleRepository>();
 
@@ -464,7 +464,7 @@ public class GetCapacityUtilizationEndpoint : MesEndpointWithoutRequest<List<Cap
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var dateStr = Query<string>("date");
+        var dateStr = Query<string?>("date", isRequired: false);
         var date = dateStr is not null
             ? DateOnly.Parse(dateStr)
             : DateOnly.FromDateTime(DateTimeOffset.UtcNow.DateTime);
@@ -591,8 +591,8 @@ public class GetGanttDataEndpoint : MesEndpointWithoutRequest<GanttDataResponse>
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var dateFrom = Query<string?>("from");
-        var dateTo = Query<string?>("to");
+        var dateFrom = Query<string?>("from", isRequired: false);
+        var dateTo = Query<string?>("to", isRequired: false);
 
         var from = dateFrom is not null ? DateOnly.Parse(dateFrom)
             : DateOnly.FromDateTime(DateTimeOffset.UtcNow.DateTime);

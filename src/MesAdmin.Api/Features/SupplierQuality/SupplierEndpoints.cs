@@ -23,8 +23,8 @@ public class ListSuppliersEndpoint : MesEndpointWithoutRequest<List<SupplierResp
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var category = Query<string?>("category");
-        var criticalOnly = Query<bool?>("critical");
+        var category = Query<string?>("category", isRequired: false);
+        var criticalOnly = Query<bool?>("critical", isRequired: false);
         var repo = Resolve<ISupplierRepository>();
 
         List<Supplier> suppliers;

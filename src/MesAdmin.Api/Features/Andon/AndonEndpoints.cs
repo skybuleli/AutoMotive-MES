@@ -27,13 +27,14 @@ public class ListAndonEndpoint : MesEndpointWithoutRequest<List<AndonEventRespon
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var statusStr = Query<string?>("status");
-        var equipmentCode = Query<string?>("equipmentCode");
-        var severityStr = Query<string?>("severity");
-        var limit = Query<int?>("limit") ?? 50;
+        // isRequired: false —— 这些是可选过滤参数，缺省时不得触发 400（FastEndpoints Query 默认必填）
+        var statusStr = Query<string?>("status", isRequired: false);
+        var equipmentCode = Query<string?>("equipmentCode", isRequired: false);
+        var severityStr = Query<string?>("severity", isRequired: false);
+        var limit = Query<int?>("limit", isRequired: false) ?? 50;
 
-        AndonEventStatus? status = statusStr is not null ? Enum.Parse<AndonEventStatus>(statusStr) : null;
-        AndonSeverity? severity = severityStr is not null ? Enum.Parse<AndonSeverity>(severityStr) : null;
+        AndonEventStatus? status = Enum.TryParse<AndonEventStatus>(statusStr, true, out var s) ? s : null;
+        AndonSeverity? severity = Enum.TryParse<AndonSeverity>(severityStr, true, out var sev) ? sev : null;
 
         var repo = Resolve<IAndonEventRepository>();
         var events = await repo.GetListAsync(status, equipmentCode, severity, limit, ct);

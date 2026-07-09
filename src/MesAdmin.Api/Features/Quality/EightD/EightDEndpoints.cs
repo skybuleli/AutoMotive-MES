@@ -178,7 +178,7 @@ public class ListEightDEndpoint : MesEndpointWithoutRequest<List<EightDReportRes
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var statusStr = Query<string>("status");
+        var statusStr = Query<string?>("status", isRequired: false);
         var repo = Resolve<IEightDReportRepository>();
         List<EightDReport> reports;
 

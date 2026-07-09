@@ -24,8 +24,8 @@ public class ListRoutingsEndpoint : MesEndpointWithoutRequest<List<RoutingRespon
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var productCode = Query<string?>("productCode");
-        var ecoStatus = Query<string?>("ecoStatus");
+        var productCode = Query<string?>("productCode", isRequired: false);
+        var ecoStatus = Query<string?>("ecoStatus", isRequired: false);
         var repo = Resolve<IRoutingRepository>();
 
         List<Domain.Models.Routing> routings;
@@ -71,7 +71,8 @@ public class GetActiveRoutingEndpoint : MesEndpointWithoutRequest<RoutingRespons
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var productCode = Query<string>("productCode")!;
+        // isRequired: false —— 交由下方自定义校验返回友好错误，而非 FastEndpoints 直接 400
+        var productCode = Query<string?>("productCode", isRequired: false);
         if (string.IsNullOrWhiteSpace(productCode))
         {
             AddError("productCode", "产品编码不能为空");
@@ -79,7 +80,7 @@ public class GetActiveRoutingEndpoint : MesEndpointWithoutRequest<RoutingRespons
         }
 
         var repo = Resolve<IRoutingRepository>();
-        var routing = await repo.GetActiveByProductAsync(productCode, ct);
+        var routing = await repo.GetActiveByProductAsync(productCode!, ct);
         if (routing is null)
         {
             await Send.NotFoundAsync(ct);

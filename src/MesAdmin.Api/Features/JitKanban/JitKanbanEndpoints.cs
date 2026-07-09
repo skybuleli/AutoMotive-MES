@@ -184,8 +184,8 @@ public class ListJitHistoryEndpoint : MesEndpointWithoutRequest<JitHistoryRespon
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var page = Query<int?>("page") ?? 1;
-        var size = Query<int?>("size") ?? 20;
+        var page = Query<int?>("page", isRequired: false) ?? 1;
+        var size = Query<int?>("size", isRequired: false) ?? 20;
 
         var (items, total) = await new ListAllJitSignalsQuery(page, size).ExecuteAsync(ct);
         Response = new JitHistoryResponse(items.Select(JitSignalMapper.MapToResponse).ToList(), total);

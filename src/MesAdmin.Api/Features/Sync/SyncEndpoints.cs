@@ -174,8 +174,8 @@ public sealed class PendingSyncEndpoint : EndpointWithoutRequest<List<SyncConfli
     public override async Task HandleAsync(CancellationToken ct)
     {
         var repo = Resolve<IOfflineSyncRepository>();
-        var terminalId = Query<string?>("terminalId");
-        var status = Query<string?>("status");
+        var terminalId = Query<string?>("terminalId", isRequired: false);
+        var status = Query<string?>("status", isRequired: false);
 
         List<OfflineSyncRecord> records;
         if (terminalId is not null)

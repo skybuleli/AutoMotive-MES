@@ -77,8 +77,8 @@ public class ListSpcSamplesEndpoint : MesEndpointWithoutRequest<List<SpcSampleRe
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var charCode = Query<string>("charCode");
-        var limitStr = Query<string>("limit");
+        var charCode = Query<string?>("charCode", isRequired: false);
+        var limitStr = Query<string?>("limit", isRequired: false);
         var limit = int.TryParse(limitStr, out var l) ? l : 25;
 
         var repo = Resolve<ISpcSampleRepository>();
@@ -114,7 +114,7 @@ public class ListSpcAlertsEndpoint : MesEndpointWithoutRequest<List<SpcRuleAlert
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var charCode = Query<string>("charCode");
+        var charCode = Query<string?>("charCode", isRequired: false);
         var repo = Resolve<ISpcRuleAlertRepository>();
 
         var alerts = await repo.GetUnacknowledgedAsync(

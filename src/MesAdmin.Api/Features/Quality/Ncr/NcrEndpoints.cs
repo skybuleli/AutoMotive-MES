@@ -84,7 +84,7 @@ public class ListNcrEndpoint : MesEndpointWithoutRequest<List<NcrResponse>>
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var statusStr = Query<string>("status");
+        var statusStr = Query<string?>("status", isRequired: false);
         var repo = Resolve<INonConformanceReportRepository>();
         List<NonConformanceReport> ncrs;
 
