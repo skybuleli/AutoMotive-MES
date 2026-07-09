@@ -143,7 +143,7 @@
                                     @ev.ProcessValue.ToString("F1")
                                     @if (ev.UpperLimit.HasValue)
                                     {
-                                        <MudText Typo="Typo.caption" Style="display:inline; color:#9399B2;">/ @ev.UpperLimit</MudText>
+                                        <MudText Typo="Typo.caption" Style="display:inline; color:var(--mud-palette-text-secondary);">/ @ev.UpperLimit</MudText>
                                     }
                                 </MudText>
                             </MudStack>
@@ -153,10 +153,10 @@
                         <MudStack Row Spacing="1" AlignItems="AlignItems.Center" Class="mt-2">
                             <MudChip T="string" Size="Size.Small" Color="@(ev.EscalationLevel >= 0 ? Color.Success : Color.Default)"
                                      Variant="@(ev.EscalationLevel >= 0 ? Variant.Filled : Variant.Outlined)">L1</MudChip>
-                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Style="color:#9399B2;" />
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Style="color:var(--mud-palette-text-secondary);" />
                             <MudChip T="string" Size="Size.Small" Color="@(ev.EscalationLevel >= 1 ? Color.Warning : Color.Default)"
                                      Variant="@(ev.EscalationLevel >= 1 ? Variant.Filled : Variant.Outlined)">L2</MudChip>
-                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Style="color:#9399B2;" />
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Style="color:var(--mud-palette-text-secondary);" />
                             <MudChip T="string" Size="Size.Small" Color="@(ev.EscalationLevel >= 2 ? Color.Error : Color.Default)"
                                      Variant="@(ev.EscalationLevel >= 2 ? Variant.Filled : Variant.Outlined)">L3</MudChip>
                             @if (ev.Status == "Acknowledged")

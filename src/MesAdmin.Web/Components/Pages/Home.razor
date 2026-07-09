@@ -3,106 +3,72 @@
 
 <PageTitle>仪表盘 — AutoMES</PageTitle>
 
-<!-- 页面标题 -->
-<MudText Typo="Typo.h4" Style="font-weight:700; color:#CDD6F4; margin-bottom:4px;">
-    博世 ESP® 制动系统 MES
-</MudText>
-<MudText Typo="Typo.body2" Style="color:#9399B2; margin-bottom:28px;">
-    汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序
-</MudText>
+<MudStack Spacing="6" Class="home-page">
 
-<!-- KPI 卡片 -->
-<MudGrid Spacing="3">
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Class="pa-5 kpi-card" Style="border-top:3px solid #CBA6F7;">
-            <MudStack Row="true" AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween">
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.caption" Style="color:#9399B2; font-weight:500;">OEE</MudText>
-                    <MudText Typo="Typo.h4" Style="font-weight:700; color:#CBA6F7; margin-top:4px;">85.2%</MudText>
-                    <MudText Typo="Typo.caption" Style="color:#6C7086;">全局设备综合效率</MudText>
-                </MudStack>
-                <MudAvatar Color="Color.Primary" Variant="Variant.Filled"
-                           Style="background:rgba(203,166,247,0.15); color:#CBA6F7;">
-                    <MudIcon Icon="@Icons.Material.Filled.Speed" />
-                </MudAvatar>
-            </MudStack>
-        </MudPaper>
-    </MudItem>
+    <!-- 页头 -->
+    <MudPaper Elevation="0" Class="mes-toolbar pa-6">
+        <MudStack Spacing="1">
+            <MudText Class="section-kicker">OVERVIEW · 总览与告警</MudText>
+            <MudText Typo="Typo.h4" Class="text-gradient" Style="font-weight:800;">博世 ESP® 制动系统 MES</MudText>
+            <MudText Typo="Typo.body2" Class="section-copy">
+                汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序
+            </MudText>
+        </MudStack>
+    </MudPaper>
 
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Class="pa-5 kpi-card" Style="border-top:3px solid #4ADE80;">
-            <MudStack Row="true" AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween">
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.caption" Style="color:#9399B2; font-weight:500;">合格率</MudText>
-                    <MudText Typo="Typo.h4" Style="font-weight:700; color:#4ADE80; margin-top:4px;">97.5%</MudText>
-                    <MudText Typo="Typo.caption" Style="color:#6C7086;">一次合格率</MudText>
-                </MudStack>
-                <MudAvatar Color="Color.Success" Variant="Variant.Filled"
-                           Style="background:rgba(74,222,128,0.15); color:#4ADE80;">
-                    <MudIcon Icon="@Icons.Material.Filled.Verified" />
-                </MudAvatar>
-            </MudStack>
-        </MudPaper>
-    </MudItem>
+    <!-- KPI 卡片 -->
+    <MudGrid Spacing="4">
+        @foreach (var kpi in _kpis)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="0" Class="glass-kpi-card" Style="height:100%;">
+                    <MudStack Row AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween">
+                        <MudStack Spacing="1">
+                            <MudText Class="kpi-label">@kpi.Label</MudText>
+                            <MudText Class="kpi-value" Style="@($"color:{kpi.Color};")">@kpi.Value</MudText>
+                            <MudText Class="kpi-sub">@kpi.Sub</MudText>
+                        </MudStack>
+                        <div class="home-kpi-icon" style="@($"background:{kpi.Color}22;color:{kpi.Color};")">
+                            <MudIcon Icon="@kpi.Icon" />
+                        </div>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
 
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Class="pa-5 kpi-card" Style="border-top:3px solid #FBBF24;">
-            <MudStack Row="true" AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween">
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.caption" Style="color:#9399B2; font-weight:500;">在产工单</MudText>
-                    <MudText Typo="Typo.h4" Style="font-weight:700; color:#FBBF24; margin-top:4px;">12</MudText>
-                    <MudText Typo="Typo.caption" Style="color:#6C7086;">进行中工单数</MudText>
-                </MudStack>
-                <MudAvatar Color="Color.Warning" Variant="Variant.Filled"
-                           Style="background:rgba(251,191,36,0.15); color:#FBBF24;">
-                    <MudIcon Icon="@Icons.Material.Filled.Assignment" />
-                </MudAvatar>
-            </MudStack>
-        </MudPaper>
-    </MudItem>
+    <!-- 快速操作 -->
+    <MudStack Spacing="3">
+        <MudText Typo="Typo.h6" Style="font-weight:600;">快速操作</MudText>
+        <MudGrid Spacing="3">
+            @foreach (var act in _actions)
+            {
+                <MudItem xs="6" sm="3">
+                    <MudButton Href="@act.Href" Variant="Variant.Outlined" Color="@act.Color"
+                               FullWidth StartIcon="@act.Icon" Class="home-action">
+                        @act.Label
+                    </MudButton>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudStack>
 
-    <MudItem xs="12" sm="6" md="3">
-        <MudPaper Elevation="0" Class="pa-5 kpi-card" Style="border-top:3px solid #EF4444;">
-            <MudStack Row="true" AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween">
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.caption" Style="color:#9399B2; font-weight:500;">Andon 报警</MudText>
-                    <MudText Typo="Typo.h4" Style="font-weight:700; color:#EF4444; margin-top:4px;">3</MudText>
-                    <MudText Typo="Typo.caption" Style="color:#6C7086;">未处理报警</MudText>
-                </MudStack>
-                <MudAvatar Color="Color.Error" Variant="Variant.Filled"
-                           Style="background:rgba(239,68,68,0.15); color:#EF4444;">
-                    <MudIcon Icon="@Icons.Material.Filled.NotificationImportant" />
-                </MudAvatar>
-            </MudStack>
-        </MudPaper>
-    </MudItem>
-</MudGrid>
+</MudStack>
 
-<!-- 快速操作 -->
-<MudText Typo="Typo.h6" Style="font-weight:600; color:#CDD6F4; margin:32px 0 16px;">快速操作</MudText>
-<MudGrid Spacing="2">
-    <MudItem xs="6" sm="3" md="2">
-        <MudButton Href="production" Variant="Variant.Outlined"
-                   Color="Color.Primary" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.AddCircle"
-                   Style="border-color:rgba(203,166,247,0.25); justify-content:flex-start; padding:10px 16px;">新建工单</MudButton>
-    </MudItem>
-    <MudItem xs="6" sm="3" md="2">
-        <MudButton Href="material" Variant="Variant.Outlined"
-                   Color="Color.Success" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.QrCodeScanner"
-                   Style="border-color:rgba(74,222,128,0.25); justify-content:flex-start; padding:10px 16px;">扫码入库</MudButton>
-    </MudItem>
-    <MudItem xs="6" sm="3" md="2">
-        <MudButton Href="andon" Variant="Variant.Outlined"
-                   Color="Color.Error" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.Campaign"
-                   Style="border-color:rgba(239,68,68,0.25); justify-content:flex-start; padding:10px 16px;">触发 Andon</MudButton>
-    </MudItem>
-    <MudItem xs="6" sm="3" md="2">
-        <MudButton Href="traceability" Variant="Variant.Outlined"
-                   Color="Color.Warning" FullWidth="true"
-                   StartIcon="@Icons.Material.Filled.Search"
-                   Style="border-color:rgba(251,191,36,0.25); justify-content:flex-start; padding:10px 16px;">追溯查询</MudButton>
-    </MudItem>
-</MudGrid>
+@code {
+    private readonly (string Label, string Value, string Sub, string Color, string Icon)[] _kpis =
+    [
+        ("OEE", "85.2%", "全局设备综合效率", "#D0B4F9", Icons.Material.Filled.Speed),
+        ("合格率", "97.5%", "一次合格率", "#ADE6A8", Icons.Material.Filled.Verified),
+        ("在产工单", "12", "进行中工单数", "#FBE7B6", Icons.Material.Filled.Assignment),
+        ("Andon 报警", "3", "未处理报警", "#F595B0", Icons.Material.Filled.NotificationImportant),
+    ];
+
+    private readonly (string Label, string Href, Color Color, string Icon)[] _actions =
+    [
+        ("新建工单", "production", Color.Primary, Icons.Material.Filled.AddCircle),
+        ("扫码入库", "material", Color.Success, Icons.Material.Filled.QrCodeScanner),
+        ("触发 Andon", "andon", Color.Error, Icons.Material.Filled.Campaign),
+        ("追溯查询", "traceability", Color.Warning, Icons.Material.Filled.Search),
+    ];
+}

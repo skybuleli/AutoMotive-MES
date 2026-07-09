@@ -103,7 +103,7 @@
                                 <MudText Typo="Typo.caption" Class="kpi-label">当前库存</MudText>
                                 <MudText Typo="Typo.h4" Style="@($"color:{alertColor};font-weight:600")">
                                     @item.CurrentQuantity.ToString("F0")
-                                    <MudText Typo="Typo.caption" Style="display:inline; color: #9399B2;">@item.Unit</MudText>
+                                    <MudText Typo="Typo.caption" Style="display:inline; color: var(--mud-palette-text-secondary);">@item.Unit</MudText>
                                 </MudText>
                             </MudStack>
                             <MudStack Spacing="0">

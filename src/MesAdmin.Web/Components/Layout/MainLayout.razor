@@ -9,14 +9,14 @@
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="1" Color="Color.Default" Dense>
+    <MudAppBar Elevation="0" Color="Color.Transparent" Class="mes-appbar" Dense>
         <MudIconButton Icon="@Icons.Material.Filled.Menu"
                        Color="Color.Inherit"
                        Edge="Edge.Start"
                        OnClick="ToggleDrawer" />
 
-        <MudStack Spacing="0">
-            <MudText Typo="Typo.h6">AutoMES</MudText>
+        <MudStack Spacing="0" Class="ml-1">
+            <MudText Typo="Typo.h6" Class="text-gradient" Style="font-weight:800;letter-spacing:-0.02em;">AutoMES</MudText>
             <MudText Typo="Typo.caption" Class="layout-subtitle">@GetPageTitle()</MudText>
         </MudStack>
 
@@ -48,13 +48,13 @@
                ClipMode="DrawerClipMode.Always"
                Class="mes-drawer">
         <MudDrawerHeader Class="px-4 py-4">
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                <MudAvatar Color="Color.Primary" Variant="Variant.Filled">
-                    <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" />
-                </MudAvatar>
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                <div class="mes-brand-mark">
+                    <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" Style="color:#0B0B12;" />
+                </div>
                 <MudStack Spacing="0">
-                    <MudText Typo="Typo.subtitle1">生产执行中台</MudText>
-                    <MudText Typo="Typo.caption" Class="layout-subtitle">ESP 总成工厂</MudText>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">生产执行中台</MudText>
+                    <MudText Typo="Typo.caption" Class="layout-subtitle">ESP 总成工厂 · Tier-1</MudText>
                 </MudStack>
             </MudStack>
         </MudDrawerHeader>

@@ -7,54 +7,57 @@
 
 <PageTitle>工单看板 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
-    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-        <MudText Typo="Typo.h5">生产工单看板</MudText>
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync">
-            刷新
-        </MudButton>
-    </MudStack>
+<MudStack Spacing="5">
+    <MudPaper Elevation="0" Class="mes-toolbar pa-5">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Spacing="1">
+                <MudText Class="section-kicker">PRODUCTION · 工单看板</MudText>
+                <MudText Typo="Typo.h5" Style="font-weight:700;">生产工单看板</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">按状态泳道浏览工单流转 · 点击卡片查看详情</MudText>
+            </MudStack>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync">
+                刷新
+            </MudButton>
+        </MudStack>
+    </MudPaper>
 
     @if (!string.IsNullOrWhiteSpace(_loadError))
     {
         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>@_loadError</MudAlert>
     }
 
-    <MudGrid Spacing="2">
+    <MudGrid Spacing="3">
         @foreach (var column in _columns)
         {
             <MudItem xs="12" sm="6" md="4" lg="2">
-                <MudPaper Elevation="2" Class="pa-3 kanban-column" Style="min-height: 60vh; background: #181825;">
-                    <MudStack Spacing="2">
-                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-                            <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@column.Label</MudText>
-                            <MudBadge Content="@column.Orders.Count" Color="@column.BadgeColor" Overlap="false" Class="ml-2" />
-                        </MudStack>
+                <div class="kanban-column">
+                    <div class="kanban-column-head">
+                        <span class="kanban-col-dot @column.Key"></span>
+                        <MudText Typo="Typo.subtitle2" Style="font-weight:600;flex:1;">@column.Label</MudText>
+                        <span class="kanban-count">@column.Orders.Count</span>
+                    </div>
 
+                    <MudStack Spacing="2" Class="mt-3">
                         @foreach (var order in column.Orders)
                         {
-                            <MudCard Elevation="1" Class="kanban-card" Style="background: #1E1E2E; cursor: pointer;" @onclick="() => GoToDetail(order.Id)">
-                                <MudCardContent Class="pa-3">
-                                    <MudStack Spacing="1">
-                                        <MudText Typo="Typo.body2" Style="font-weight: 600; color: #CBA6F7;">@order.OrderNumber</MudText>
-                                        <MudText Typo="Typo.caption" Class="text-secondary">@order.ProductCode · @order.BomVersion</MudText>
-                                        <MudDivider Class="my-1" />
-                                        <MudStack Row Justify="Justify.SpaceBetween">
-                                            <MudText Typo="Typo.caption">计划: @order.PlannedQuantity</MudText>
-                                            <MudText Typo="Typo.caption">良品: @order.QualifiedQuantity</MudText>
-                                        </MudStack>
-                                        <MudText Typo="Typo.caption" Class="text-secondary">@order.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudText>
-                                    </MudStack>
-                                </MudCardContent>
-                            </MudCard>
+                            <div class="kanban-card" @onclick="() => GoToDetail(order.Id)">
+                                <MudText Typo="Typo.body2" Class="kanban-order-no">@order.OrderNumber</MudText>
+                                <MudText Typo="Typo.caption" Class="section-copy">@order.ProductCode · @order.BomVersion</MudText>
+                                <MudDivider Class="my-2" />
+                                <MudStack Row Justify="Justify.SpaceBetween">
+                                    <MudText Typo="Typo.caption">计划 <b>@order.PlannedQuantity</b></MudText>
+                                    <MudText Typo="Typo.caption">良品 <b>@order.QualifiedQuantity</b></MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.caption" Class="kpi-sub mt-1">@order.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudText>
+                            </div>
                         }
 
                         @if (column.Orders.Count == 0)
                         {
-                            <MudText Typo="Typo.caption" Align="Align.Center" Class="text-secondary py-4">暂无工单</MudText>
+                            <MudText Typo="Typo.caption" Align="Align.Center" Class="section-copy py-6">暂无工单</MudText>
                         }
                     </MudStack>
-                </MudPaper>
+                </div>
             </MudItem>
         }
     </MudGrid>
@@ -93,19 +96,19 @@
     {
         var columns = new List<KanbanColumn>();
 
-        foreach (var (status, label, badgeColor) in new[]
+        foreach (var (status, label, key) in new[]
         {
-            ("Created", "已创建", Color.Default),
-            ("Released", "已放行", Color.Info),
-            ("InProgress", "执行中", Color.Primary),
-            ("Completed", "已完工", Color.Success),
-            ("Closed", "已关闭", Color.Dark),
+            ("Created", "已创建", "created"),
+            ("Released", "已放行", "released"),
+            ("InProgress", "执行中", "inprogress"),
+            ("Completed", "已完工", "completed"),
+            ("Closed", "已关闭", "closed"),
         })
         {
             try
             {
                 var items = await Api.GetAsync<List<OrderSummary>>($"api/v1/orders?status={status}&page=1&size=50");
-                columns.Add(new KanbanColumn(label, badgeColor, items ?? []));
+                columns.Add(new KanbanColumn(label, key, items ?? []));
             }
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
@@ -113,7 +116,7 @@
             }
             catch
             {
-                columns.Add(new KanbanColumn(label, badgeColor, []));
+                columns.Add(new KanbanColumn(label, key, []));
             }
         }
 
@@ -146,5 +149,5 @@
         return true;
     }
 
-    private sealed record KanbanColumn(string Label, Color BadgeColor, List<OrderSummary> Orders);
+    private sealed record KanbanColumn(string Label, string Key, List<OrderSummary> Orders);
 }
