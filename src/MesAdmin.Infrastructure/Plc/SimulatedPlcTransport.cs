@@ -159,8 +159,8 @@ public static class PlcFrameWriter
         destination[0] = PlcFrameProtocol.Header0;
         destination[1] = PlcFrameProtocol.Header1;
 
-        // 设备码 8 字节 ASCII（不足补 \0）
-        WriteAscii(destination.Slice(PlcFrameProtocol.EquipmentCodeOffset, 8), snapshot.EquipmentCode);
+        // 设备码 16 字节 ASCII（不足补 \0）
+        WriteAscii(destination.Slice(PlcFrameProtocol.EquipmentCodeOffset, 16), snapshot.EquipmentCode);
 
         // 状态 1 字节
         destination[PlcFrameProtocol.StatusOffset] = (byte)snapshot.Status;
@@ -192,6 +192,6 @@ public static class PlcFrameWriter
     private static void WriteAscii(Span<byte> destination, string value)
     {
         destination.Clear(); // 先清零（补 \0）
-        var bytes = Encoding.ASCII.GetBytes(value.AsSpan(), destination);
+        Encoding.ASCII.GetBytes(value.AsSpan(0, Math.Min(value.Length, destination.Length)), destination);
     }
 }

@@ -50,7 +50,7 @@ public class FullLifecycleE2ETest
         Assert.Equal(OrderStatus.Created, order.Status);
         Assert.Equal("ESP-9.0", order.ProductCode);
         Assert.Equal(100, order.PlannedQuantity);
-        Assert.StartsWith($"WO-{DateTimeOffset.Now:yyyyMMdd}-", order.OrderNumber);
+        Assert.StartsWith($"WO-{DateTimeOffset.UtcNow:yyyyMMdd}-", order.OrderNumber);
 
         // 验证 31 道工序已初始化
         var ops = await opRepo.GetByOrderIdAsync(order.Id, default);

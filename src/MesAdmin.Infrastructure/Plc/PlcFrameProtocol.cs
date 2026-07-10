@@ -6,8 +6,8 @@ namespace MesAdmin.Infrastructure.Plc;
 
 /// <summary>
 /// PLC 帧协议常量（T2.12）。
-/// 帧格式：[帧头 0x55 0xAA][设备码 8B][状态 1B][循环计数 8B][合格 8B][不良 8B][运行时长 8B][过程值 8B][标签 16B][帧尾 0x0D 0x0A]
-/// 总长 = 2 + 8 + 1 + 8 + 8 + 8 + 8 + 8 + 16 + 2 = 69 字节
+/// 帧格式：[帧头 0x55 0xAA][设备码 16B][状态 1B][循环计数 8B][合格 8B][不良 8B][运行时长 8B][过程值 8B][标签 16B][帧尾 0x0D 0x0A]
+/// 总长 = 2 + 16 + 1 + 8 + 8 + 8 + 8 + 8 + 16 + 2 = 77 字节
 /// 零分配解析：SearchValues SIMD 帧头扫描 + MemoryMarshal.Read 原生读取，禁止 byte[] + BitConverter。
 /// </summary>
 public static class PlcFrameProtocol
@@ -18,19 +18,19 @@ public static class PlcFrameProtocol
     public const byte Tail1 = 0x0A;
 
     /// <summary>帧总长度（字节）</summary>
-    public const int FrameLength = 69;
+    public const int FrameLength = 77;
 
     /// <summary>帧头偏移</summary>
     public const int HeaderOffset = 0;
-    public const int EquipmentCodeOffset = 2;       // 8 字节 ASCII
-    public const int StatusOffset = 10;              // 1 字节
-    public const int CycleCountOffset = 11;          // 8 字节 little-endian
-    public const int GoodCountOffset = 19;           // 8 字节
-    public const int DefectCountOffset = 27;         // 8 字节
-    public const int RunTimeOffset = 35;             // 8 字节
-    public const int ProcessValueOffset = 43;        // 8 字节 double
-    public const int ProcessTagOffset = 51;          // 16 字节 ASCII
-    public const int TailOffset = 67;                // 2 字节
+    public const int EquipmentCodeOffset = 2;        // 16 字节 ASCII
+    public const int StatusOffset = 18;              // 1 字节
+    public const int CycleCountOffset = 19;          // 8 字节 little-endian
+    public const int GoodCountOffset = 27;           // 8 字节
+    public const int DefectCountOffset = 35;         // 8 字节
+    public const int RunTimeOffset = 43;             // 8 字节
+    public const int ProcessValueOffset = 51;        // 8 字节 double
+    public const int ProcessTagOffset = 59;          // 16 字节 ASCII
+    public const int TailOffset = 75;                // 2 字节
 
     /// <summary>
     /// SearchValues 帧头扫描器（SIMD 加速）。
@@ -68,8 +68,8 @@ public ref struct PlcFrameReader
         _frame = frame;
     }
 
-    /// <summary>设备编码（8 字节 ASCII，去除尾部 \0）</summary>
-    public string EquipmentCode => ReadAscii(PlcFrameProtocol.EquipmentCodeOffset, 8);
+    /// <summary>设备编码（16 字节 ASCII，去除尾部 \0）</summary>
+    public string EquipmentCode => ReadAscii(PlcFrameProtocol.EquipmentCodeOffset, 16);
 
     /// <summary>设备状态（1 字节）</summary>
     public EquipmentStatus Status => (EquipmentStatus)_frame[PlcFrameProtocol.StatusOffset];

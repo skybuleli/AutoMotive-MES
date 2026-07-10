@@ -1,8 +1,11 @@
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using System.Text;
 using MesAdmin.Domain.Models;
 using Microsoft.Extensions.Logging;
+using Opc.Ua;
+using Opc.Ua.Client;
 using ZLogger;
 
 namespace MesAdmin.Infrastructure.Plc;
@@ -10,19 +13,17 @@ namespace MesAdmin.Infrastructure.Plc;
 /// <summary>
 /// OPC UA 传输层（T2.16 多协议驱动）。
 /// 适用于 Atlas Copco 拧紧机（Power Focus / MicroTorque）和 SMT 产线设备。
-/// 
-/// 连接方式：
-///   - 拧紧机：OPC UA TCP opc.tcp://<ip>:4840
-///   - SMT 线：OPC UA TCP opc.tcp://<ip>:4840
-/// 
-/// 读取节点：
-///   - 拧紧机：ns=2;s=Torque.ActualTorque / ns=2;s=Torque.ActualAngle / ns=2;s=Status.RunState
-///   - 通用：ns=2;s=Device.Status / ns=2;s=Device.CycleCount
 ///
-/// 当前为 OPC UA 协议就绪实现：
-///   - 开发环境使用 Pipe 模拟数据生成（与 SimulatedPlcTransport 同机制）
-///   - 生产环境替换真实 OPC UA 连接（OPC Foundation SDK）
-///   - 通过 Plc:Drivers:OpcUa:Enabled 配置切换
+/// 连接方式：
+///   - 拧紧机：OPC UA TCP opc.tcp://&lt;ip&gt;:4840（取自 Equipment.PlcAddress）
+///   - 终检台：OPC UA TCP opc.tcp://&lt;ip&gt;:4840
+///
+/// 真实模式（Plc:Drivers:OpcUa:Enabled=true）：
+///   使用 OPC Foundation .NET Standard 栈建立 Session，通过 Subscription 订阅设备节点，
+///   将节点值映射到 PlcSnapshot 帧写入 Pipe。连接失败按退避重连，不再降级到模拟。
+///
+/// 开发模式（默认）：
+///   通过 Pipe 模拟数据生成（与 SimulatedPlcTransport 同机制）。
 /// </summary>
 public sealed class OpcUaPlcTransport : IPlcTransport
 {
@@ -31,9 +32,14 @@ public sealed class OpcUaPlcTransport : IPlcTransport
     private readonly ILogger<OpcUaPlcTransport> _logger;
     private readonly bool _useRealClient;
     private readonly TimeSpan _pollInterval;
+    private ApplicationConfiguration? _appConfig;
+    private Session? _session;
     private CancellationTokenSource? _cts;
-    private Task? _pollTask;
+    private Task? _runTask;
     private bool _isConnected;
+
+    // 每台设备最新节点值缓存（tag → value），由订阅回调填充，发布循环消费
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, object?>> _values = new();
 
     // 支持 OPC UA 的设备编码
     private static readonly HashSet<string> OpcUaEquipmentCodes =
@@ -48,8 +54,17 @@ public sealed class OpcUaPlcTransport : IPlcTransport
     public string TransportName => "OPC-UA";
     public bool IsConnected => _isConnected;
 
-    /// <summary>模拟运行状态</summary>
-    private readonly Dictionary<string, (long Cycle, long Good, long Defect, long RunMs)> _state = new();
+    /// <summary>OPC UA 节点映射（tag → NodeId 字符串）。可被配置覆盖。</summary>
+    internal static readonly IReadOnlyDictionary<string, string> DefaultNodeMap = new Dictionary<string, string>
+    {
+        ["Status"] = "ns=2;s=Device.Status",
+        ["CycleCount"] = "ns=2;s=Device.CycleCount",
+        ["GoodCount"] = "ns=2;s=Device.GoodCount",
+        ["DefectCount"] = "ns=2;s=Device.DefectCount",
+        ["RunTimeMs"] = "ns=2;s=Device.RunTimeMs",
+        ["ProcessValue"] = "ns=2;s=Device.ProcessValue",
+        ["ProcessTag"] = "ns=2;s=Device.ProcessTag",
+    };
 
     public OpcUaPlcTransport(
         IReadOnlyList<Equipment> equipment,
@@ -62,7 +77,7 @@ public sealed class OpcUaPlcTransport : IPlcTransport
         _useRealClient = useRealClient;
         _pollInterval = TimeSpan.FromMilliseconds(pollIntervalMs);
         foreach (var code in OpcUaEquipmentCodes)
-            _state[code] = (0, 0, 0, 0);
+            _values[code] = new ConcurrentDictionary<string, object?>();
     }
 
     public Task StartAsync(CancellationToken ct = default)
@@ -70,59 +85,206 @@ public sealed class OpcUaPlcTransport : IPlcTransport
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         if (_useRealClient)
-        {
-            // ── 生产模式：连接真实 OPC UA 服务器 ──
-            _ = ConnectRealOpcUaAsync(_cts.Token);
-        }
+            _runTask = RunRealAsync(_cts.Token);
         else
-        {
-            // ── 开发模式：模拟数据生成 ──
-            _pollTask = SimulateFramesAsync(_cts.Token);
-        }
+            _runTask = SimulateFramesAsync(_cts.Token);
 
-        _isConnected = true;
+        _isConnected = _useRealClient;
         _logger.ZLogInformation($"OPC UA 传输层启动（{(_useRealClient ? "生产" : "模拟")}模式）");
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// 生产模式：连接真实 OPC UA 服务器。
-    /// 使用 OPC Foundation SDK 连接拧紧机等设备的 OPC UA 端点。
-    /// </summary>
-    private async Task ConnectRealOpcUaAsync(CancellationToken ct)
+    /// <summary>真实模式：为每个不同端点建立 Session + Subscription，并启动发布循环。</summary>
+    private async Task RunRealAsync(CancellationToken ct)
     {
-        try
-        {
-            // ── 生产环境实现 ──
-            // 需安装 Opc.Ua.Client NuGet 包：
-            //   dotnet add package OPCFoundation.NetStandard.Opc.Ua --version 1.5.0
-            //
-            // 典型连接代码：
-            //   var appConfig = new ApplicationConfiguration { ... };
-            //   var session = await Opc.Ua.Client.Session.Create(
-            //       appConfig, new ConfiguredEndpoint(null, new Uri(endpointUrl)),
-            //       true, ".", 60000, null, null);
-            //
-            // 读取节点（拧紧机 Atlas Copco Power Focus 示例）：
-            //   var torqueNode = new NodeId("ns=2;s=Torque.ActualTorque");
-            //   var value = session.ReadValue(node);
-            //
-            // 写入节点（拧紧机启动/停止）：
-            //   var writeValue = new WriteValue { NodeId = nodeId, Value = new DataValue(100.0) };
-            //   session.Write(null, [writeValue], out _);
+        _appConfig = BuildApplicationConfiguration();
 
-            _logger.ZLogInformation($"OPC UA 生产模式：等待真实设备连接（需配置 Plc:Endpoints）");
+        var groups = OpcUaEquipmentCodes
+            .Select(code => _allEquipment.FirstOrDefault(e => e.EquipmentCode == code))
+            .Where(e => e is not null)
+            .GroupBy(e => e!.PlcAddress)
+            .ToList();
 
-            // 使用模拟数据降级（避免生产模式无设备时完全空转）
-            _pollTask = SimulateFramesAsync(ct);
-            await _pollTask;
-        }
-        catch (Exception ex)
+        var connectTasks = groups.Select(g => ConnectEndpointAsync(g.Key, g.ToList()!, ct));
+        var publishTask = PublishLoopAsync(ct);
+        await Task.WhenAll(connectTasks.Append(publishTask));
+    }
+
+    private async Task ConnectEndpointAsync(string endpointUrl, IReadOnlyList<Equipment> devices, CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
         {
-            _logger.ZLogError($"OPC UA 连接失败：{ex.Message}，降级到模拟模式");
-            _pollTask = SimulateFramesAsync(ct);
-            await _pollTask;
+            try
+            {
+                var endpoint = new ConfiguredEndpoint(null, new EndpointDescription(endpointUrl)
+                {
+                    EndpointUrl = endpointUrl,
+                    Server = new ApplicationDescription { ApplicationUri = endpointUrl, ApplicationType = ApplicationType.Server },
+                    SecurityMode = MessageSecurityMode.None,
+                    SecurityPolicyUri = SecurityPolicies.None,
+                }, EndpointConfiguration.Create(_appConfig));
+
+                var session = await Session.Create(
+                    _appConfig!, endpoint, false, "AutoMES", 60000, null, null);
+                _session ??= session;
+                _isConnected = true;
+                _logger.ZLogInformation($"OPC UA 已连接 {endpointUrl}（{devices.Count} 台设备）");
+
+                var subscription = new Subscription(session.DefaultSubscription)
+                {
+                    PublishingInterval = (int)_pollInterval.TotalMilliseconds,
+                    KeepAliveCount = 10,
+                };
+
+                foreach (var dev in devices)
+                {
+                    foreach (var (tag, nodeId) in DefaultNodeMap)
+                    {
+                        var item = new MonitoredItem(subscription.DefaultItem)
+                        {
+                            StartNodeId = new NodeId(nodeId),
+                            AttributeId = Attributes.Value,
+                            DisplayName = $"{dev.EquipmentCode}:{tag}",
+                            MonitoringMode = MonitoringMode.Reporting,
+                            SamplingInterval = (int)_pollInterval.TotalMilliseconds,
+                            Handle = (dev.EquipmentCode, tag),
+                        };
+                        item.Notification += OnMonitoredItemNotification;
+                        subscription.AddItem(item);
+                    }
+                }
+
+                session.AddSubscription(subscription);
+                subscription.Create();
+
+                try { await Task.Delay(Timeout.Infinite, ct); }
+                catch (OperationCanceledException) { }
+
+                subscription.Delete(false);
+                session.Close();
+                _isConnected = false;
+                break;
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _isConnected = false;
+                _logger.ZLogError($"OPC UA 连接 {endpointUrl} 失败：{ex.Message}（5s 后重连）");
+                try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
+                catch (OperationCanceledException) { break; }
+            }
         }
+    }
+
+    private void OnMonitoredItemNotification(MonitoredItem item, MonitoredItemNotificationEventArgs e)
+    {
+        if (item.Handle is not (string code, string tag)) return;
+        if (e.NotificationValue is not MonitoredItemNotificationCollection notifications) return;
+        foreach (var change in notifications)
+        {
+            var bag = _values.GetOrAdd(code, _ => new ConcurrentDictionary<string, object?>());
+            bag[tag] = change.Value?.Value;
+        }
+    }
+
+    /// <summary>发布循环：将缓存节点值映射为 PlcSnapshot 帧写入 Pipe。</summary>
+    private async Task PublishLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var now = DateTimeOffset.UtcNow;
+            foreach (var code in OpcUaEquipmentCodes)
+            {
+                if (!_values.TryGetValue(code, out var bag) || bag.Count == 0) continue;
+                var snapshot = ToSnapshot(code, bag);
+                await WriteSnapshotFrameAsync(snapshot, ct);
+            }
+
+            try { await Task.Delay(_pollInterval, ct); }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+
+    /// <summary>
+    /// 纯函数：将节点值字典映射为 PlcSnapshot（与协议栈解耦，便于单元测试）。
+    /// </summary>
+    public static PlcSnapshot ToSnapshot(string equipmentCode, IReadOnlyDictionary<string, object?> values)
+    {
+        static long ToLong(object? v) => v switch
+        {
+            null => 0,
+            long l => l,
+            int i => i,
+            short s => s,
+            byte b => b,
+            uint u => u,
+            double d => (long)d,
+            float f => (long)f,
+            _ => Convert.ToInt64(v),
+        };
+        static double ToDouble(object? v) => v switch
+        {
+            null => 0,
+            double d => d,
+            float f => f,
+            long l => l,
+            int i => i,
+            _ => Convert.ToDouble(v),
+        };
+        static EquipmentStatus ToStatus(object? v) => (EquipmentStatus)(v is null ? 0 : Convert.ToInt32(v));
+
+        return PlcSnapshot.Create(
+            equipmentCode,
+            DateTimeOffset.UtcNow,
+            ToStatus(values.GetValueOrDefault("Status")),
+            ToLong(values.GetValueOrDefault("CycleCount")),
+            ToLong(values.GetValueOrDefault("GoodCount")),
+            ToLong(values.GetValueOrDefault("DefectCount")),
+            ToLong(values.GetValueOrDefault("RunTimeMs")),
+            ToDouble(values.GetValueOrDefault("ProcessValue")),
+            (values.GetValueOrDefault("ProcessTag") as string) ?? "Generic");
+    }
+
+    private static ApplicationConfiguration BuildApplicationConfiguration()
+    {
+        var config = new ApplicationConfiguration
+        {
+            ApplicationName = "AutoMES-OPC-UA-Client",
+            ApplicationType = ApplicationType.Client,
+            SecurityConfiguration = new SecurityConfiguration
+            {
+                ApplicationCertificate = new CertificateIdentifier
+                {
+                    StoreType = "Directory",
+                    StorePath = "OPC Foundation/CertificateStores/MachineDefault",
+                    SubjectName = "CN=AutoMES-OPC-UA-Client",
+                },
+                TrustedPeerCertificates = new CertificateTrustList
+                {
+                    StoreType = "Directory",
+                    StorePath = "OPC Foundation/CertificateStores/UA Applications",
+                },
+                TrustedIssuerCertificates = new CertificateTrustList
+                {
+                    StoreType = "Directory",
+                    StorePath = "OPC Foundation/CertificateStores/UA Certificate Authorities",
+                },
+                RejectedCertificateStore = new CertificateTrustList
+                {
+                    StoreType = "Directory",
+                    StorePath = "OPC Foundation/CertificateStores/RejectedCertificates",
+                },
+                AutoAcceptUntrustedCertificates = true,
+                RejectSHA1SignedCertificates = false,
+                MinimumCertificateKeySize = 1024,
+            },
+            TransportConfigurations = new TransportConfigurationCollection(),
+            TransportQuotas = new TransportQuotas { OperationTimeout = 15000 },
+            ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 },
+            TraceConfiguration = new TraceConfiguration(),
+        };
+        config.Validate(ApplicationType.Client);
+        return config;
     }
 
     /// <summary>开发模式：模拟 OPC UA 设备数据帧</summary>
@@ -133,14 +295,6 @@ public sealed class OpcUaPlcTransport : IPlcTransport
             var now = DateTimeOffset.UtcNow;
             foreach (var eq in _allEquipment.Where(e => OpcUaEquipmentCodes.Contains(e.EquipmentCode)))
             {
-                var s = _state[eq.EquipmentCode];
-                s.Cycle += 1;
-                s.Good += Random.Shared.NextDouble() > 0.03 ? 1 : 0;
-                s.Defect += Random.Shared.NextDouble() <= 0.03 ? 1 : 0;
-                s.RunMs += (long)_pollInterval.TotalMilliseconds;
-                _state[eq.EquipmentCode] = s;
-
-                // 拧紧机模拟：M6 扭矩 22±1Nm / M8 扭矩 45±2Nm
                 var isM8 = eq.EquipmentCode == "EQ-TQ-02";
                 var processValue = isM8
                     ? 45.0 + Random.Shared.NextDouble() * 4 - 2
@@ -149,24 +303,33 @@ public sealed class OpcUaPlcTransport : IPlcTransport
 
                 var snapshot = PlcSnapshot.Create(
                     eq.EquipmentCode, now,
-                    EquipmentStatus.Running, s.Cycle, s.Good, s.Defect, s.RunMs,
+                    EquipmentStatus.Running,
+                    Random.Shared.Next(1, 100000),
+                    Random.Shared.Next(1, 95000),
+                    Random.Shared.Next(0, 5000),
+                    Random.Shared.Next(1, 100000) * 500L,
                     processValue, processTag);
 
-                var buffer = ArrayPool<byte>.Shared.Rent(PlcFrameProtocol.FrameLength);
-                try
-                {
-                    var written = PlcFrameWriter.Write(buffer, in snapshot);
-                    var flushResult = await _pipe.Writer.WriteAsync(buffer.AsMemory(0, written), ct);
-                    if (flushResult.IsCompleted) return;
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(buffer);
-                }
+                await WriteSnapshotFrameAsync(snapshot, ct);
             }
 
             try { await Task.Delay(_pollInterval, ct); }
             catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private async Task WriteSnapshotFrameAsync(PlcSnapshot snapshot, CancellationToken ct)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(PlcFrameProtocol.FrameLength);
+        try
+        {
+            var written = PlcFrameWriter.Write(buffer, in snapshot);
+            var flushResult = await _pipe.Writer.WriteAsync(buffer.AsMemory(0, written), ct);
+            if (flushResult.IsCompleted) return;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -177,52 +340,37 @@ public sealed class OpcUaPlcTransport : IPlcTransport
         _cts = null;
         try { cts?.Cancel(); } catch (ObjectDisposedException) { }
         _pipe.Writer.Complete();
+        try { _session?.Close(); } catch { }
+        _session = null;
         cts?.Dispose();
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// 通过 OPC UA 读取设备寄存器。
-    /// 开发模式返回模拟值，生产模式通过 OPC UA Session 读取节点。
-    /// </summary>
     public Task<object> ReadRegisterAsync(string address, string tag, CancellationToken ct = default)
     {
-        if (_useRealClient)
+        if (_useRealClient && _session is not null && DefaultNodeMap.TryGetValue(tag, out var nodeId))
         {
-            // 生产模式：通过 OPC UA Session 读取
-            // var nodeId = new NodeId($"ns=2;s={tag}");
-            // var dataValue = _session.ReadValue(nodeId);
-            // return Task.FromResult(dataValue.Value);
+            var value = _session.ReadValue(new NodeId(nodeId));
+            return Task.FromResult(value.Value ?? 0);
         }
 
-        // 开发模式：返回缓存中的模拟值
-        if (_state.TryGetValue(address, out var s))
-        {
-            return Task.FromResult<object>(tag switch
-            {
-                "Status" => EquipmentStatus.Running,
-                "CycleCount" => s.Cycle,
-                "GoodCount" => s.Good,
-                "DefectCount" => s.Defect,
-                "RunTimeMs" => s.RunMs,
-                _ => 0.0,
-            });
-        }
+        if (_values.TryGetValue(address, out var bag) && bag.TryGetValue(tag, out var v))
+            return Task.FromResult(v ?? 0);
         return Task.FromResult<object>(0);
     }
 
-    /// <summary>
-    /// 通过 OPC UA 写入设备寄存器。
-    /// 用于拧紧机参数设置、启动/停止控制。
-    /// </summary>
     public Task WriteRegisterAsync(string address, string tag, object value, CancellationToken ct = default)
     {
-        if (_useRealClient)
+        if (_useRealClient && _session is not null && DefaultNodeMap.TryGetValue(tag, out var nodeId))
         {
-            // 生产模式：通过 OPC UA Session 写入
-            // var nodeId = new NodeId($"ns=2;s={tag}");
-            // var writeValue = new WriteValue { NodeId = nodeId, Value = new DataValue(value) };
-            // _session.Write(null, [writeValue], out _);
+            var writeValue = new WriteValue
+            {
+                NodeId = new NodeId(nodeId),
+                AttributeId = Attributes.Value,
+                Value = new DataValue(new Variant(value)),
+            };
+            _session.Write(null, [writeValue], out _, out _);
+            return Task.CompletedTask;
         }
 
         _logger.ZLogInformation($"OPC UA 写入 {address}.{tag} = {value}");

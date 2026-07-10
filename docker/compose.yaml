@@ -10,6 +10,10 @@
 # 环境变量参考（通过 .env.production 或 uc env set 注入）：
 #   POSTGRES_PASSWORD=<强密码>
 #   JWT_SECRET=<256位密钥>
+#   SAP_USE_REAL_CLIENT=true
+#   PLC_USE_REAL_CLIENTS=true
+#   当前真实 PLC 驱动仅完成 Modbus TCP；OPC UA / EtherNet-IP / Profinet
+#   补齐前，mes-api 会拒绝以 Production 启动，防止模拟降级上线。
 #   SAP_BASE_URL=http://sap-erp:8000/sap/opu/odata
 #   SAP_USERNAME=SAP_SERVICE_USER
 #   SAP_PASSWORD=<SAP密码>
@@ -130,8 +134,9 @@ services:
       Sap__Password: ${SAP_PASSWORD:-}
       Sap__Client: ${SAP_CLIENT:-800}
       Sap__TimeoutSeconds: ${SAP_TIMEOUT_SECONDS:-30}
-      Sap__UseRealClient: ${SAP_USE_REAL_CLIENT:-false}
+      Sap__UseRealClient: ${SAP_USE_REAL_CLIENT:?必须设置 SAP_USE_REAL_CLIENT=true}
       Sap__WebhookSecret: ${SAP_WEBHOOK_SECRET:-}
+      Plc__UseRealClients: ${PLC_USE_REAL_CLIENTS:?必须设置 PLC_USE_REAL_CLIENTS=true}
       QualityReports__Email__Enabled: ${SMTP_ENABLED:-false}
       QualityReports__Email__From: ${SMTP_FROM:-automes@bosch.com}
       QualityReports__Email__SmtpHost: ${SMTP_HOST:-localhost}

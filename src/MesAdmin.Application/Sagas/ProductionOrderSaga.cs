@@ -23,7 +23,8 @@ namespace MesAdmin.Application.Sagas;
 public class ProductionOrderSaga(
     IProductionOrderRepository orderRepo,
     IWorkOrderOperationRepository operationRepo,
-    IRoutingRepository routingRepo)
+    IRoutingRepository routingRepo,
+    IPlcClient plcClient)
 {
     /// <summary>站号 → PLC 设备码映射（回退默认值）</summary>
     private static readonly Dictionary<int, string> FallbackStationEquipment = new()
@@ -92,13 +93,12 @@ public class ProductionOrderSaga(
 
             // ── 站2 合装装配：AtLeastOnce ──
             var eq2 = GetEquipment(stationEquipment, 2, "EQ-ASM-01");
+            if (!await IsStationCompleted(orderId, 2, stationLastSeq))
+                await EnsureEquipmentReadyAsync(eq2);
             await CaptureEffectAsync(workflow, $"station-2-assembly-{orderId}", ResiliencyLevel.AtLeastOnce, "station-2", async () =>
             {
                 if (await IsStationCompleted(orderId, 2, stationLastSeq))
                     return;
-
-                if (!await IsEquipmentReady(2))
-                    throw new Exception("合装设备未就绪");
 
                 await CompleteOperationRange(orderId, 2, 5, "AUTO", eq2);
                 state.AssemblyCompletedAt = DateTimeOffset.UtcNow;
@@ -108,6 +108,8 @@ public class ProductionOrderSaga(
 
             // ── 站3 螺栓拧紧：AtLeastOnce（每个螺栓独立 Effect）──
             var eq3 = GetEquipment(stationEquipment, 3, "EQ-TQ-01");
+            if (!await IsOperationCompleted(orderId, 10))
+                await EnsureEquipmentReadyAsync(eq3);
             foreach (var bolt in new[] { "M6-FL", "M6-FR", "M8-RL", "M8-RR" })
             {
                 var seq = boltSeq.GetValueOrDefault(bolt, 6);
@@ -134,6 +136,8 @@ public class ProductionOrderSaga(
 
             // ── 站4 液压测试：AtLeastOnce ──
             var eq4 = GetEquipment(stationEquipment, 4, "EQ-HYD-01");
+            if (!await IsStationCompleted(orderId, 4, stationLastSeq))
+                await EnsureEquipmentReadyAsync(eq4);
             await CaptureEffectAsync(workflow, $"station-4-hydraulic-{orderId}", ResiliencyLevel.AtLeastOnce, "station-4", async () =>
             {
                 if (await IsStationCompleted(orderId, 4, stationLastSeq))
@@ -147,6 +151,8 @@ public class ProductionOrderSaga(
 
             // ── 站5 ECU 刷写：AtLeastOnce ──
             var eq5 = GetEquipment(stationEquipment, 5, "EQ-FLS-01");
+            if (!await IsStationCompleted(orderId, 5, stationLastSeq))
+                await EnsureEquipmentReadyAsync(eq5);
             await CaptureEffectAsync(workflow, $"station-5-flash-{orderId}", ResiliencyLevel.AtLeastOnce, "station-5", async () =>
             {
                 if (await IsStationCompleted(orderId, 5, stationLastSeq))
@@ -160,6 +166,8 @@ public class ProductionOrderSaga(
 
             // ── 站6 功能终检：AtMostOnce ──
             var eq6 = GetEquipment(stationEquipment, 6, "EQ-FT-01");
+            if (!await IsOperationCompleted(orderId, 30))
+                await EnsureEquipmentReadyAsync(eq6);
             await CaptureEffectAsync(workflow, $"station-6-final-test-{orderId}", ResiliencyLevel.AtMostOnce, "station-6", async () =>
             {
                 await CompleteOperationRange(orderId, 28, 30, "AUTO", eq6);
@@ -170,6 +178,8 @@ public class ProductionOrderSaga(
 
             // ── 站7 VIN 绑定：AtLeastOnce ──
             var eq7 = GetEquipment(stationEquipment, 7, "EQ-VN-01");
+            if (!await IsStationCompleted(orderId, 7, stationLastSeq))
+                await EnsureEquipmentReadyAsync(eq7);
             await CaptureEffectAsync(workflow, $"station-7-vin-bind-{orderId}", ResiliencyLevel.AtLeastOnce, "station-7", async () =>
             {
                 if (await IsStationCompleted(orderId, 7, stationLastSeq))
@@ -259,13 +269,12 @@ public class ProductionOrderSaga(
     //  工序操作辅助方法
     // ═══════════════════════════════════════════
 
-    /// <summary>
-    /// 设备就绪检查。
-    /// 当前为模拟环境占位实现：始终放行，由 Effect 的 AtLeastOnce 幂等保证重放安全。
-    /// TODO(T2.16): 真实 OPC UA 驱动接入后，改为读取设备运行状态做硬联锁。
-    /// </summary>
-    private static Task<bool> IsEquipmentReady(int station)
-        => Task.FromResult(true);
+    /// <summary>设备就绪检查。Effect 之外调用，重放时重新读取实时 PLC 状态。</summary>
+    private async Task EnsureEquipmentReadyAsync(string equipmentCode)
+    {
+        if (!await plcClient.IsReadyAsync(equipmentCode))
+            throw new SafetyInterlockException($"设备 {equipmentCode} 未就绪");
+    }
 
     /// <summary>检查指定工序是否已完工（幂等哨兵）</summary>
     private async Task<bool> IsOperationCompleted(Ulid orderId, int sequence)

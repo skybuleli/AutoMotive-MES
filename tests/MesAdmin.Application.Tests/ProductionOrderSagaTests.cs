@@ -353,7 +353,7 @@ public class ProductionOrderSagaTests
         var (order, repo, opRepo, saga, store) = CreateSagaWith31Ops();
 
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: 1);
-        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo());
+        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
         var (action, _) = await RegisterSaga(crashingSaga, store);
 
         // 首次执行：在站2 SaveChangesAsync 时崩溃
@@ -416,7 +416,7 @@ public class ProductionOrderSagaTests
         var (order, repo, opRepo, _, store) = CreateSagaWith31Ops();
 
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: crashAfterSaveCount);
-        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo());
+        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
         var (action, _) = await RegisterSaga(crashingSaga, store);
 
         var crashed = false;
@@ -472,7 +472,7 @@ public class ProductionOrderSagaTests
         var (order, repo, opRepo, _, store) = CreateSagaWith31Ops();
 
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: crashAfter);
-        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo());
+        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
@@ -509,7 +509,7 @@ public class ProductionOrderSagaTests
         //   2: 螺栓1(seq 6) → 3: 螺栓2(seq 7) → 4: 螺栓3(seq 8) → 5: 螺栓4(seq 9) → 6: 复检(seq 10)
         // crashAfterSaveCount=4 → 螺栓3(seq 8) 的 CompleteOperation 在内存中完成，SaveChanges 时崩溃
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: 4);
-        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo());
+        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
@@ -553,7 +553,7 @@ public class ProductionOrderSagaTests
 
         // 第9次 SaveChanges = 站6 CompleteOperationRange(seq 28-30, AtMostOnce)
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: 9);
-        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo());
+        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
@@ -569,6 +569,21 @@ public class ProductionOrderSagaTests
 
         // 站7尚未执行
         Assert.Equal(OperationStatus.Pending, opRepo.StoredOps[31].Status);
+    }
+
+    [Fact]
+    public async Task Execute_WhenStation2EquipmentNotReady_ShouldBlockBeforeOperations()
+    {
+        var (order, repo, opRepo, _, store) = CreateSagaWith31Ops();
+        var saga = new ProductionOrderSaga(repo, opRepo, new SagaRoutingRepo(), new FakePlcClient(isReady: false));
+        var (action, _) = await RegisterSaga(saga, store);
+
+        await Assert.ThrowsAsync<FatalWorkflowException<SafetyInterlockException>>(
+            () => action.Invoke.Invoke(order.Id.ToString(), order.Id));
+
+        Assert.Equal(OrderStatus.InProgress, order.Status);
+        Assert.All(opRepo.StoredOps.Values.Where(o => o.Sequence >= 2), op =>
+            Assert.Equal(OperationStatus.Pending, op.Status));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -591,7 +606,7 @@ public class ProductionOrderSagaTests
             opRepo.StoredOps[seq] = WorkOrderOperation.Create(order.Id, seq, station, code, name);
 
         var routingRepo = new SagaRoutingRepo();
-        var saga = new ProductionOrderSaga(repo, opRepo, routingRepo);
+        var saga = new ProductionOrderSaga(repo, opRepo, routingRepo, new FakePlcClient());
         return (order, repo, opRepo, saga, store);
     }
 
@@ -745,16 +760,16 @@ public class ProductionOrderSagaTests
         public Task UpdateAsync(Routing routing, CancellationToken ct = default) => Task.CompletedTask;
     }
 
-    public sealed class FakePlcClient : IPlcClient
+    public sealed class FakePlcClient(bool isReady = true) : IPlcClient
     {
         public Task<object> ReadAsync(string address, string tag, CancellationToken ct = default)
-            => Task.FromResult<object>(true);
+            => Task.FromResult<object>(isReady ? EquipmentStatus.Running : EquipmentStatus.Alarm);
 
         public Task WriteAsync(string address, string tag, object value, CancellationToken ct = default)
             => Task.CompletedTask;
 
         public Task<bool> IsReadyAsync(string plcAddress, CancellationToken ct = default)
-            => Task.FromResult(true);
+            => Task.FromResult(isReady);
     }
 
     /// <summary>

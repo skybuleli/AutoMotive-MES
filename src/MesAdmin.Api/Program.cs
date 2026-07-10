@@ -32,6 +32,7 @@ using System.Net.Mail;
 using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+RuntimeSafetyGuards.ValidateNoSimulationInProduction(builder.Configuration, builder.Environment.EnvironmentName);
 
 // ValidateOnBuild disabled temporarily for preview; QualityReportService DI chain needs resolution
 // builder.Host.UseDefaultServiceProvider((context, options) =>

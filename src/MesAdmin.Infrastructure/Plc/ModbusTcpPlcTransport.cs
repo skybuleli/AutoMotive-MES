@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.IO.Pipelines;
 using System.Net.Sockets;
 using System.Text;
@@ -63,7 +64,8 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
         IReadOnlyList<Equipment> equipment,
         ILogger<ModbusTcpPlcTransport> logger,
         bool useRealClient = false,
-        int pollIntervalMs = 500)
+        int pollIntervalMs = 500,
+        IReadOnlyDictionary<string, string>? endpointOverrides = null)
     {
         _allEquipment = equipment;
         _logger = logger;
@@ -74,7 +76,10 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
         _deviceEndpoints = new Dictionary<string, (string Host, int Port)>();
         foreach (var eq in equipment.Where(e => ModbusEquipmentCodes.Contains(e.EquipmentCode)))
         {
-            var parts = eq.PlcAddress.Split(':');
+            var endpoint = endpointOverrides is not null && endpointOverrides.TryGetValue(eq.EquipmentCode, out var configured)
+                ? configured
+                : eq.PlcAddress;
+            var parts = endpoint.Replace("modbus://", "", StringComparison.OrdinalIgnoreCase).Split(':');
             var host = parts[0];
             var port = parts.Length > 1 && int.TryParse(parts[1], out var p) ? p : 502;
             _deviceEndpoints[eq.EquipmentCode] = (host, port);
@@ -90,7 +95,7 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
 
         if (_useRealClient)
         {
-            _ = ConnectRealModbusAsync(_cts.Token);
+            _pollTask = ConnectRealModbusAsync(_cts.Token);
         }
         else
         {
@@ -108,40 +113,108 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
     /// </summary>
     private async Task ConnectRealModbusAsync(CancellationToken ct)
     {
+        _logger.ZLogInformation($"Modbus TCP 真实模式：连接 {_deviceEndpoints.Count} 台设备");
+        var tasks = _deviceEndpoints.Select(kv => PollDeviceAsync(kv.Key, kv.Value.Host, kv.Value.Port, ct));
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task PollDeviceAsync(string equipmentCode, string host, int port, CancellationToken ct)
+    {
+        ushort transactionId = 0;
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                using var tcp = new TcpClient();
+                await tcp.ConnectAsync(host, port, ct);
+                _logger.ZLogInformation($"Modbus TCP 已连接 {equipmentCode} {host}:{port}");
+
+                var stream = tcp.GetStream();
+                while (!ct.IsCancellationRequested && tcp.Connected)
+                {
+                    transactionId++;
+                    var request = BuildReadHoldingRegistersRequest(transactionId, unitId: 1, startAddress: 0, quantity: 8);
+                    await stream.WriteAsync(request, ct);
+
+                    var response = new byte[25];
+                    await ReadExactlyAsync(stream, response, ct);
+                    var snapshot = ParseRegisters(equipmentCode, response);
+                    await WriteSnapshotFrameAsync(snapshot, ct);
+
+                    await Task.Delay(_pollInterval, ct);
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _logger.ZLogError($"Modbus TCP 读取 {equipmentCode} {host}:{port} 失败：{ex.Message}");
+                try { await Task.Delay(TimeSpan.FromSeconds(2), ct); } catch { break; }
+            }
+        }
+    }
+
+    private static byte[] BuildReadHoldingRegistersRequest(ushort transactionId, byte unitId, ushort startAddress, ushort quantity)
+    {
+        var request = new byte[12];
+        BinaryPrimitives.WriteUInt16BigEndian(request.AsSpan(0, 2), transactionId);
+        BinaryPrimitives.WriteUInt16BigEndian(request.AsSpan(2, 2), 0);
+        BinaryPrimitives.WriteUInt16BigEndian(request.AsSpan(4, 2), 6);
+        request[6] = unitId;
+        request[7] = 0x03;
+        BinaryPrimitives.WriteUInt16BigEndian(request.AsSpan(8, 2), startAddress);
+        BinaryPrimitives.WriteUInt16BigEndian(request.AsSpan(10, 2), quantity);
+        return request;
+    }
+
+    private static async Task ReadExactlyAsync(NetworkStream stream, byte[] buffer, CancellationToken ct)
+    {
+        var offset = 0;
+        while (offset < buffer.Length)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(offset), ct);
+            if (read == 0)
+                throw new IOException("Modbus TCP 连接已关闭");
+            offset += read;
+        }
+    }
+
+    private static PlcSnapshot ParseRegisters(string equipmentCode, ReadOnlySpan<byte> response)
+    {
+        if (response.Length < 25 || response[7] != 0x03 || response[8] != 16)
+            throw new InvalidDataException("Modbus TCP 响应格式无效");
+
+        var status = (EquipmentStatus)ReadRegister(response, 0);
+        var cycle = ReadRegister(response, 1);
+        var good = ReadRegister(response, 2);
+        var defect = ReadRegister(response, 3);
+        var runMs = ReadRegister(response, 4) | ((long)ReadRegister(response, 5) << 16);
+        var processValue = ReadRegister(response, 6) / 10.0;
+        var processTag = ReadRegister(response, 7) switch
+        {
+            1 => "CanLatency",
+            2 => "LaserPower",
+            _ => "ModbusValue"
+        };
+
+        return PlcSnapshot.Create(equipmentCode, DateTimeOffset.UtcNow, status, cycle, good, defect, runMs, processValue, processTag);
+    }
+
+    private static ushort ReadRegister(ReadOnlySpan<byte> response, int index)
+        => BinaryPrimitives.ReadUInt16BigEndian(response.Slice(9 + index * 2, 2));
+
+    private async Task WriteSnapshotFrameAsync(PlcSnapshot snapshot, CancellationToken ct)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(PlcFrameProtocol.FrameLength);
         try
         {
-            // ── 生产环境实现 ──
-            // 每个设备建立独立 TCP 连接，使用 Modbus TCP 协议读取：
-            //
-            // Modbus TCP 请求帧格式：
-            //   [TransactionId 2B][ProtocolId 2B=0x0000][Length 2B][UnitId 1B][FuncCode 1B][Data...]
-            //
-            // 读保持寄存器 (FuncCode=0x03):
-            //   请求:  [TransactionId][0x0000][0x0006][UnitId][0x03][StartAddr 2B][Quantity 2B]
-            //   响应:  [TransactionId][0x0000][0x03+2*N][UnitId][0x03][ByteCount][Data...]
-            //
-            // 读输入寄存器 (FuncCode=0x04):
-            //   请求/响应格式相同，寄存器地址不同
-            //
-            // 示例连接：
-            //   using var tcp = new TcpClient();
-            //   await tcp.ConnectAsync(host, port, ct);
-            //   var stream = tcp.GetStream();
-            //
-            //   byte[] req = [0x00, 0x01, 0x00, 0x00, 0x00, 0x06, unitId, 0x03, 0x00, startReg, 0x00, count];
-            //   await stream.WriteAsync(req, ct);
-            //   var resp = new byte[9 + count * 2];
-            //   await stream.ReadAsync(resp, ct);
-
-            _logger.ZLogInformation($"Modbus TCP 生产模式：等待真实设备连接（需配置 IP 和端口）");
-            _pollTask = SimulateFramesAsync(ct);
-            await _pollTask;
+            var written = PlcFrameWriter.Write(buffer, in snapshot);
+            var flushResult = await _pipe.Writer.WriteAsync(buffer.AsMemory(0, written), ct);
+            if (flushResult.IsCompleted)
+                throw new IOException("PLC Pipe 已关闭");
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.ZLogError($"Modbus TCP 连接失败：{ex.Message}，降级到模拟模式");
-            _pollTask = SimulateFramesAsync(ct);
-            await _pollTask;
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 
@@ -191,15 +264,23 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
         }
     }
 
-    public Task StopAsync()
+    public async Task StopAsync()
     {
         _isConnected = false;
         var cts = _cts;
+        var pollTask = _pollTask;
         _cts = null;
+        _pollTask = null;
         try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+
+        if (pollTask is not null)
+        {
+            try { await pollTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+        }
+
         _pipe.Writer.Complete();
         cts?.Dispose();
-        return Task.CompletedTask;
     }
 
     public Task<object> ReadRegisterAsync(string address, string tag, CancellationToken ct = default)

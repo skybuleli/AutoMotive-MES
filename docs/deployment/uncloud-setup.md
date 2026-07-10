@@ -775,12 +775,15 @@ vim .env.production
 |------|---------|------|
 | `POSTGRES_PASSWORD` | `openssl rand -base64 24` | PostgreSQL 数据库密码 |
 | `JWT_SECRET` | `openssl rand -base64 32` | JWT 签名密钥（≥256 位）|
+| `SAP_USE_REAL_CLIENT` | `true` | Production 禁止 Mock SAP |
+| `PLC_USE_REAL_CLIENTS` | `true` | Production 禁止模拟 PLC |
+
+> **当前限制：** 真实 PLC 驱动目前只完成 Modbus TCP。OPC UA / EtherNet-IP / Profinet 仍是占位实现，因此 API 会拒绝以 `Production` 启动，直到这些驱动补齐或产线路由移除对应设备。
 
 **可选变量：**
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `SAP_USE_REAL_CLIENT` | `false` | 是否启用真实 SAP 连接 |
 | `SMTP_ENABLED` | `false` | 是否启用邮件推送 |
 | `OTLP_ENDPOINT` | `http://greptimedb:4000/v1/otlp` | 可观测性端点 |
 
@@ -1396,7 +1399,9 @@ uc build --push -f docker/compose.yaml
 - [ ] `.env.production` 中的所有变量已正确设置
 - [ ] `POSTGRES_PASSWORD` 已使用强密码（openssl rand -base64 24）
 - [ ] `JWT_SECRET` 已使用 256 位密钥（openssl rand -base64 32）
-- [ ] `SAP_USE_REAL_CLIENT=false`（除非已配置 SAP）
+- [ ] `SAP_USE_REAL_CLIENT=true`，且 SAP 地址/账号已配置
+- [ ] `PLC_USE_REAL_CLIENTS=true`，且 PLC 地址已配置
+- [ ] OPC UA / EtherNet-IP / Profinet 真实驱动已实现并通过联调（当前未满足时 API 会拒绝 `Production` 启动）
 - [ ] `SMTP_ENABLED=false`（除非已配置 SMTP）
 
 #### 服务
@@ -2447,7 +2452,8 @@ echo "=== 3/5: 创建 .env.production ==="
 cat > .env.production << EOF
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 JWT_SECRET=${JWT_SECRET}
-SAP_USE_REAL_CLIENT=false
+SAP_USE_REAL_CLIENT=true
+PLC_USE_REAL_CLIENTS=true
 SMTP_ENABLED=false
 EOF
 

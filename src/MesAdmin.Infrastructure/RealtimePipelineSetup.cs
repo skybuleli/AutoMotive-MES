@@ -31,6 +31,10 @@ public static class RealtimePipelineSetup
         var channelCapacity = plcSection.GetValue("ChannelCapacity", 10000);
         var readIntervalMs = plcSection.GetValue("ReadIntervalMs", 10);
         var useRealClients = plcSection.GetValue("UseRealClients", false);
+        var useRealOpcUa = useRealClients && plcSection.GetValue("Drivers:OpcUa:Enabled", false);
+        var useRealModbusTcp = useRealClients && plcSection.GetValue("Drivers:ModbusTcp:Enabled", false);
+        var useRealEthernetIp = useRealClients && plcSection.GetValue("Drivers:EthernetIp:Enabled", false);
+        var useRealProfinet = useRealClients && plcSection.GetValue("Drivers:Profinet:Enabled", false);
 
         // 设备清单（单例）
         services.AddSingleton(Equipment.DefaultEquipment);
@@ -52,7 +56,7 @@ public static class RealtimePipelineSetup
         {
             var equipment = sp.GetRequiredService<IReadOnlyList<Equipment>>();
             var logger = sp.GetRequiredService<ILogger<OpcUaPlcTransport>>();
-            return new OpcUaPlcTransport(equipment, logger, useRealClients);
+            return new OpcUaPlcTransport(equipment, logger, useRealOpcUa);
         });
 
         // Modbus TCP 传输层（刷写台 + VIN 标刻机）
@@ -60,7 +64,11 @@ public static class RealtimePipelineSetup
         {
             var equipment = sp.GetRequiredService<IReadOnlyList<Equipment>>();
             var logger = sp.GetRequiredService<ILogger<ModbusTcpPlcTransport>>();
-            return new ModbusTcpPlcTransport(equipment, logger, useRealClients);
+            var endpoints = plcSection
+                .GetSection("Drivers:ModbusTcp:Endpoints")
+                .GetChildren()
+                .ToDictionary(c => c.Key, c => c.Value ?? "", StringComparer.Ordinal);
+            return new ModbusTcpPlcTransport(equipment, logger, useRealModbusTcp, endpointOverrides: endpoints);
         });
 
         // EtherNet/IP 传输层（液压测试台）
@@ -68,7 +76,7 @@ public static class RealtimePipelineSetup
         {
             var equipment = sp.GetRequiredService<IReadOnlyList<Equipment>>();
             var logger = sp.GetRequiredService<ILogger<EthernetIpPlcTransport>>();
-            return new EthernetIpPlcTransport(equipment, logger, useRealClients);
+            return new EthernetIpPlcTransport(equipment, logger, useRealEthernetIp);
         });
 
         // Profinet 传输层（压装/合装工作站 — Siemens S7）
@@ -76,7 +84,7 @@ public static class RealtimePipelineSetup
         {
             var equipment = sp.GetRequiredService<IReadOnlyList<Equipment>>();
             var logger = sp.GetRequiredService<ILogger<ProfinetPlcTransport>>();
-            return new ProfinetPlcTransport(equipment, logger, useRealClients);
+            return new ProfinetPlcTransport(equipment, logger, useRealProfinet);
         });
 
         // ── 驱动工厂（统一接口，按设备编码分发到对应传输层）──

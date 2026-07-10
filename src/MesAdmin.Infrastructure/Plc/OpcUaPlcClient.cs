@@ -197,7 +197,9 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
     {
         lock (_lock)
         {
-            return Task.FromResult(_latest.ContainsKey(plcAddress));
+            return Task.FromResult(
+                _latest.TryGetValue(plcAddress, out var snapshot)
+                && snapshot.Status is EquipmentStatus.Running or EquipmentStatus.Idle);
         }
     }
 
