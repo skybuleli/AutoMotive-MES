@@ -63,6 +63,7 @@ public class DashboardSummaryHandlerTests
         public Task<int> CountByOrderNumberPrefixAsync(string prefix, CancellationToken ct = default) => Task.FromResult(0);
         public Task AddAsync(ProductionOrder order, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(ProductionOrder order) { }
+        public Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default) => Task.FromResult(new List<ProductionOrder>());
         public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(1);
     }
 

@@ -528,6 +528,7 @@ public class BackflushMaterialsHandlerTests
 
         public Task AddAsync(ProductionOrder order, CancellationToken ct = default) => Task.CompletedTask;
         public void Update(ProductionOrder order) { }
+        public Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default) => Task.FromResult(new List<ProductionOrder>());
 
         public Task<int> SaveChangesAsync(CancellationToken ct = default)
         {

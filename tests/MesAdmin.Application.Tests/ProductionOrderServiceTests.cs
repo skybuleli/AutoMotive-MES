@@ -179,6 +179,8 @@ public class ProductionOrderCommandHandlerTests
         }
 
         public void Update(ProductionOrder order) { UpdateCallCount++; }
+        public Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+            => Task.FromResult(StoredOrders.Where(o => o.CreatedAt >= start && o.CreatedAt <= end).ToList());
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
@@ -317,6 +319,7 @@ public class ProductionOrderCommandHandlerTests
         public Task<List<ProductionOrder>> GetPageAsync(OrderStatus? status, int skip, int take, CancellationToken ct = default) => Task.FromResult(new List<ProductionOrder>());
         public Task<int> CountAsync(OrderStatus? status, CancellationToken ct = default) => Task.FromResult(0);
         public void Update(ProductionOrder order) { }
+        public Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default) => Task.FromResult(new List<ProductionOrder>());
     }
 
     /// <summary>
@@ -347,6 +350,25 @@ public class ProductionOrderCommandHandlerTests
                 OperationCode = d.Code,
                 OperationName = d.Name,
                 ParameterTemplates = [],
+                EquipmentCode = d.Station switch
+                {
+                    2 => "EQ-ASM-01",
+                    3 => "EQ-TQ-01",
+                    4 => "EQ-HYD-01",
+                    5 => "EQ-FLS-01",
+                    6 => "EQ-FT-01",
+                    7 => "EQ-VN-01",
+                    _ => null
+                },
+                IsStationSentinel = d.Seq is 5 or 10 or 23 or 27 or 30 or 31,
+                TargetComponent = d.Name switch
+                {
+                    var n when n.Contains("M6-FL") => "M6-FL",
+                    var n when n.Contains("M6-FR") => "M6-FR",
+                    var n when n.Contains("M8-RL") => "M8-RL",
+                    var n when n.Contains("M8-RR") => "M8-RR",
+                    _ => null
+                },
             }).ToList();
 
             _routing = Routing.Create(

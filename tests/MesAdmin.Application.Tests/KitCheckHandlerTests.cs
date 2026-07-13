@@ -427,6 +427,8 @@ public class KitCheckHandlerTests
             => Task.CompletedTask;
 
         public void Update(ProductionOrder order) { }
+        public Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+            => Task.FromResult(new List<ProductionOrder>());
 
         public Task<int> SaveChangesAsync(CancellationToken ct = default)
         {

@@ -1,6 +1,7 @@
 using FastEndpoints;
 using MesAdmin.Api.Infrastructure;
 using MesAdmin.Application.Interfaces;
+using ZLogger;
 
 namespace MesAdmin.Api.Features.SapWebhooks.Writeback;
 
@@ -60,12 +61,12 @@ public class WritebackRejectionEndpoint : MesEndpointWithoutRequest<WritebackRes
         if (result.Success)
         {
             rejection.MarkWrittenBack(DateTimeOffset.UtcNow);
-            _logger.LogInformation("手动触发拒单回写成功：{RejectionId}", rejectionIdStr);
+            _logger.ZLogInformation($"手动触发拒单回写成功：{rejectionIdStr}");
         }
         else
         {
             rejection.MarkFailed(result.ErrorMessage ?? "手动触发失败", DateTimeOffset.UtcNow);
-            _logger.LogWarning("手动触发拒单回写失败：{RejectionId}，{Error}", rejectionIdStr, result.ErrorMessage);
+            _logger.ZLogWarning($"手动触发拒单回写失败：{rejectionIdStr}，{result.ErrorMessage}");
         }
 
         await _rejectionRepo.SaveChangesAsync(ct);

@@ -7,6 +7,7 @@ using MesAdmin.Api.Infrastructure;
 using MesAdmin.Application.Features.ProductionOrders;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
+using ZLogger;
 
 namespace MesAdmin.Api.Features.SapWebhooks.ReceiveOrder;
 
@@ -34,7 +35,7 @@ public class ReceiveOrderEndpoint : MesEndpoint<SapProductionOrderRequest, Produ
         // Ulid 校验（Validator 不含此逻辑因为需要领域类型）
         if (!Ulid.TryParse(req.RoutingId, out var routingId))
         {
-            Logger.LogWarning("SAP 工单拒单：工艺路线 ID {RoutingId} 无效", req.RoutingId);
+            Logger.ZLogWarning($"SAP 工单拒单：工艺路线 ID {req.RoutingId} 无效");
             await RecordRejectionAsync(req, $"工艺路线 ID 无效：{req.RoutingId}", ct);
             AddError(r => r.RoutingId, $"工艺路线 ID 无效：{req.RoutingId}");
             ThrowIfAnyErrors();
@@ -49,15 +50,14 @@ public class ReceiveOrderEndpoint : MesEndpoint<SapProductionOrderRequest, Produ
                 req.PlannedQuantity,
                 req.Priority).ExecuteAsync(ct);
 
-            Logger.LogInformation("SAP 工单已创建：{OrderNumber}（来源：{ExternalOrderNumber}）",
-                order.OrderNumber, req.ExternalOrderNumber);
+            Logger.ZLogInformation($"SAP 工单已创建：{order.OrderNumber}（来源：{req.ExternalOrderNumber}）");
 
             Response = OrderMapper.ToSummary(order);
             await SendCreatedDualAsync<GetOrderByIdEndpoint>(new { orderId = order.Id.ToString() }, ct);
         }
         catch (ArgumentException ex)
         {
-            Logger.LogWarning(ex, "SAP 工单创建失败：参数校验不通过");
+            Logger.ZLogWarning(ex, $"SAP 工单创建失败：参数校验不通过");
             // T1.3 拒单回写：记录拒单原因，待异步回写 SAP
             await RecordRejectionAsync(req, ex.Message, ct);
             AddError(ex.Message);
@@ -86,7 +86,7 @@ public class ReceiveOrderEndpoint : MesEndpoint<SapProductionOrderRequest, Produ
         catch (Exception ex)
         {
             // 拒单记录写入失败不应阻断 400 响应，仅记录日志
-            Logger.LogError(ex, "SAP 拒单记录持久化失败（外部工单号：{ExternalOrderNumber}）", req.ExternalOrderNumber);
+            Logger.ZLogError(ex, $"SAP 拒单记录持久化失败（外部工单号：{req.ExternalOrderNumber}）");
         }
     }
 }

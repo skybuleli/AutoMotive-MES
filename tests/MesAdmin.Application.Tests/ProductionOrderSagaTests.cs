@@ -2,10 +2,12 @@ using Cleipnir.ResilientFunctions;
 using Cleipnir.ResilientFunctions.CoreRuntime.Invocation;
 using Cleipnir.ResilientFunctions.Domain;
 using Cleipnir.ResilientFunctions.Storage;
+using MesAdmin.Application.Common;
 using MesAdmin.Application.Features.ProductionOrders;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Application.Sagas;
 using MesAdmin.Domain.Models;
+using Microsoft.Extensions.Options;
 
 namespace MesAdmin.Application.Tests;
 
@@ -20,6 +22,26 @@ namespace MesAdmin.Application.Tests;
 public class ProductionOrderSagaTests
 {
     private const int SagaProcessedOpCount = 30; // seq 2-31（站 1 由人工处理）
+
+    private static IOptions<ProductionOrderSagaOptions> DefaultOptions()
+        => Options.Create(new ProductionOrderSagaOptions());
+
+    // ═══════════════════════════════════════════════════════════
+    //  Scenario 0: 工单不存在 → 抛出 OrderNotFoundException
+    // ═══════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task Execute_WhenOrderNotFound_ShouldThrowOrderNotFoundException()
+    {
+        var repo = new SagaOrderRepo(null);
+        var opRepo = new SagaOpRepo();
+        var saga = new ProductionOrderSaga(repo, opRepo, new SagaRoutingRepo(), new FakePlcClient(), DefaultOptions());
+        var (action, _) = await RegisterSaga(saga);
+
+        var missingId = Ulid.NewUlid();
+        await Assert.ThrowsAsync<FatalWorkflowException<OrderNotFoundException>>(
+            () => action.Invoke.Invoke(missingId.ToString(), missingId));
+    }
 
     // ═══════════════════════════════════════════════════════════
     //  Scenario 1: Saga 执行全部 30 道工序
@@ -236,8 +258,8 @@ public class ProductionOrderSagaTests
         repo.ResetSaveCount();
         await action.Invoke.Invoke(order.Id.ToString(), order.Id);
 
-        // Saga outside-Effect code: Release (1) + Start (1) = 2 saves
-        // All effects skip because IsStationCompleted returns true — no opRepo.SaveChanges
+        // Release+Start 已合并为一个 Effect，内部执行 Release (1) + Start (1) = 2 次 orderRepo.SaveChanges。
+        // 各站 Effect 因 IsStationCompleted 返回 true 全部跳过，不触发 opRepo.SaveChanges。
         Assert.Equal(2, repo.SaveChangesCallCount);
         Assert.All(opRepo.StoredOps.Values, op =>
             Assert.Equal(OperationStatus.Completed, op.Status));
@@ -353,7 +375,7 @@ public class ProductionOrderSagaTests
         var (order, repo, opRepo, saga, store) = CreateSagaWith31Ops();
 
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: 1);
-        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
+        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient(), DefaultOptions());
         var (action, _) = await RegisterSaga(crashingSaga, store);
 
         // 首次执行：在站2 SaveChangesAsync 时崩溃
@@ -416,7 +438,7 @@ public class ProductionOrderSagaTests
         var (order, repo, opRepo, _, store) = CreateSagaWith31Ops();
 
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: crashAfterSaveCount);
-        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
+        var crashingSaga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient(), DefaultOptions());
         var (action, _) = await RegisterSaga(crashingSaga, store);
 
         var crashed = false;
@@ -472,7 +494,7 @@ public class ProductionOrderSagaTests
         var (order, repo, opRepo, _, store) = CreateSagaWith31Ops();
 
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: crashAfter);
-        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
+        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient(), DefaultOptions());
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
@@ -509,7 +531,7 @@ public class ProductionOrderSagaTests
         //   2: 螺栓1(seq 6) → 3: 螺栓2(seq 7) → 4: 螺栓3(seq 8) → 5: 螺栓4(seq 9) → 6: 复检(seq 10)
         // crashAfterSaveCount=4 → 螺栓3(seq 8) 的 CompleteOperation 在内存中完成，SaveChanges 时崩溃
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: 4);
-        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
+        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient(), DefaultOptions());
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
@@ -553,7 +575,7 @@ public class ProductionOrderSagaTests
 
         // 第9次 SaveChanges = 站6 CompleteOperationRange(seq 28-30, AtMostOnce)
         var crashRepo = new CrashTestOpRepo(opRepo, crashAfterSaveCount: 9);
-        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient());
+        var saga = new ProductionOrderSaga(repo, crashRepo, new SagaRoutingRepo(), new FakePlcClient(), DefaultOptions());
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
@@ -575,7 +597,7 @@ public class ProductionOrderSagaTests
     public async Task Execute_WhenStation2EquipmentNotReady_ShouldBlockBeforeOperations()
     {
         var (order, repo, opRepo, _, store) = CreateSagaWith31Ops();
-        var saga = new ProductionOrderSaga(repo, opRepo, new SagaRoutingRepo(), new FakePlcClient(isReady: false));
+        var saga = new ProductionOrderSaga(repo, opRepo, new SagaRoutingRepo(), new FakePlcClient(isReady: false), DefaultOptions());
         var (action, _) = await RegisterSaga(saga, store);
 
         await Assert.ThrowsAsync<FatalWorkflowException<SafetyInterlockException>>(
@@ -606,7 +628,7 @@ public class ProductionOrderSagaTests
             opRepo.StoredOps[seq] = WorkOrderOperation.Create(order.Id, seq, station, code, name);
 
         var routingRepo = new SagaRoutingRepo();
-        var saga = new ProductionOrderSaga(repo, opRepo, routingRepo, new FakePlcClient());
+        var saga = new ProductionOrderSaga(repo, opRepo, routingRepo, new FakePlcClient(), DefaultOptions());
         return (order, repo, opRepo, saga, store);
     }
 
@@ -666,6 +688,7 @@ public class ProductionOrderSagaTests
         }
 
         public void Update(ProductionOrder order) { }
+        public Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default) => Task.FromResult(new List<ProductionOrder>());
 
         public Task<int> SaveChangesAsync(CancellationToken ct = default)
         {
@@ -735,6 +758,25 @@ public class ProductionOrderSagaTests
                 OperationCode = d.Code,
                 OperationName = d.Name,
                 ParameterTemplates = [],
+                EquipmentCode = d.Station switch
+                {
+                    2 => "EQ-ASM-01",
+                    3 => "EQ-TQ-01",
+                    4 => "EQ-HYD-01",
+                    5 => "EQ-FLS-01",
+                    6 => "EQ-FT-01",
+                    7 => "EQ-VN-01",
+                    _ => null
+                },
+                IsStationSentinel = d.Seq is 5 or 10 or 23 or 27 or 30 or 31,
+                TargetComponent = d.Name switch
+                {
+                    var n when n.Contains("M6-FL") => "M6-FL",
+                    var n when n.Contains("M6-FR") => "M6-FR",
+                    var n when n.Contains("M8-RL") => "M8-RL",
+                    var n when n.Contains("M8-RR") => "M8-RR",
+                    _ => null
+                },
             }).ToList();
 
             _routing = Routing.Create(
