@@ -40,8 +40,8 @@ public class GetDailyReportEndpoint : EndpointWithoutRequest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var yesterday = DateTimeOffset.Now.Date.AddDays(-1);
-        var today = DateTimeOffset.Now.Date;
+        var yesterday = DateTimeOffset.UtcNow.Date.AddDays(-1);
+        var today = DateTimeOffset.UtcNow.Date;
         var pdf = await _reportService.GenerateOnDemandAsync(
             ReportPeriod.Daily, yesterday, today, ct);
 
@@ -73,7 +73,7 @@ public class GetWeeklyReportEndpoint : EndpointWithoutRequest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var now = DateTimeOffset.Now;
+        var now = DateTimeOffset.UtcNow;
         var lastWeek = now.Date.AddDays((int)now.DayOfWeek * -1 - 7);
         var weekEnd = lastWeek.AddDays(7);
         var pdf = await _reportService.GenerateOnDemandAsync(
@@ -107,7 +107,7 @@ public class GetMonthlyReportEndpoint : EndpointWithoutRequest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var now = DateTimeOffset.Now;
+        var now = DateTimeOffset.UtcNow;
         var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset);
         var lastMonth = monthStart.AddMonths(-1);
         var targetStart = new DateTimeOffset(lastMonth.Year, lastMonth.Month, 1, 0, 0, 0, now.Offset);

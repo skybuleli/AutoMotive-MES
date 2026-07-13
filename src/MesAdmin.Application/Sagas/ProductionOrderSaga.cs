@@ -1,9 +1,11 @@
 using Cleipnir.ResilientFunctions;
 using Cleipnir.ResilientFunctions.CoreRuntime.Invocation;
 using Cleipnir.ResilientFunctions.Domain;
+using MesAdmin.Application.Common;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Application.Observability;
 using MesAdmin.Domain.Models;
+using Microsoft.Extensions.Options;
 
 namespace MesAdmin.Application.Sagas;
 
@@ -24,72 +26,58 @@ public class ProductionOrderSaga(
     IProductionOrderRepository orderRepo,
     IWorkOrderOperationRepository operationRepo,
     IRoutingRepository routingRepo,
-    IPlcClient plcClient)
+    IPlcClient plcClient,
+    IOptions<ProductionOrderSagaOptions> options)
 {
-    /// <summary>站号 → PLC 设备码映射（回退默认值）</summary>
-    private static readonly Dictionary<int, string> FallbackStationEquipment = new()
-    {
-        { 2, "EQ-ASM-01" }, { 3, "EQ-TQ-01" },
-        { 4, "EQ-HYD-01" }, { 5, "EQ-FLS-01" },
-        { 6, "EQ-FT-01" }, { 7, "EQ-VN-01" },
-    };
-
-    /// <summary>站号 → 哨兵工序序号（回退默认值）</summary>
-    private static readonly Dictionary<int, int> FallbackStationLastSeq = new()
-    {
-        { 2, 5 }, { 3, 10 }, { 4, 23 }, { 5, 27 }, { 7, 31 },
-    };
-
-    /// <summary>站3 螺栓编码 → 工序序号（回退默认值）</summary>
-    private static readonly Dictionary<string, int> FallbackBoltSequence = new()
-    {
-        { "M6-FL", 6 }, { "M6-FR", 7 },
-        { "M8-RL", 8 }, { "M8-RR", 9 },
-    };
+    private readonly ProductionOrderSagaOptions _options = options?.Value ?? new ProductionOrderSagaOptions();
 
     public async Task Execute(Ulid orderId, Workflow workflow)
     {
         AutoMesMetrics.RecordSagaStarted();
 
-        try
-        {
-            var state = await workflow.States.CreateOrGetDefault<SagaState>();
+        var state = await workflow.States.CreateOrGetDefault<SagaState>();
 
-            // ── 加载工艺路线（P1 集成：动态计算站映射）──
+        // ── 加载工艺路线（P1 集成：动态计算站映射）──
             var currentOrder = await orderRepo.GetByIdTrackedAsync(orderId)
-                ?? throw new InvalidOperationException($"工单 {orderId} 不存在");
+                ?? throw new OrderNotFoundException(orderId);
 
             var routing = currentOrder.RoutingId != default
                 ? await routingRepo.GetByIdAsync(currentOrder.RoutingId)
                 : null;
             routing ??= await routingRepo.GetActiveByProductAsync(currentOrder.ProductCode);
 
-            // 从 Routing 动态计算映射（未找到则回退硬编码）
-            var stationEquipment = routing is not null
+            // 从 Routing 动态计算映射（未找到则回退配置）
+            IReadOnlyDictionary<int, string> stationEquipment = routing is not null
                 ? BuildStationEquipmentMap(routing)
-                : FallbackStationEquipment;
-            var stationLastSeq = routing is not null
+                : _options.FallbackStationEquipment;
+            IReadOnlyDictionary<int, int> stationLastSeq = routing is not null
                 ? BuildStationLastSequenceMap(routing)
-                : FallbackStationLastSeq;
-            var boltSeq = routing is not null
+                : _options.FallbackStationLastSeq;
+            IReadOnlyDictionary<string, int> boltSeq = routing is not null
                 ? BuildBoltSequenceMap(routing)
-                : FallbackBoltSequence;
+                : _options.FallbackBoltSequence;
 
-            // ── 安全联锁：Effect 之外（重放时重新实时评估）──
-
-            if (currentOrder.Status == OrderStatus.Created)
+            // ── 工单状态推进：Created → Released → InProgress（AtLeastOnce，幂等）──
+            await CaptureEffectAsync(workflow, $"release-and-start-order-{orderId}", ResiliencyLevel.AtLeastOnce, "release-start", async () =>
             {
-                currentOrder.Release();
-                await orderRepo.SaveChangesAsync();
-            }
+                var order = await orderRepo.GetByIdTrackedAsync(orderId);
+                if (order is null)
+                    throw new OrderNotFoundException(orderId);
 
-            if (currentOrder.Status == OrderStatus.Released)
-            {
-                currentOrder.Start();
-                await orderRepo.SaveChangesAsync();
-                state.CurrentStation = 2;
-                await state.Save();
-            }
+                if (order.Status == OrderStatus.Created)
+                {
+                    order.Release();
+                    await orderRepo.SaveChangesAsync();
+                }
+
+                if (order.Status == OrderStatus.Released)
+                {
+                    order.Start();
+                    await orderRepo.SaveChangesAsync();
+                    state.CurrentStation = 2;
+                    await state.Save();
+                }
+            });
 
             // ── 站2 合装装配：AtLeastOnce ──
             var eq2 = GetEquipment(stationEquipment, 2, "EQ-ASM-01");
@@ -191,21 +179,16 @@ public class ProductionOrderSaga(
                 await state.Save();
             });
 
-            // 工单状态停留在 InProgress，等待人工完工确认。
-            AutoMesMetrics.RecordSagaCompleted();
-        }
-        catch
-        {
-            throw;
-        }
+        // 工单状态停留在 InProgress，等待人工完工确认。
+        AutoMesMetrics.RecordSagaCompleted();
     }
 
     // ═══════════════════════════════════════════
     //  动态映射构建（P1 集成）
     // ═══════════════════════════════════════════
 
-    /// <summary>从工艺路线构建站号→设备码映射（取工站首道工序的 FixtureCode 或根据设备命名约定推断）</summary>
-    private static Dictionary<int, string> BuildStationEquipmentMap(Routing routing)
+    /// <summary>从工艺路线构建站号→设备码映射（优先使用显式 EquipmentCode）</summary>
+    private Dictionary<int, string> BuildStationEquipmentMap(Routing routing)
     {
         var map = new Dictionary<int, string>();
         foreach (var station in routing.Operations.Select(o => o.Station).Distinct())
@@ -213,43 +196,46 @@ public class ProductionOrderSaga(
             if (station == 1) continue; // 站1 人工上料，无设备
 
             var firstOp = routing.GetOperationsByStation(station).FirstOrDefault();
-            if (firstOp?.FixtureCode is not null && firstOp.FixtureCode.StartsWith("EQ-"))
-            {
-                map[station] = firstOp.FixtureCode;
-            }
-            else
-            {
-                // 按设备命名约定推断
-                map[station] = station switch
-                {
-                    2 => "EQ-ASM-01",
-                    3 => "EQ-TQ-01",
-                    4 => "EQ-HYD-01",
-                    5 => "EQ-FLS-01",
-                    6 => "EQ-FT-01",
-                    7 => "EQ-VN-01",
-                    _ => throw new ArgumentOutOfRangeException(nameof(station), $"未知工站 {station}")
-                };
-            }
+            var equipmentCode = firstOp?.EquipmentCode;
+
+            // 兼容旧数据：FixtureCode 以 EQ- 开头时视为设备编码
+            if (string.IsNullOrEmpty(equipmentCode) && firstOp?.FixtureCode is not null && firstOp.FixtureCode.StartsWith("EQ-"))
+                equipmentCode = firstOp.FixtureCode;
+
+            map[station] = equipmentCode ?? _options.FallbackStationEquipment.GetValueOrDefault(station, $"EQ-ST{station:D2}-01");
         }
         return map;
     }
 
-    /// <summary>从工艺路线构建站号→最后一道工序序号映射（幂等哨兵）</summary>
-    private static Dictionary<int, int> BuildStationLastSequenceMap(Routing routing)
+    /// <summary>从工艺路线构建站号→最后一道工序序号映射（优先使用 IsStationSentinel）</summary>
+    private Dictionary<int, int> BuildStationLastSequenceMap(Routing routing)
     {
+        var sentinels = routing.Operations
+            .Where(o => o.Station > 1 && o.IsStationSentinel)
+            .ToDictionary(o => o.Station, o => o.Sequence);
+
+        if (sentinels.Count > 0)
+            return sentinels;
+
+        // 兼容旧数据：按工站最大序号推断
         return routing.Operations
-            .Where(o => o.Station > 1) // 站1 人工处理
+            .Where(o => o.Station > 1)
             .GroupBy(o => o.Station)
             .ToDictionary(g => g.Key, g => g.Max(o => o.Sequence));
     }
 
-    /// <summary>从工艺路线构建站3 螺栓编码→工序序号映射</summary>
-    private static Dictionary<string, int> BuildBoltSequenceMap(Routing routing)
+    /// <summary>从工艺路线构建螺栓编码→工序序号映射（优先使用 TargetComponent）</summary>
+    private Dictionary<string, int> BuildBoltSequenceMap(Routing routing)
     {
-        var station3Ops = routing.GetOperationsByStation(3);
-        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var map = routing.GetOperationsByStation(3)
+            .Where(o => !string.IsNullOrEmpty(o.TargetComponent))
+            .ToDictionary(o => o.TargetComponent!, o => o.Sequence, StringComparer.OrdinalIgnoreCase);
 
+        if (map.Count > 0)
+            return map;
+
+        // 兼容旧数据：从工序名称推断
+        var station3Ops = routing.GetOperationsByStation(3);
         foreach (var op in station3Ops)
         {
             if (op.OperationName.Contains("M6-FL")) map["M6-FL"] = op.Sequence;
@@ -262,7 +248,7 @@ public class ProductionOrderSaga(
     }
 
     /// <summary>获取工站设备码，回退到默认值</summary>
-    private static string GetEquipment(Dictionary<int, string> map, int station, string fallback)
+    private static string GetEquipment(IReadOnlyDictionary<int, string> map, int station, string fallback)
         => map.GetValueOrDefault(station, fallback);
 
     // ═══════════════════════════════════════════
@@ -284,7 +270,7 @@ public class ProductionOrderSaga(
     }
 
     /// <summary>检查指定工站是否已完工（检查该站最后一道工序，从动态映射读取）</summary>
-    private async Task<bool> IsStationCompleted(Ulid orderId, int station, Dictionary<int, int> stationLastSeq)
+    private async Task<bool> IsStationCompleted(Ulid orderId, int station, IReadOnlyDictionary<int, int> stationLastSeq)
     {
         if (!stationLastSeq.TryGetValue(station, out var lastSeq))
             return false;

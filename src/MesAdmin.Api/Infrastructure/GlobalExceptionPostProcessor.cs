@@ -1,5 +1,6 @@
 using System.Net;
 using FastEndpoints;
+using MesAdmin.Application.Common;
 using Microsoft.Extensions.Logging;
 using ZLogger;
 
@@ -27,6 +28,7 @@ public sealed class GlobalExceptionPostProcessor(
 
         var (statusCode, message) = ex switch
         {
+            OrderNotFoundException => (HttpStatusCode.NotFound, ex.Message),
             KeyNotFoundException => (HttpStatusCode.NotFound, ex.Message),
             ArgumentException => (HttpStatusCode.BadRequest, ex.Message),
             InvalidOperationException => (HttpStatusCode.Conflict, ex.Message),

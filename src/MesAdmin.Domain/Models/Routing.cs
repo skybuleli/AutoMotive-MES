@@ -189,6 +189,24 @@ public partial class RoutingOperation
 
     /// <summary>参数模板列表</summary>
     public List<ParameterTemplate> ParameterTemplates { get; set; } = [];
+
+    /// <summary>
+    /// 该工序使用的设备编码（如 EQ-TQ-01）。
+    /// 显式指定后，Saga 不再依赖 FixtureCode 前缀推断或硬编码映射。
+    /// </summary>
+    public string? EquipmentCode { get; set; }
+
+    /// <summary>
+    /// 标识该工序是否为所在工站的最后一道工序（幂等哨兵）。
+    /// 用于 Saga 判断整个工站是否已完工。
+    /// </summary>
+    public bool IsStationSentinel { get; set; }
+
+    /// <summary>
+    /// 目标组件标识（如 "M6-FL"）。
+    /// 用于站 3 螺栓拧紧等需要按组件定位工序的场景，避免依赖 OperationName 字符串匹配。
+    /// </summary>
+    public string? TargetComponent { get; set; }
 }
 
 /// <summary>
