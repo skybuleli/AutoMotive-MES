@@ -53,7 +53,7 @@ public sealed class QualityReportService : BackgroundService
         {
             try
             {
-                var now = DateTimeOffset.Now;
+                var now = DateTimeOffset.UtcNow;
                 var emailEnabled = _config.GetValue<bool>("QualityReports:Email:Enabled");
 
                 // 日报：每日 06:00
@@ -174,10 +174,7 @@ public sealed class QualityReportService : BackgroundService
         var now = DateTimeOffset.UtcNow;
 
         // ── 产量数据 ──
-        var allRecords = await recordRepo.GetByStageAsync(InspectionStage.Ipqc, ct);
-        var dateFiltered = allRecords
-            .Where(r => r.CreatedAt >= start && r.CreatedAt <= end)
-            .ToList();
+        var dateFiltered = await recordRepo.GetByStageAndPeriodAsync(InspectionStage.Ipqc, start, end, ct);
 
         var totalInspections = dateFiltered.Count;
         var passed = dateFiltered.Count(r => r.Verdict == InspectionVerdict.Passed);
@@ -185,8 +182,7 @@ public sealed class QualityReportService : BackgroundService
         var firstPassYield = totalInspections > 0 ? (double)passed / totalInspections * 100 : 100.0;
 
         // ── 不良品分布 ──
-        var allNcrs = await ncrRepo.GetByProductCodeAsync("ESP-9.0", ct);
-        var periodNcrs = allNcrs.Where(n => n.CreatedAt >= start && n.CreatedAt <= end).ToList();
+        var periodNcrs = await ncrRepo.GetByProductCodeAndPeriodAsync("ESP-9.0", start, end, ct);
         var openNcrs = periodNcrs.Count(n => n.Status != NcrStatus.Closed);
 
         var defectDistribution = new Dictionary<string, int>();
@@ -209,8 +205,7 @@ public sealed class QualityReportService : BackgroundService
         var spcSummaries = new Dictionary<string, SpcSummary>();
         foreach (var code in charCodes)
         {
-            var samples = await sampleRepo.GetByCharacteristicAsync(code, 100, ct);
-            var periodSamples = samples.Where(s => s.CollectedAt >= start && s.CollectedAt <= end).ToList();
+            var periodSamples = await sampleRepo.GetByCharacteristicAndPeriodAsync(code, start, end, ct);
 
             if (periodSamples.Count == 0) continue;
 
@@ -236,8 +231,7 @@ public sealed class QualityReportService : BackgroundService
             }
 
             // 告警统计
-            var alerts = await alertRepo.GetByCharacteristicAsync(code, 50, ct);
-            var periodAlerts = alerts.Where(a => a.CreatedAt >= start && a.CreatedAt <= end).ToList();
+            var periodAlerts = await alertRepo.GetByCharacteristicAndPeriodAsync(code, start, end, ct);
 
             spcSummaries[code] = new SpcSummary(
                 code,
@@ -254,8 +248,7 @@ public sealed class QualityReportService : BackgroundService
         }
 
         // ── 8D 状态 ──
-        var all8Ds = await eightDRepo.GetByProductCodeAsync("ESP-9.0", ct);
-        var period8Ds = all8Ds.Where(r => r.CreatedAt >= start && r.CreatedAt <= end).ToList();
+        var period8Ds = await eightDRepo.GetByProductCodeAndPeriodAsync("ESP-9.0", start, end, ct);
         var closed8Ds = period8Ds.Count(r => r.Status == EightDStatus.Closed);
         var eightDClosureRate = period8Ds.Count > 0 ? (double)closed8Ds / period8Ds.Count * 100 : 100.0;
 

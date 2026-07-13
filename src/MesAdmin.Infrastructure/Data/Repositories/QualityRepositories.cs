@@ -25,6 +25,12 @@ public class QualityRecordRepository(MesDbContext db) : IQualityRecordRepository
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
 
+    public Task<List<QualityRecord>> GetByStageAndPeriodAsync(InspectionStage stage, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.QualityRecords.AsNoTracking()
+            .Where(r => r.Stage == stage && r.CreatedAt >= start && r.CreatedAt <= end)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync(ct);
+
     public Task<List<QualityRecord>> GetByBatchAsync(string batchNumber, CancellationToken ct = default)
         => db.QualityRecords.AsNoTracking()
             .Where(r => r.BatchNumber == batchNumber)
@@ -79,6 +85,12 @@ public class SpcSampleRepository(MesDbContext db) : ISpcSampleRepository
             .OrderBy(s => s.SubgroupIndex)
             .ToListAsync(ct);
 
+    public Task<List<SpcSample>> GetByCharacteristicAndPeriodAsync(string characteristicCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.SpcSamples.AsNoTracking()
+            .Where(s => s.CharacteristicCode == characteristicCode && s.CollectedAt >= start && s.CollectedAt <= end)
+            .OrderBy(s => s.SubgroupIndex)
+            .ToListAsync(ct);
+
     public Task<List<SpcSample>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default)
         => db.SpcSamples.AsNoTracking()
             .Where(s => s.OrderId == orderId)
@@ -128,6 +140,12 @@ public class SpcRuleAlertRepository(MesDbContext db) : ISpcRuleAlertRepository
             .Take(limit)
             .ToListAsync(ct);
 
+    public Task<List<SpcRuleAlert>> GetByCharacteristicAndPeriodAsync(string characteristicCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.SpcRuleAlerts.AsNoTracking()
+            .Where(a => a.CharacteristicCode == characteristicCode && a.CreatedAt >= start && a.CreatedAt <= end)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync(ct);
+
     public Task AddAsync(SpcRuleAlert alert, CancellationToken ct = default)
         => db.SpcRuleAlerts.AddAsync(alert, ct).AsTask();
 
@@ -166,6 +184,12 @@ public class NonConformanceReportRepository(MesDbContext db) : INonConformanceRe
             .OrderByDescending(n => n.CreatedAt)
             .ToListAsync(ct);
 
+    public Task<List<NonConformanceReport>> GetByProductCodeAndPeriodAsync(string productCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.NonConformanceReports.AsNoTracking()
+            .Where(n => n.ProductCode == productCode && n.CreatedAt >= start && n.CreatedAt <= end)
+            .OrderByDescending(n => n.CreatedAt)
+            .ToListAsync(ct);
+
     public Task AddAsync(NonConformanceReport ncr, CancellationToken ct = default)
         => db.NonConformanceReports.AddAsync(ncr, ct).AsTask();
 
@@ -192,6 +216,12 @@ public class EightDReportRepository(MesDbContext db) : IEightDReportRepository
     public Task<List<EightDReport>> GetByProductCodeAsync(string productCode, CancellationToken ct = default)
         => db.EightDReports.AsNoTracking()
             .Where(r => r.ProductCode == productCode)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync(ct);
+
+    public Task<List<EightDReport>> GetByProductCodeAndPeriodAsync(string productCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.EightDReports.AsNoTracking()
+            .Where(r => r.ProductCode == productCode && r.CreatedAt >= start && r.CreatedAt <= end)
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
 

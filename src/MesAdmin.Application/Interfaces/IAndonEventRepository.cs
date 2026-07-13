@@ -20,6 +20,9 @@ public interface IAndonEventRepository
     /// <summary>获取所有未关闭的报警（供升级服务扫描）</summary>
     Task<List<AndonEvent>> GetActiveAsync(CancellationToken ct = default);
 
+    /// <summary>按创建时间范围查询报警（索引范围查询，避免全表加载）。</summary>
+    Task<List<AndonEvent>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default);
+
     /// <summary>获取未确认的报警数量</summary>
     Task<int> GetActiveCountAsync(CancellationToken ct = default);
 

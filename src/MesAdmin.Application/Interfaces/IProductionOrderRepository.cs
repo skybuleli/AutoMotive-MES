@@ -15,6 +15,8 @@ public interface IProductionOrderRepository
     Task<ProductionOrder?> GetByIdTrackedAsync(Ulid id, CancellationToken cancellationToken = default);
     Task<ProductionOrder?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default);
     Task<List<ProductionOrder>> GetAllAsync(CancellationToken cancellationToken = default);
+    /// <summary>按创建时间范围查询工单（索引范围查询，避免全表加载）。</summary>
+    Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken cancellationToken = default);
     Task<List<ProductionOrder>> GetPageAsync(OrderStatus? status, int skip, int take, CancellationToken cancellationToken = default);
     Task<int> CountAsync(OrderStatus? status, CancellationToken cancellationToken = default);
     Task<int> CountByOrderNumberPrefixAsync(string orderNumberPrefix, CancellationToken cancellationToken = default);

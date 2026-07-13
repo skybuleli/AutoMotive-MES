@@ -65,35 +65,31 @@ public sealed class ReportDataSourceService
         var snapshots = _oeeStore.GetAllSnapshots();
         var snapDict = snapshots.ToDictionary(s => s.EquipmentCode);
 
-        var hasData = snapshots.Any(s => s.TotalUpdates > 0);
-        var avgOee = hasData ? snapshots.Where(s => s.TotalUpdates > 0).Average(s => s.Oee) : 0.0;
-        var avgAvail = hasData ? snapshots.Where(s => s.TotalUpdates > 0).Average(s => s.Availability) : 0.0;
-        var avgPerf = hasData ? snapshots.Where(s => s.TotalUpdates > 0).Average(s => s.Performance) : 0.0;
-        var avgQual = hasData ? snapshots.Where(s => s.TotalUpdates > 0).Average(s => s.Quality) : 0.0;
-        var targetMet = hasData ? snapshots.Count(s => s.TotalUpdates > 0 && s.Oee >= 0.85) : 0;
+        var active = snapshots.Where(s => s.TotalUpdates > 0).ToList();
+        var hasData = active.Count > 0;
+        var avgOee = hasData ? active.Average(s => s.Oee) : 0.0;
+        var avgAvail = hasData ? active.Average(s => s.Availability) : 0.0;
+        var avgPerf = hasData ? active.Average(s => s.Performance) : 0.0;
+        var avgQual = hasData ? active.Average(s => s.Quality) : 0.0;
+        var targetMet = active.Count(s => s.Oee >= 0.85);
         var totalEquip = allEquipment.Count;
 
         // ── 2. 从 Andon 事件获取停机原因统计 ──
-        var allAndonEvents = await andonRepo.GetListAsync(limit: 200, ct: ct);
-        var periodAndons = allAndonEvents
-            .Where(a => a.CreatedAt >= start && a.CreatedAt <= end)
-            .ToList();
+        var periodAndons = await andonRepo.GetByPeriodAsync(start, end, ct);
 
         var stopReasonGroups = periodAndons
             .GroupBy(a => a.AlarmType)
             .ToDictionary(g => g.Key.ToString(), g => g.Count());
 
         // ── 3. 从工单数据获取产量统计 ──
-        var allOrders = await orderRepo.GetAllAsync(ct);
-        var periodOrders = allOrders.Where(o => o.CreatedAt >= start && o.CreatedAt <= end).ToList();
+        var periodOrders = await orderRepo.GetByPeriodAsync(start, end, ct);
         var totalQualified = periodOrders.Sum(o => o.QualifiedQuantity);
         var totalDefective = periodOrders.Sum(o => o.DefectiveQuantity);
         var totalProduced = totalQualified + totalDefective;
         var yieldRate = totalProduced > 0 ? (double)totalQualified / totalProduced * 100 : 100.0;
 
         // ── 4. 维护工单统计（用于 MTBF/MTTR 计算参考）──
-        var allMaintOrders = await maintOrderRepo.GetListAsync(limit: 200, ct: ct);
-        var periodMaint = allMaintOrders.Where(o => o.CreatedAt >= start && o.CreatedAt <= end).ToList();
+        var periodMaint = await maintOrderRepo.GetByPeriodAsync(start, end, ct);
         var maintCompleted = periodMaint.Count(o => o.Status == MaintenanceOrderStatus.Completed);
 
         // ── 5. 构建 KPI 卡片 ──
@@ -211,13 +207,8 @@ public sealed class ReportDataSourceService
         using var scope = _scopeFactory.CreateScope();
         var orderRepo = scope.ServiceProvider.GetRequiredService<IProductionOrderRepository>();
 
-        var allOrders = await orderRepo.GetAllAsync(ct);
+        var periodOrders = await orderRepo.GetByPeriodAsync(start, end, ct);
         var now = DateTimeOffset.UtcNow;
-
-        // 时间范围过滤
-        var periodOrders = allOrders
-            .Where(o => o.CreatedAt >= start && o.CreatedAt <= end)
-            .ToList();
 
         var completed = periodOrders.Count(o => o.Status == OrderStatus.Completed);
         var inProgress = periodOrders.Count(o => o.Status == OrderStatus.InProgress);
@@ -264,18 +255,14 @@ public sealed class ReportDataSourceService
         var now = DateTimeOffset.UtcNow;
 
         // ── 产量数据 ──
-        var allRecords = await recordRepo.GetByStageAsync(InspectionStage.Ipqc, ct);
-        var dateFiltered = allRecords
-            .Where(r => r.CreatedAt >= start && r.CreatedAt <= end)
-            .ToList();
+        var dateFiltered = await recordRepo.GetByStageAndPeriodAsync(InspectionStage.Ipqc, start, end, ct);
         var totalInspections = dateFiltered.Count;
         var passed = dateFiltered.Count(r => r.Verdict == InspectionVerdict.Passed);
         var failed = dateFiltered.Count(r => r.Verdict == InspectionVerdict.Failed);
         var firstPassYield = totalInspections > 0 ? (double)passed / totalInspections * 100 : 100.0;
 
         // ── 不良品分布 ──
-        var allNcrs = await ncrRepo.GetByProductCodeAsync("ESP-9.0", ct);
-        var periodNcrs = allNcrs.Where(n => n.CreatedAt >= start && n.CreatedAt <= end).ToList();
+        var periodNcrs = await ncrRepo.GetByProductCodeAndPeriodAsync("ESP-9.0", start, end, ct);
         var openNcrs = periodNcrs.Count(n => n.Status != NcrStatus.Closed);
 
         var defectDist = new Dictionary<string, int>();
@@ -298,8 +285,7 @@ public sealed class ReportDataSourceService
         var spcRows = new List<TableRow>();
         foreach (var code in charCodes)
         {
-            var samples = await sampleRepo.GetByCharacteristicAsync(code, 100, ct);
-            var periodSamples = samples.Where(s => s.CollectedAt >= start && s.CollectedAt <= end).ToList();
+            var periodSamples = await sampleRepo.GetByCharacteristicAndPeriodAsync(code, start, end, ct);
             if (periodSamples.Count == 0) continue;
 
             var values = periodSamples.SelectMany(s => s.Values).ToArray();
@@ -321,8 +307,7 @@ public sealed class ReportDataSourceService
                 cpk = Math.Min(cpu, cpl);
             }
 
-            var alerts = await alertRepo.GetByCharacteristicAsync(code, 50, ct);
-            var periodAlerts = alerts.Where(a => a.CreatedAt >= start && a.CreatedAt <= end).ToList();
+            var periodAlerts = await alertRepo.GetByCharacteristicAndPeriodAsync(code, start, end, ct);
             var cpkStr = cpk?.ToString("F4") ?? "N/A";
             var cpkColor = cpk switch
             {
@@ -344,8 +329,7 @@ public sealed class ReportDataSourceService
         }
 
         // ── 8D 状态 ──
-        var all8Ds = await eightDRepo.GetByProductCodeAsync("ESP-9.0", ct);
-        var period8Ds = all8Ds.Where(r => r.CreatedAt >= start && r.CreatedAt <= end).ToList();
+        var period8Ds = await eightDRepo.GetByProductCodeAndPeriodAsync("ESP-9.0", start, end, ct);
         var closed8Ds = period8Ds.Count(r => r.Status == EightDStatus.Closed);
         var closureRate = period8Ds.Count > 0 ? (double)closed8Ds / period8Ds.Count * 100 : 100.0;
 
@@ -421,8 +405,7 @@ public sealed class ReportDataSourceService
         var now = DateTimeOffset.UtcNow;
 
         // 简化：获取所有工单进行统计
-        var allOrders = await orderRepo.GetListAsync(limit: 200, ct: ct);
-        var periodOrders = allOrders.Where(o => o.CreatedAt >= start && o.CreatedAt <= end).ToList();
+        var periodOrders = await orderRepo.GetByPeriodAsync(start, end, ct);
         var completed = periodOrders.Count(o => o.Status == MaintenanceOrderStatus.Completed);
         var overdue = periodOrders.Count(o => o.Status == MaintenanceOrderStatus.Open && o.CreatedAt < end.AddDays(-7)); // 超过 7 天未完成视为超期
         var completionRate = periodOrders.Count > 0 ? (double)completed / periodOrders.Count * 100 : 100.0;
@@ -476,8 +459,7 @@ public sealed class ReportDataSourceService
         var now = DateTimeOffset.UtcNow;
 
         // ── 1. 工单统计 ──
-        var allOrders = await orderRepo.GetAllAsync(ct);
-        var periodOrders = allOrders.Where(o => o.CreatedAt >= start && o.CreatedAt <= end).ToList();
+        var periodOrders = await orderRepo.GetByPeriodAsync(start, end, ct);
         var completed = periodOrders.Count(o => o.Status is OrderStatus.Completed or OrderStatus.Closed);
         var totalQualified = periodOrders.Sum(o => o.QualifiedQuantity);
         var totalDefective = periodOrders.Sum(o => o.DefectiveQuantity);
@@ -486,8 +468,7 @@ public sealed class ReportDataSourceService
         var completionRate = periodOrders.Count > 0 ? (double)completed / periodOrders.Count * 100 : 100.0;
 
         // ── 2. 质量统计（FPY + PPM）──
-        var allRecords = await recordRepo.GetByStageAsync(InspectionStage.Ipqc, ct);
-        var periodRecords = allRecords.Where(r => r.CreatedAt >= start && r.CreatedAt <= end).ToList();
+        var periodRecords = await recordRepo.GetByStageAndPeriodAsync(InspectionStage.Ipqc, start, end, ct);
         var passed = periodRecords.Count(r => r.Verdict == InspectionVerdict.Passed);
         var failed = periodRecords.Count(r => r.Verdict == InspectionVerdict.Failed);
         var totalInsp = periodRecords.Count;
@@ -495,8 +476,7 @@ public sealed class ReportDataSourceService
         var ppm = totalProduced > 0 ? (double)totalDefective / totalProduced * 1_000_000 : 0;
 
         // ── 3. NCR 统计 + 质量成本估算 ──
-        var allNcrs = await ncrRepo.GetByProductCodeAsync("ESP-9.0", ct);
-        var periodNcrs = allNcrs.Where(n => n.CreatedAt >= start && n.CreatedAt <= end).ToList();
+        var periodNcrs = await ncrRepo.GetByProductCodeAndPeriodAsync("ESP-9.0", start, end, ct);
         var openNcrs = periodNcrs.Count(n => n.Status != NcrStatus.Closed);
 
         // 质量成本估算（严重 NCR 约 500 元，一般 200 元，轻微 50 元）
@@ -528,8 +508,7 @@ public sealed class ReportDataSourceService
 
         foreach (var code in charCodes)
         {
-            var samples = await sampleRepo.GetByCharacteristicAsync(code, 100, ct);
-            var periodSamples = samples.Where(s => s.CollectedAt >= start && s.CollectedAt <= end).ToList();
+            var periodSamples = await sampleRepo.GetByCharacteristicAndPeriodAsync(code, start, end, ct);
             if (periodSamples.Count == 0) continue;
 
             var values = periodSamples.SelectMany(s => s.Values).ToArray();
@@ -553,8 +532,7 @@ public sealed class ReportDataSourceService
 
             if (cpk.HasValue) cpkValues.Add(cpk.Value);
 
-            var alerts = await alertRepo.GetByCharacteristicAsync(code, 50, ct);
-            var periodAlerts = alerts.Where(a => a.CreatedAt >= start && a.CreatedAt <= end).ToList();
+            var periodAlerts = await alertRepo.GetByCharacteristicAndPeriodAsync(code, start, end, ct);
             var cpkStr = cpk?.ToString("F4") ?? "N/A";
             var cpkColor = cpk switch
             {
@@ -577,8 +555,7 @@ public sealed class ReportDataSourceService
         avgCpk = cpkValues.Count > 0 ? cpkValues.Average() : null;
 
         // ── 5. 8D 统计 ──
-        var all8Ds = await eightDRepo.GetByProductCodeAsync("ESP-9.0", ct);
-        var period8Ds = all8Ds.Where(r => r.CreatedAt >= start && r.CreatedAt <= end).ToList();
+        var period8Ds = await eightDRepo.GetByProductCodeAndPeriodAsync("ESP-9.0", start, end, ct);
         var closed8Ds = period8Ds.Count(r => r.Status == EightDStatus.Closed);
         var closureRate = period8Ds.Count > 0 ? (double)closed8Ds / period8Ds.Count * 100 : 100.0;
         var overdued8ds = period8Ds.Count(r => r.CorrectiveActionDueDate.HasValue && r.CorrectiveActionDueDate.Value < now && r.Status != EightDStatus.Closed);
@@ -591,8 +568,7 @@ public sealed class ReportDataSourceService
         var totalOeeEquip = oeeSnapshots.Count;
 
         // ── 7. Andon 月度统计 ──
-        var allAndonEvts = await andonRepo.GetListAsync(limit: 200, ct: ct);
-        var periodAndons = allAndonEvts.Where(a => a.CreatedAt >= start && a.CreatedAt <= end).ToList();
+        var periodAndons = await andonRepo.GetByPeriodAsync(start, end, ct);
         var openAndons = periodAndons.Count(a => a.Status is AndonEventStatus.Active or AndonEventStatus.EscalatedL2 or AndonEventStatus.EscalatedL3);
         var resolvedAndons = periodAndons.Count(a => a.Status is AndonEventStatus.Resolved or AndonEventStatus.Closed);
 
@@ -602,8 +578,7 @@ public sealed class ReportDataSourceService
             .ToDictionary(g => g.Key.ToString(), g => g.Count());
 
         // ── 8. 维护统计 ──
-        var allMaintOrders = await maintOrderRepo.GetListAsync(limit: 200, ct: ct);
-        var periodMaint = allMaintOrders.Where(o => o.CreatedAt >= start && o.CreatedAt <= end).ToList();
+        var periodMaint = await maintOrderRepo.GetByPeriodAsync(start, end, ct);
         var maintCompleted = periodMaint.Count(o => o.Status == MaintenanceOrderStatus.Completed);
         var maintCompletionRate = periodMaint.Count > 0 ? (double)maintCompleted / periodMaint.Count * 100 : 100.0;
 

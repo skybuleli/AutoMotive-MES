@@ -9,6 +9,8 @@ public interface IQualityRecordRepository
     Task<QualityRecord?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default);
     Task<List<QualityRecord>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default);
     Task<List<QualityRecord>> GetByStageAsync(InspectionStage stage, CancellationToken ct = default);
+    /// <summary>按检验阶段 + 创建时间范围查询（索引范围查询，避免全表加载）。</summary>
+    Task<List<QualityRecord>> GetByStageAndPeriodAsync(InspectionStage stage, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default);
     Task<List<QualityRecord>> GetByBatchAsync(string batchNumber, CancellationToken ct = default);
     Task AddAsync(QualityRecord record, CancellationToken ct = default);
     void Update(QualityRecord record);
@@ -31,6 +33,8 @@ public interface ISpcSampleRepository
 {
     Task<SpcSample?> GetByIdAsync(Ulid id, CancellationToken ct = default);
     Task<List<SpcSample>> GetByCharacteristicAsync(string characteristicCode, int limit = 25, CancellationToken ct = default);
+    /// <summary>按特性 + 采集时间范围查询（索引范围查询，避免全表加载）。</summary>
+    Task<List<SpcSample>> GetByCharacteristicAndPeriodAsync(string characteristicCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default);
     Task<List<SpcSample>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default);
     Task<List<SpcSample>> GetByEquipmentAsync(string equipmentCode, int limit = 25, CancellationToken ct = default);
     Task<int> GetMaxSubgroupIndexAsync(string characteristicCode, CancellationToken ct = default);
@@ -44,6 +48,8 @@ public interface ISpcRuleAlertRepository
 {
     Task<List<SpcRuleAlert>> GetUnacknowledgedAsync(string? characteristicCode = null, CancellationToken ct = default);
     Task<List<SpcRuleAlert>> GetByCharacteristicAsync(string characteristicCode, int limit = 50, CancellationToken ct = default);
+    /// <summary>按特性 + 创建时间范围查询（索引范围查询，避免全表加载）。</summary>
+    Task<List<SpcRuleAlert>> GetByCharacteristicAndPeriodAsync(string characteristicCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default);
     Task AddAsync(SpcRuleAlert alert, CancellationToken ct = default);
     Task AddRangeAsync(IEnumerable<SpcRuleAlert> alerts, CancellationToken ct = default);
     void Update(SpcRuleAlert alert);
@@ -58,6 +64,8 @@ public interface INonConformanceReportRepository
     Task<List<NonConformanceReport>> GetByStatusAsync(NcrStatus status, CancellationToken ct = default);
     Task<List<NonConformanceReport>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default);
     Task<List<NonConformanceReport>> GetByProductCodeAsync(string productCode, CancellationToken ct = default);
+    /// <summary>按产品编码 + 创建时间范围查询（索引范围查询，避免全表加载）。</summary>
+    Task<List<NonConformanceReport>> GetByProductCodeAndPeriodAsync(string productCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default);
     Task AddAsync(NonConformanceReport ncr, CancellationToken ct = default);
     void Update(NonConformanceReport ncr);
     Task<int> SaveChangesAsync(CancellationToken ct = default);
@@ -70,6 +78,8 @@ public interface IEightDReportRepository
     Task<EightDReport?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default);
     Task<List<EightDReport>> GetByStatusAsync(EightDStatus status, CancellationToken ct = default);
     Task<List<EightDReport>> GetByProductCodeAsync(string productCode, CancellationToken ct = default);
+    /// <summary>按产品编码 + 创建时间范围查询（索引范围查询，避免全表加载）。</summary>
+    Task<List<EightDReport>> GetByProductCodeAndPeriodAsync(string productCode, DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default);
     Task AddAsync(EightDReport report, CancellationToken ct = default);
     void Update(EightDReport report);
     Task<int> SaveChangesAsync(CancellationToken ct = default);

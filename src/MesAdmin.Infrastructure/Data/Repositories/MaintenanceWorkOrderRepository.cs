@@ -32,6 +32,12 @@ public sealed class MaintenanceWorkOrderRepository(MesDbContext db) : IMaintenan
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync(ct);
 
+    public Task<List<MaintenanceWorkOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.MaintenanceWorkOrders.AsNoTracking()
+            .Where(o => o.CreatedAt >= start && o.CreatedAt <= end)
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync(ct);
+
     public async Task AddAsync(MaintenanceWorkOrder order, CancellationToken ct = default)
     {
         await db.MaintenanceWorkOrders.AddAsync(order, ct);

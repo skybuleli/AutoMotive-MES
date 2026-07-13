@@ -32,6 +32,14 @@ public class ProductionOrderRepository(MesDbContext db) : IProductionOrderReposi
             .ThenByDescending(order => order.Id)
             .ToListAsync(ct);
 
+    public Task<List<ProductionOrder>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.ProductionOrders
+            .AsNoTracking()
+            .Where(order => order.CreatedAt >= start && order.CreatedAt <= end)
+            .OrderByDescending(order => order.CreatedAt)
+            .ThenByDescending(order => order.Id)
+            .ToListAsync(ct);
+
     public Task<List<ProductionOrder>> GetPageAsync(OrderStatus? status, int skip, int take, CancellationToken ct = default)
     {
         var query = db.ProductionOrders.AsNoTracking().AsQueryable();

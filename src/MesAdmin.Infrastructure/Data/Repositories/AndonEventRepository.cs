@@ -42,6 +42,12 @@ public class AndonEventRepository(MesDbContext db) : IAndonEventRepository
             .OrderByDescending(e => e.OccurredAt)
             .ToListAsync(ct);
 
+    public Task<List<AndonEvent>> GetByPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+        => db.AndonEvents.AsNoTracking()
+            .Where(e => e.CreatedAt >= start && e.CreatedAt <= end)
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync(ct);
+
     public Task<int> GetActiveCountAsync(CancellationToken ct = default)
         => db.AndonEvents
             .CountAsync(e => e.Status != AndonEventStatus.Closed
