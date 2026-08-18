@@ -2,6 +2,8 @@ using FastEndpoints;
 using MemoryPack;
 using MesAdmin.Application.Interfaces;
 using MesAdmin.Domain.Models;
+using Microsoft.Extensions.Logging;
+using ZLogger;
 
 namespace MesAdmin.Application.Features.Materials;
 
@@ -123,5 +125,56 @@ internal sealed class ListMaterialBatchesHandler(IMaterialBatchRepository batche
         var items = await batches.GetPageAsync(query.MaterialCode, skip, take, ct);
         var total = await batches.CountAsync(query.MaterialCode, ct);
         return (items, total);
+    }
+}
+
+/// <summary>
+/// 批次检验合格命令（Received → Qualified，T1.12 来料质检）。
+/// </summary>
+[MemoryPackable]
+public sealed partial record QualifyMaterialBatchCommand(
+    Ulid BatchId,
+    string InspectorId) : IWriteCommand<MaterialBatch>;
+
+internal sealed class QualifyMaterialBatchHandler(
+    IMaterialBatchRepository batches,
+    ILogger<QualifyMaterialBatchHandler> logger) : ICommandHandler<QualifyMaterialBatchCommand, MaterialBatch>
+{
+    public async Task<MaterialBatch> ExecuteAsync(QualifyMaterialBatchCommand cmd, CancellationToken ct)
+    {
+        var batch = await batches.GetByIdTrackedAsync(cmd.BatchId, ct)
+            ?? throw new KeyNotFoundException($"物料批次 {cmd.BatchId} 不存在");
+
+        batch.Qualify();
+        await batches.SaveChangesAsync(ct);
+
+        logger.ZLogInformation($"批次检验合格：{batch.MaterialCode} {batch.BatchNumber}，质检员 {cmd.InspectorId}");
+        return batch;
+    }
+}
+
+/// <summary>
+/// 批次检验不合格命令（Received/Qualified → Rejected，T1.12 来料质检）。
+/// </summary>
+[MemoryPackable]
+public sealed partial record RejectMaterialBatchCommand(
+    Ulid BatchId,
+    string InspectorId,
+    string Reason) : IWriteCommand<MaterialBatch>;
+
+internal sealed class RejectMaterialBatchHandler(
+    IMaterialBatchRepository batches,
+    ILogger<RejectMaterialBatchHandler> logger) : ICommandHandler<RejectMaterialBatchCommand, MaterialBatch>
+{
+    public async Task<MaterialBatch> ExecuteAsync(RejectMaterialBatchCommand cmd, CancellationToken ct)
+    {
+        var batch = await batches.GetByIdTrackedAsync(cmd.BatchId, ct)
+            ?? throw new KeyNotFoundException($"物料批次 {cmd.BatchId} 不存在");
+
+        batch.Reject();
+        await batches.SaveChangesAsync(ct);
+
+        logger.ZLogInformation($"批次检验不合格（拒收）：{batch.MaterialCode} {batch.BatchNumber}，质检员 {cmd.InspectorId}，原因：{cmd.Reason}");
+        return batch;
     }
 }

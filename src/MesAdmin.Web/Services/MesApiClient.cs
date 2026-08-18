@@ -121,7 +121,7 @@ public class MesApiClient
         return GetAsync<List<SpcAlertDto>>(url, ct);
     }
 
-    /// <summary>查询检验记录列表</summary>
+    /// <summary>查询检验记录列表（按阶段：Iq/Ipqc/Oqc/FirstArticle/OnlineTest）</summary>
     public Task<List<QualityRecordDto>?> GetQualityRecordsAsync(string stage, CancellationToken ct = default)
         => GetAsync<List<QualityRecordDto>>($"api/v1/quality/records?stage={Uri.EscapeDataString(stage)}", ct);
 
@@ -361,11 +361,11 @@ public class MesApiClient
 
     /// <summary>查询关键供应商管控设置</summary>
     public Task<List<CriticalSupplierSettingDto>?> GetCriticalSettingsAsync(CancellationToken ct = default)
-        => GetAsync<List<CriticalSupplierSettingDto>>("api/v1/suppliers/critical-settings", ct);
+        => GetAsync<List<CriticalSupplierSettingDto>>("api/v1/suppliers/suppliers/critical-settings", ct);
 
     /// <summary>创建关键供应商管控设置</summary>
     public Task<(bool Ok, CriticalSupplierSettingDto? Data, int Status)> CreateCriticalSettingAsync(CreateCriticalSettingBody body, CancellationToken ct = default)
-        => PostAsync<CriticalSupplierSettingDto>("api/v1/suppliers/critical-settings", body, ct);
+        => PostAsync<CriticalSupplierSettingDto>("api/v1/suppliers/suppliers/critical-settings", body, ct);
 
     // ═══════════════════════════════════════════
     // M09 排程管理 API (T3.10-T3.13)

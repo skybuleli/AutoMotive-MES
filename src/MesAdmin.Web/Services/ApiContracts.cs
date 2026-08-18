@@ -173,7 +173,7 @@ public record SpcChartSampleDto(
     double Mean,
     double Range);
 
-/// <summary>质量检验记录响应 DTO</summary>
+/// <summary>质量检验记录响应 DTO（镜像 API QualityRecordResponse）</summary>
 public record QualityRecordDto(
     string Id,
     string Stage,
@@ -187,13 +187,15 @@ public record QualityRecordDto(
     string InspectionPlanName,
     string? AqlScheme,
     int SampleSize,
+    int AcceptNumber,
+    int RejectNumber,
     string InspectorId,
     string Verdict,
+    List<MeasuredCharDto> Characteristics,
     int DefectCount,
     string? Remarks,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? CompletedAt,
-    List<MeasuredCharDto> Characteristics);
+    DateTimeOffset? CompletedAt);
 
 /// <summary>检验特性实测值 DTO</summary>
 public record MeasuredCharDto(
