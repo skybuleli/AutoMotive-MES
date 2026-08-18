@@ -89,7 +89,7 @@ public sealed class OfflineSyncService : IAsyncDisposable
                 }
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException ex) { _logger.ZLogDebug(ex, $"[OfflineSync] 消费循环已取消"); }
         catch (Exception ex)
         {
             _logger.ZLogError(ex, $"[OfflineSync] 消费循环异常");
@@ -127,6 +127,7 @@ public sealed class OfflineSyncService : IAsyncDisposable
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
+            _logger.ZLogError(ex, $"[OfflineSync] 操作执行异常：{record.OperationType} | {record.EntityType}:{record.EntityId}");
             await HandleRetryAsync(record, ex.Message, ct);
         }
     }
@@ -219,7 +220,8 @@ public sealed class OfflineSyncService : IAsyncDisposable
         _disposed = true;
         _cts.Cancel();
         _channel.Writer.TryComplete();
-        try { await _consumerTask; } catch { }
+        try { await _consumerTask; }
+        catch (Exception ex) { _logger.ZLogDebug(ex, $"[OfflineSync] 消费者任务停止异常"); }
         _cts.Dispose();
     }
 }

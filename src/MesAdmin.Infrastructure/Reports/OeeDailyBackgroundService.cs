@@ -44,7 +44,7 @@ public sealed class OeeDailyBackgroundService : BackgroundService
         {
             try
             {
-                var now = DateTimeOffset.Now;
+                var now = DateTimeOffset.UtcNow;
                 var emailEnabled = _config.GetValue<bool>("OeeReports:Email:Enabled");
 
                 if (emailEnabled && now.Hour == 6 && now.Minute == 0)

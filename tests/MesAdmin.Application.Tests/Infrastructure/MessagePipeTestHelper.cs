@@ -36,10 +36,10 @@ public sealed class TestPublisher<TMessage>
     }
 
     /// <summary>同步发布一条消息。</summary>
-    public void Publish(TMessage message)
+    public void Publish(TMessage message, CancellationToken ct = default)
     {
         _published.Add(message);
-        _handler?.Invoke(message, CancellationToken.None);
+        _handler?.Invoke(message, ct);
     }
 
     /// <summary>异步发布一条消息。</summary>

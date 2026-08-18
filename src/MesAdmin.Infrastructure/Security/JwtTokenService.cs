@@ -4,8 +4,10 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MesAdmin.Application.Security;
+using ZLogger;
 
 namespace MesAdmin.Infrastructure.Security;
 
@@ -13,7 +15,7 @@ namespace MesAdmin.Infrastructure.Security;
 /// JWT 令牌服务实现。
 /// 生成包含用户 ID、用户名、角色 Claims 的 Bearer 令牌。
 /// </summary>
-public class JwtTokenService(IConfiguration configuration) : ITokenService
+public class JwtTokenService(IConfiguration configuration, ILogger<JwtTokenService> logger) : ITokenService
 {
     private readonly SymmetricSecurityKey _key = new(
         Encoding.UTF8.GetBytes(configuration["Jwt:Secret"]
@@ -69,8 +71,9 @@ public class JwtTokenService(IConfiguration configuration) : ITokenService
             var principal = handler.ValidateToken(token, BuildValidationParameters(), out _);
             return principal;
         }
-        catch
+        catch (Exception ex)
         {
+            logger.ZLogDebug(ex, $"JWT 令牌校验失败（无效/过期令牌）");
             return null;
         }
     }

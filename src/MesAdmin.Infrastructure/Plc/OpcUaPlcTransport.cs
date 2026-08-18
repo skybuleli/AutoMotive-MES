@@ -97,7 +97,7 @@ public sealed class OpcUaPlcTransport : IPlcTransport
     /// <summary>真实模式：为每个不同端点建立 Session + Subscription，并启动发布循环。</summary>
     private async Task RunRealAsync(CancellationToken ct)
     {
-        _appConfig = BuildApplicationConfiguration();
+        _appConfig = await BuildApplicationConfigurationAsync();
 
         var groups = OpcUaEquipmentCodes
             .Select(code => _allEquipment.FirstOrDefault(e => e.EquipmentCode == code))
@@ -158,7 +158,7 @@ public sealed class OpcUaPlcTransport : IPlcTransport
                 subscription.Create();
 
                 try { await Task.Delay(Timeout.Infinite, ct); }
-                catch (OperationCanceledException) { }
+                catch (OperationCanceledException ex) { _logger.ZLogDebug(ex, $"OPC UA 会话等待已取消：{endpointUrl}"); }
 
                 subscription.Delete(false);
                 session.Close();
@@ -169,7 +169,7 @@ public sealed class OpcUaPlcTransport : IPlcTransport
             catch (Exception ex)
             {
                 _isConnected = false;
-                _logger.ZLogError($"OPC UA 连接 {endpointUrl} 失败：{ex.Message}（5s 后重连）");
+                _logger.ZLogError(ex, $"OPC UA 连接 {endpointUrl} 失败（5s 后重连）");
                 try { await Task.Delay(TimeSpan.FromSeconds(5), ct); }
                 catch (OperationCanceledException) { break; }
             }
@@ -245,7 +245,7 @@ public sealed class OpcUaPlcTransport : IPlcTransport
             (values.GetValueOrDefault("ProcessTag") as string) ?? "Generic");
     }
 
-    private static ApplicationConfiguration BuildApplicationConfiguration()
+    private static async Task<ApplicationConfiguration> BuildApplicationConfigurationAsync()
     {
         var config = new ApplicationConfiguration
         {
@@ -283,7 +283,7 @@ public sealed class OpcUaPlcTransport : IPlcTransport
             ClientConfiguration = new ClientConfiguration { DefaultSessionTimeout = 60000 },
             TraceConfiguration = new TraceConfiguration(),
         };
-        config.Validate(ApplicationType.Client);
+        await config.Validate(ApplicationType.Client);
         return config;
     }
 
@@ -338,9 +338,11 @@ public sealed class OpcUaPlcTransport : IPlcTransport
         _isConnected = false;
         var cts = _cts;
         _cts = null;
-        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException ex) { _logger.ZLogDebug(ex, $"OPC UA 取消令牌已释放"); }
         _pipe.Writer.Complete();
-        try { _session?.Close(); } catch { }
+        try { _session?.Close(); }
+        catch (Exception ex) { _logger.ZLogDebug(ex, $"OPC UA 会话关闭失败"); }
         _session = null;
         cts?.Dispose();
         return Task.CompletedTask;

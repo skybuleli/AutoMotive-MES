@@ -4,6 +4,8 @@ using MemoryPack;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Protocol;
+using Microsoft.Extensions.Logging;
+using ZLogger;
 
 namespace MesAdmin.Infrastructure.Hubs;
 
@@ -12,7 +14,7 @@ namespace MesAdmin.Infrastructure.Hubs;
 /// 因 Cysharp 未提供 MemoryPack SignalR 协议 NuGet 包，基于 MemoryPackSerializer 自定义实现 IHubProtocol。
 /// 序列化 HubMessage 为 MemoryPack 二进制，替代默认的 JSON 协议。
 /// </summary>
-public class MemoryPackHubProtocol : IHubProtocol
+public class MemoryPackHubProtocol(ILogger<MemoryPackHubProtocol> logger) : IHubProtocol
 {
     private const string ProtocolName = "memorypack";
 
@@ -44,8 +46,9 @@ public class MemoryPackHubProtocol : IHubProtocol
 
             return message is not null;
         }
-        catch
+        catch (Exception ex)
         {
+            logger.ZLogDebug(ex, $"MemoryPack 帧反序列化失败，丢弃该帧");
             message = null;
             return false;
         }

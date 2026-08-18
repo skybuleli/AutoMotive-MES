@@ -384,10 +384,13 @@ public class ProductionOrderSagaTests
         {
             await action.Invoke.Invoke(order.Id.ToString(), order.Id);
         }
+        // 预期：Saga 崩溃异常即测试断言对象，属预期捕获
+#pragma warning disable ERP022 // 测试代码：预期异常捕获
         catch
         {
             crashed = true;
         }
+#pragma warning restore ERP022
         Assert.True(crashed, "Saga 应在站2完成后崩溃");
 
         // 站2工序已完工（CompleteOperationRange 完成后崩溃 → 内存状态已更新）
@@ -446,10 +449,13 @@ public class ProductionOrderSagaTests
         {
             await action.Invoke.Invoke(order.Id.ToString(), order.Id);
         }
+        // 预期：Saga 崩溃异常即测试断言对象，属预期捕获
+#pragma warning disable ERP022 // 测试代码：预期异常捕获
         catch
         {
             crashed = true;
         }
+#pragma warning restore ERP022
         Assert.True(crashed, $"Saga 应在站{completedStation}完成后崩溃");
 
         // 已完成的工序应持久化（seq 2 到 pendingStartSeq-1）
@@ -498,7 +504,9 @@ public class ProductionOrderSagaTests
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
+#pragma warning disable ERP022 // 测试代码：预期异常捕获
         catch { /* Cleipnir FatalWorkflowException 预期 */ }
+#pragma warning restore ERP022
 
         // 已完成工序持久化
         foreach (var seq in Enumerable.Range(2, pendingStartSeq - 2))
@@ -535,7 +543,9 @@ public class ProductionOrderSagaTests
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
+#pragma warning disable ERP022 // 测试代码：预期异常捕获
         catch { /* Cleipnir FatalWorkflowException 预期 */ }
+#pragma warning restore ERP022
 
         // 站2 已完成（第1次 SaveChanges 成功）
         Assert.All(Enumerable.Range(2, 4), seq =>
@@ -579,7 +589,9 @@ public class ProductionOrderSagaTests
         var (action, _) = await RegisterSaga(saga, store);
 
         try { await action.Invoke.Invoke(order.Id.ToString(), order.Id); }
+#pragma warning disable ERP022 // 测试代码：预期异常捕获
         catch { /* Cleipnir FatalWorkflowException 预期 */ }
+#pragma warning restore ERP022
 
         // 站2-5已完成（第6-8次 SaveChanges 成功）
         Assert.All(Enumerable.Range(2, 26), seq =>

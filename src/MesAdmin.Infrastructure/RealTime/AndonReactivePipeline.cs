@@ -101,16 +101,15 @@ public sealed class AndonReactivePipeline : IHostedService, IAsyncDisposable
                         andonEvent.LowerLimit,
                         andonEvent.OccurredAt), ct);
 
-                    _logger.LogInformation("Andon alarm triggered: {EventNumber} {Description}",
-                        andonEvent.EventNumber, andonEvent.Description);
+                    _logger.ZLogInformation($"Andon 报警触发：{andonEvent.EventNumber} {andonEvent.Description}");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Andon pipeline error");
+                    _logger.ZLogError(ex, $"Andon 管道异常");
                 }
             });
 
-        _logger.LogInformation("Andon reactive pipeline started");
+        _logger.ZLogInformation($"Andon 响应式管道已启动");
         return Task.CompletedTask;
     }
 
@@ -205,7 +204,7 @@ public sealed class AndonReactivePipeline : IHostedService, IAsyncDisposable
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _subscription?.Dispose();
-        _logger.LogInformation("Andon reactive pipeline stopped");
+        _logger.ZLogInformation($"Andon 响应式管道已停止");
         return Task.CompletedTask;
     }
 

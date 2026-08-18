@@ -35,7 +35,7 @@ public sealed class GlobalExceptionPostProcessor(
             _ => (HttpStatusCode.InternalServerError, "服务器内部错误"),
         };
 
-        logger.ZLogError($"请求 {ctx.HttpContext.Request.Path} 异常: {ex.Message}");
+        logger.ZLogError(ex, $"请求 {ctx.HttpContext.Request.Path} 异常");
 
         ctx.MarkExceptionAsHandled();
 

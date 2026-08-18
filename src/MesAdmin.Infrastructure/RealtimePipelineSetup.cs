@@ -48,7 +48,7 @@ public static class RealtimePipelineSetup
         {
             var equipment = sp.GetRequiredService<IReadOnlyList<Equipment>>();
             var logger = sp.GetRequiredService<ILogger<SimulatedPlcTransport>>();
-            return new SimulatedPlcTransport(equipment);
+            return new SimulatedPlcTransport(equipment, logger);
         });
 
         // OPC UA 传输层（拧紧机 Atlas Copco + 终检台）

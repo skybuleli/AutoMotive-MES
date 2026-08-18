@@ -1,5 +1,6 @@
 using MesAdmin.Domain.Models;
 using Microsoft.Extensions.Logging;
+using ZLogger;
 
 namespace MesAdmin.Infrastructure.Plc;
 
@@ -55,12 +56,12 @@ public sealed class PlcDriverFactory
         // 未匹配到专用驱动 → 降级到模拟传输层
         if (_simulatedFallback is not null)
         {
-            _logger.LogWarning("设备 {EquipmentCode} 未找到专用驱动，使用模拟传输层降级", equipmentCode);
+            _logger.ZLogWarning($"设备 {equipmentCode} 未找到专用驱动，使用模拟传输层降级");
             return _simulatedFallback;
         }
 
         // 极端降级：返回任意第一个
-        _logger.LogError("设备 {EquipmentCode} 未找到任何传输层", equipmentCode);
+        _logger.ZLogError($"设备 {equipmentCode} 未找到任何传输层");
         return _transports[0];
     }
 

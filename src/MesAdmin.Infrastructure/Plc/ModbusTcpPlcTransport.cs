@@ -147,8 +147,8 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                _logger.ZLogError($"Modbus TCP 读取 {equipmentCode} {host}:{port} 失败：{ex.Message}");
-                try { await Task.Delay(TimeSpan.FromSeconds(2), ct); } catch { break; }
+                _logger.ZLogError(ex, $"Modbus TCP 读取 {equipmentCode} {host}:{port} 失败");
+                try { await Task.Delay(TimeSpan.FromSeconds(2), ct); } catch (OperationCanceledException) { break; }
             }
         }
     }
@@ -271,12 +271,13 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
         var pollTask = _pollTask;
         _cts = null;
         _pollTask = null;
-        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException ex) { _logger.ZLogDebug(ex, $"Modbus TCP 取消令牌已释放"); }
 
         if (pollTask is not null)
         {
             try { await pollTask.ConfigureAwait(false); }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException ex) { _logger.ZLogDebug(ex, $"Modbus TCP 轮询任务已取消"); }
         }
 
         _pipe.Writer.Complete();

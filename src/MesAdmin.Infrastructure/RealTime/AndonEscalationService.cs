@@ -110,7 +110,7 @@ public sealed class AndonEscalationService : IHostedService, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _logger.ZLogError($"Andon 升级扫描异常：{ex.Message}");
+                _logger.ZLogError(ex, $"Andon 升级扫描异常");
             }
 
             try { await Task.Delay(ScanInterval, ct); }
@@ -123,7 +123,8 @@ public sealed class AndonEscalationService : IHostedService, IAsyncDisposable
         _cts?.Cancel();
         if (_scanTask is not null)
         {
-            try { await _scanTask; } catch { }
+            try { await _scanTask; }
+            catch (Exception ex) { _logger.ZLogDebug(ex, $"Andon 升级扫描任务停止异常"); }
         }
     }
 

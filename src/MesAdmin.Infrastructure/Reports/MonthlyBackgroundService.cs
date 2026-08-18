@@ -42,7 +42,7 @@ public sealed class MonthlyBackgroundService : BackgroundService
         {
             try
             {
-                var now = DateTimeOffset.Now;
+                var now = DateTimeOffset.UtcNow;
                 var emailEnabled = _config.GetValue<bool>("MonthlyReport:Email:Enabled");
 
                 // 每月 1 日 06:00 生成并发送月报

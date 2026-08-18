@@ -67,7 +67,7 @@ public sealed class PreventiveMaintenanceService : BackgroundService, IAsyncDisp
         _subscription = _pipeline.PlcStream
             .Subscribe(OnPlcSnapshot);
 
-        _logger.LogInformation("预防性维护服务已启动");
+        _logger.ZLogInformation($"预防性维护服务已启动");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -100,7 +100,7 @@ public sealed class PreventiveMaintenanceService : BackgroundService, IAsyncDisp
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogError(ex, "预防性维护服务检查异常: {Message}", ex.Message);
+                _logger.ZLogError(ex, $"预防性维护服务检查异常");
             }
 
             try { await Task.Delay(CheckInterval, stoppingToken); }
@@ -177,8 +177,7 @@ public sealed class PreventiveMaintenanceService : BackgroundService, IAsyncDisp
 
         await orderRepo.AddAsync(order, ct);
 
-        _logger.LogInformation("预防性维护工单已创建: {OrderNumber} - {EquipmentCode} - {Task}",
-            order.OrderNumber, plan.EquipmentCode, plan.TaskDescription);
+        _logger.ZLogInformation($"预防性维护工单已创建：{order.OrderNumber} - {plan.EquipmentCode} - {plan.TaskDescription}");
     }
 
     /// <summary>

@@ -97,7 +97,11 @@ public sealed class UploadSyncBatchEndpoint : Endpoint<UploadSyncBatchBody, Uplo
                     op.TerminalId, op.OperationType, op.Payload,
                     op.EntityType, op.EntityId, op.OperationTimestamp);
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, $"离线记录参数无效，已跳过：{op.OperationType} | {op.EntityType}:{op.EntityId}");
+                return null;
+            }
         }).ToList();
 
         var validRecords = records.Where(r => r is not null).Cast<OfflineSyncRecord>().ToList();

@@ -116,8 +116,9 @@ public partial record Gs1Barcode(
             result = new DateTimeOffset(2000 + yy, mm, dd, 0, 0, 0, TimeSpan.Zero);
             return true;
         }
-        catch
+        catch (ArgumentOutOfRangeException)
         {
+            // 日期组合非法（如 2 月 31 日），按无效日期处理；领域模型不引入日志依赖，属预期分支。
             return false;
         }
     }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MesAdmin.Application.Tests;
 
@@ -60,10 +61,13 @@ public class Chaos_SignalRReconnectTests
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await connection.StartAsync(cts.Token);
         }
+        // 预期：StartAsync 在服务器不可用时抛异常，异常即测试断言对象，属预期捕获
+#pragma warning disable ERP022 // 测试代码：预期异常捕获
         catch
         {
             thrown = true;
         }
+#pragma warning restore ERP022
         finally
         {
             await connection.DisposeAsync();
@@ -170,7 +174,7 @@ public class Chaos_SignalRReconnectTests
     [Fact]
     public void MemoryPackHubProtocol_ShouldCreate()
     {
-        var protocol = new MemoryPackHubProtocol();
+        var protocol = new MemoryPackHubProtocol(NullLogger<MemoryPackHubProtocol>.Instance);
 
         Assert.NotNull(protocol);
         Assert.Equal("memorypack", protocol.Name);
@@ -187,7 +191,7 @@ public class Chaos_SignalRReconnectTests
     [Fact]
     public void MemoryPackHubProtocol_TransferFormat_ShouldBeBinary()
     {
-        var protocol = new MemoryPackHubProtocol();
+        var protocol = new MemoryPackHubProtocol(NullLogger<MemoryPackHubProtocol>.Instance);
 
         // MemoryPack 使用二进制传输格式
         Assert.Equal(TransferFormat.Binary, protocol.TransferFormat);

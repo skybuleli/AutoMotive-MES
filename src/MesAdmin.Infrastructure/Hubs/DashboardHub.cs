@@ -77,7 +77,7 @@ public sealed class OeePushService : IHostedService, IDisposable
             catch (Exception ex)
             {
                 AutoMesMetrics.RecordSignalRPushFailure("dashboard", "OeeUpdated");
-                _logger.ZLogError($"OEE 推送失败：{ex.Message}");
+                _logger.ZLogError(ex, $"OEE 推送失败");
             }
         });
         return Task.CompletedTask;
@@ -141,7 +141,7 @@ public sealed class ChannelHealthPushService : IHostedService, IAsyncDisposable
             catch (Exception ex)
             {
                 AutoMesMetrics.RecordSignalRPushFailure("dashboard", "ChannelHealth");
-                _logger.ZLogError($"ChannelHealth 推送异常：{ex.Message}");
+                _logger.ZLogError(ex, $"ChannelHealth 推送异常");
             }
 
             try { await Task.Delay(_interval, ct); }
@@ -154,7 +154,8 @@ public sealed class ChannelHealthPushService : IHostedService, IAsyncDisposable
         _cts?.Cancel();
         if (_pushTask is not null)
         {
-            try { await _pushTask; } catch { }
+            try { await _pushTask; }
+            catch (Exception ex) { _logger.ZLogDebug(ex, $"ChannelHealth 推送任务停止异常"); }
         }
     }
 

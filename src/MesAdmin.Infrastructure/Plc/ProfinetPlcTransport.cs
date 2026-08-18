@@ -124,13 +124,14 @@ public sealed class ProfinetPlcTransport : IPlcTransport
             catch (Exception ex)
             {
                 _isConnected = false;
-                _logger.ZLogError($"Profinet 读取 {eq.EquipmentCode} 失败：{ex.Message}（2s 后重连）");
+                _logger.ZLogError(ex, $"Profinet 读取 {eq.EquipmentCode} 失败（2s 后重连）");
                 try { await Task.Delay(TimeSpan.FromSeconds(2), ct); }
                 catch (OperationCanceledException) { break; }
             }
             finally
             {
-                try { plc?.Close(); } catch { }
+                try { plc?.Close(); }
+                catch (Exception ex) { _logger.ZLogDebug(ex, $"Profinet 连接释放失败：{eq.EquipmentCode}"); }
             }
         }
     }
@@ -211,7 +212,8 @@ public sealed class ProfinetPlcTransport : IPlcTransport
         _isConnected = false;
         var cts = _cts;
         _cts = null;
-        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException ex) { _logger.ZLogDebug(ex, $"Profinet 取消令牌已释放"); }
         _pipe.Writer.Complete();
         cts?.Dispose();
         return Task.CompletedTask;

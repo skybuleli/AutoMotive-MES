@@ -161,6 +161,7 @@ public class CreateScheduleEndpoint : MesEndpoint<CreateScheduleRequest, Schedul
         }
         catch (Exception ex)
         {
+            Logger.LogWarning(ex, $"创建排程失败：{req.OrderId}");
             AddError(ex.Message);
             ThrowIfAnyErrors();
         }

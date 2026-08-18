@@ -28,7 +28,7 @@ public sealed class LoggingCommandMiddleware<TCommand, TResult>(
         }
         catch (Exception ex)
         {
-            logger.ZLogError($"✗ {name}: {ex.Message}");
+            logger.ZLogError(ex, $"✗ {name}");
             throw;
         }
     }

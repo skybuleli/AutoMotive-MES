@@ -4,6 +4,7 @@ using MessagePipe;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ZLogger;
 
 namespace MesAdmin.Infrastructure.Hubs;
 
@@ -19,14 +20,14 @@ public sealed class AndonHub : Hub
     public override Task OnConnectedAsync()
     {
         AutoMesMetrics.RecordSignalRConnected("andon");
-        _logger.LogInformation("AndonHub client connected: {Id}", Context.ConnectionId);
+        _logger.ZLogInformation($"AndonHub 客户端连接：{Context.ConnectionId}");
         return base.OnConnectedAsync();
     }
 
     public override Task OnDisconnectedAsync(Exception? exception)
     {
         AutoMesMetrics.RecordSignalRDisconnected("andon");
-        _logger.LogInformation("AndonHub client disconnected: {Id}", Context.ConnectionId);
+        _logger.ZLogInformation($"AndonHub 客户端断开：{Context.ConnectionId}");
         return base.OnDisconnectedAsync(exception);
     }
 }
@@ -86,7 +87,7 @@ public sealed class AndonPushService : IHostedService, IDisposable
         catch (Exception ex)
         {
             AutoMesMetrics.RecordSignalRPushFailure("andon", method);
-            _logger.LogError(ex, "{Method} push failed", method);
+            _logger.ZLogError(ex, $"{method} 推送失败");
         }
     }
 

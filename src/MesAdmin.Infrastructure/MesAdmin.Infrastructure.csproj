@@ -39,4 +39,8 @@
       <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="MesAdmin.Application.Tests" />
+  </ItemGroup>
+
 </Project>

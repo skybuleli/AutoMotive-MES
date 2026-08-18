@@ -28,7 +28,7 @@ public sealed class TransactionMiddleware<TCommand, TResult>(
         }
         catch (Exception ex)
         {
-            logger.ZLogWarning($"事务回滚: {typeof(TCommand).Name} - {ex.Message}");
+            logger.ZLogWarning(ex, $"事务回滚: {typeof(TCommand).Name}");
             throw;
         }
     }

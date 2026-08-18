@@ -3,6 +3,8 @@ using System.IO.Pipelines;
 using System.Runtime.InteropServices;
 using System.Text;
 using MesAdmin.Domain.Models;
+using Microsoft.Extensions.Logging;
+using ZLogger;
 
 namespace MesAdmin.Infrastructure.Plc;
 
@@ -17,6 +19,7 @@ public sealed class SimulatedPlcTransport : IPlcTransport
     private readonly Pipe _pipe = new(System.IO.Pipelines.PipeOptions.Default);
     private readonly IReadOnlyList<Equipment> _equipment;
     private readonly TimeSpan _sampleInterval;
+    private readonly ILogger<SimulatedPlcTransport> _logger;
     private CancellationTokenSource? _cts;
     private Task? _generateTask;
     private bool _isConnected;
@@ -31,9 +34,10 @@ public sealed class SimulatedPlcTransport : IPlcTransport
     public string TransportName => "Simulated";
     public bool IsConnected => _isConnected;
 
-    public SimulatedPlcTransport(IReadOnlyList<Equipment> equipment, TimeSpan? sampleInterval = null)
+    public SimulatedPlcTransport(IReadOnlyList<Equipment> equipment, ILogger<SimulatedPlcTransport> logger, TimeSpan? sampleInterval = null)
     {
         _equipment = equipment;
+        _logger = logger;
         _sampleInterval = sampleInterval ?? TimeSpan.FromMilliseconds(500);
         SupportedEquipmentCodes = new HashSet<string>(equipment.Select(e => e.EquipmentCode));
         foreach (var eq in equipment)
@@ -53,11 +57,13 @@ public sealed class SimulatedPlcTransport : IPlcTransport
         _isConnected = false;
         var cts = _cts;
         _cts = null;
-        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException ex) { _logger.ZLogDebug(ex, $"模拟传输层取消令牌已释放"); }
         _pipe.Writer.Complete();
         if (_generateTask is not null)
         {
-            try { _generateTask.GetAwaiter().GetResult(); } catch { }
+            try { _generateTask.GetAwaiter().GetResult(); }
+            catch (Exception ex) { _logger.ZLogDebug(ex, $"模拟传输层停止时任务异常"); }
         }
         cts?.Dispose();
         return Task.CompletedTask;

@@ -149,13 +149,14 @@ public sealed class EthernetIpPlcTransport : IPlcTransport
             catch (Exception ex)
             {
                 _isConnected = false;
-                _logger.ZLogError($"EtherNet/IP 读取 {eq.EquipmentCode} 失败：{ex.Message}（2s 后重连）");
+                _logger.ZLogError(ex, $"EtherNet/IP 读取 {eq.EquipmentCode} 失败（2s 后重连）");
                 try { await Task.Delay(TimeSpan.FromSeconds(2), ct); }
                 catch (OperationCanceledException) { break; }
             }
             finally
             {
-                try { tcp?.Dispose(); } catch { }
+                try { tcp?.Dispose(); }
+                catch (Exception ex) { _logger.ZLogDebug(ex, $"EtherNet/IP 连接释放失败：{eq.EquipmentCode}"); }
             }
         }
     }
@@ -317,7 +318,8 @@ public sealed class EthernetIpPlcTransport : IPlcTransport
         _isConnected = false;
         var cts = _cts;
         _cts = null;
-        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException ex) { _logger.ZLogDebug(ex, $"EtherNet/IP 取消令牌已释放"); }
         _pipe.Writer.Complete();
         cts?.Dispose();
         return Task.CompletedTask;

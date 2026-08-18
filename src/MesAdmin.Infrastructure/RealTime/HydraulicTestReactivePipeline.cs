@@ -90,7 +90,7 @@ public sealed class HydraulicTestReactivePipeline : IHostedService, IAsyncDispos
                 }
                 catch (Exception ex)
                 {
-                    _logger.ZLogError($"液压测试管道异常：{ex.Message}");
+                    _logger.ZLogError(ex, $"液压测试管道异常");
                 }
             });
 
@@ -299,7 +299,7 @@ public sealed class HydraulicTestReactivePipeline : IHostedService, IAsyncDispos
         }
         catch (Exception ex)
         {
-            _logger.ZLogError($"液压测试结果持久化失败: {ex.Message}");
+            _logger.ZLogError(ex, $"液压测试结果持久化失败");
         }
     }
 

@@ -7,6 +7,22 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 indent_style = space
 
+# ErrorProne.NET 规则策略（2026-08 审查后）
+# 真实 bug 类 → warning，存量已修复，持续拦截新引入
+#   EPC13 未观察的 Task（fire-and-forget 丢异常）
+#   EPC30 方法递归调用（易栈溢出/死循环）
+#   EPC17 async-void 委托（异常会崩进程/丢到线程池）
+# 异常处理规则 → warning（存量已逐步修复：记录完整异常/在吞异常处补日志，避免静默）
+#   EPC12 catch 中仅观察 ex.Message（应记录完整异常）
+#   ERP022 退出点吞掉未观察异常（应记录后返回，避免静默吞掉）
+# 注：Razor 生成代码不响应 .editorconfig severity（路径映射到 .razor 也不生效），
+#     故 EPC12/ERP022 在 Web 项目 csproj 的 NoWarn 中静默；EPC13/30/17 无 razor 存量。
+dotnet_diagnostic.EPC13.severity = warning
+dotnet_diagnostic.EPC30.severity = warning
+dotnet_diagnostic.EPC17.severity = warning
+dotnet_diagnostic.EPC12.severity = warning
+dotnet_diagnostic.ERP022.severity = warning
+
 [*.{cs,csx}]
 indent_size = 4
 tab_width = 4

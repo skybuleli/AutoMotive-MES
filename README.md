@@ -261,21 +261,53 @@ Effect 内    → 禁止读外部缓存（重放时缓存可能已失效）
 
 ## 🚀 快速开始
 
+### 一键启动（推荐）
+
+```bash
+./scripts/dev.sh
+```
+
+脚本会自动完成：启动 PostgreSQL（未运行时）→ 启动 REST API（`http://localhost:5040`）→ 启动 Web 管理后台（`http://localhost:5138`），两者就绪后打印访问地址。`Ctrl+C` 一键停止全部服务（含按端口兜底清理残留进程）。
+
+> 登录账号：`manager` / `leader` / `qe` / `ee` / `warehouse` / `sqe`（开发环境，密码任意）。
+
+### 手动启动（备选）
+
 ```bash
 # 1. 启动 PostgreSQL
 docker compose -f docker/compose.dev.yaml up -d
 
-# 2. 运行 Web 管理后台
-dotnet run --project src/MesAdmin.Web
-
-# 3. 运行 REST API（可选，工位终端用）
+# 2. 运行 REST API（Web 登录与数据访问均依赖此服务，必须启动）
 dotnet run --project src/MesAdmin.Api
 
-# 4. 运行全部测试
+# 3. 运行 Web 管理后台
+dotnet run --project src/MesAdmin.Web
+```
+
+### 测试与联调
+
+```bash
+# 运行全部测试
 dotnet test
 
-# 5. 运行性能基准
+# 运行性能基准
 dotnet run -c Release --project tests/MesAdmin.Benchmarks
+
+# 全接口冒烟探测（构建 + 启动 API + 多角色探测全部端点，报告 404/500）
+./scripts/probe-api.sh
+```
+
+### 代码质量分析器（ErrorProne.NET）
+
+解决方案在 `Directory.Build.props` 引入 **ErrorProne.NET.CoreAnalyzers + Structs**（另含 Meziantou / Roslynator），规则策略记录在 `.editorconfig`：
+
+- **全部规则 → warning**，构建即拦截：`EPC13` 未观察的 Task、`EPC30` 方法递归、`EPC17` async-void 委托、`EPC12` catch 仅观察 `ex.Message`（应记录完整异常）、`ERP022` 退出点吞异常（应记录后返回）。
+- 存量 122 处（81 EPC12 + 41 ERP022）已全部修复：后端 `ZLogError(ex, ...)` 记录完整异常、吞异常处补日志/收窄 catch、页面注入 `ILogger<T>`；测试中“预期异常捕获”用带注释的 `#pragma warning disable ERP022` 显式豁免。
+- 页面（`.razor`）通过 `@inject ILogger<Page>` 记录完整异常，用户仍只看到友好错误文案。
+
+```bash
+# 构建即触发分析，当前基线 0 ErrorProne 告警（仅遗留 SSH.NET 依赖漏洞告警 NU1903）
+dotnet build MesAdmin.sln
 ```
 
 ---

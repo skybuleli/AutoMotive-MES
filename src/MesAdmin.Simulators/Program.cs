@@ -268,7 +268,7 @@ public sealed class ModbusSimulatorService(
                 _ = HandleClientAsync(device, client, ct);
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException ex) { logger.LogDebug(ex, "Modbus simulator stopped"); }
         finally
         {
             listener.Stop();

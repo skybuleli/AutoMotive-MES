@@ -123,7 +123,7 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
         catch (OperationCanceledException) { /* 正常关闭 */ }
         catch (Exception ex)
         {
-            _logger.ZLogError($"PLC Channel 消费循环异常：{ex.Message}");
+            _logger.ZLogError(ex, $"PLC Channel 消费循环异常");
         }
     }
 
@@ -138,11 +138,13 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
 
         if (_producerTask is not null)
         {
-            try { await _producerTask; } catch { }
+            try { await _producerTask; }
+            catch (Exception ex) { _logger.ZLogDebug(ex, $"PLC 生产者任务停止异常"); }
         }
         if (_consumerTask is not null)
         {
-            try { await _consumerTask; } catch { }
+            try { await _consumerTask; }
+            catch (Exception ex) { _logger.ZLogDebug(ex, $"PLC 消费者任务停止异常"); }
         }
 
         _plcStream.OnCompleted();
@@ -151,7 +153,9 @@ public sealed class PlcDataAcquisitionPipeline : IHostedService, IAsyncDisposabl
 
     public async ValueTask DisposeAsync()
     {
-        await StopAsync(CancellationToken.None);
+        // 使用超时 Token 避免 Dispose 时无限等待
+        using var disposeCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await StopAsync(disposeCts.Token);
         _plcStream.Dispose();
         _cts?.Dispose();
         _cts = null;
