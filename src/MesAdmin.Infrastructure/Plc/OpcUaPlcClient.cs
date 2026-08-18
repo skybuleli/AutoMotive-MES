@@ -70,7 +70,7 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _logger.ZLogError($"启动 {transport.TransportName} 失败：{ex.Message}");
+                _logger.ZLogError(ex, $"启动 {transport.TransportName} 失败");
             }
         }
 
@@ -115,50 +115,77 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
             catch (Exception ex)
             {
                 AutoMesMetrics.RecordPlcReadLoopError(transport.TransportName);
-                _logger.ZLogError($"{transport.TransportName} 读取循环异常：{ex.Message}");
+                _logger.ZLogError(ex, $"{transport.TransportName} 读取循环异常");
                 // 短暂延迟后重试，避免空转
-                try { await Task.Delay(1000, ct); } catch { break; }
+                try { await Task.Delay(1000, ct); } catch (OperationCanceledException) { break; }
             }
         }
     }
 
     /// <summary>
     /// 从 PipeReader 缓冲区中零分配扫描并解析一帧。
-    /// 使用 SearchValues SIMD 定位帧头，PlcFrameReader 解析字段。
+    /// 使用 SequenceReader 在完整 ReadOnlySequence 上定位帧头，支持帧跨 ReadOnlySequence 多个 segment。
+    /// 解析前将 77 字节帧复制到 stackalloc 连续缓冲区，再交给 PlcFrameReader 解析。
     /// </summary>
-    private static bool TryReadFrame(ref ReadOnlySequence<byte> buffer, out PlcSnapshot snapshot)
+    internal static bool TryReadFrame(ref ReadOnlySequence<byte> buffer, out PlcSnapshot snapshot)
     {
         snapshot = default!;
+        const int frameLength = PlcFrameProtocol.FrameLength;
 
-        if (buffer.Length < PlcFrameProtocol.FrameLength)
+        if (buffer.Length < frameLength)
             return false;
 
-        var span = buffer.FirstSpan;
+        var reader = new SequenceReader<byte>(buffer);
+        Span<byte> frame = stackalloc byte[frameLength];
 
-        // SearchValues 扫描帧头 0x55 0xAA（SIMD 加速）
-        var headerSpan = new ReadOnlySpan<byte>([PlcFrameProtocol.Header0, PlcFrameProtocol.Header1]);
-        var headerIndex = span.IndexOf(headerSpan);
-        if (headerIndex < 0 || headerIndex + PlcFrameProtocol.FrameLength > span.Length)
+        while (!reader.End)
         {
-            // 跳过已扫描部分
-            buffer = buffer.Slice(span.Length > 1 ? span.Length - 1 : 1);
-            return false;
-        }
+            // 在完整 sequence 上定位帧头首字节 0x55
+            // 注：SequenceReader 按字节扫描，跨段安全；77 字节帧场景下 SIMD 收益有限。
+            if (!reader.TryAdvanceTo(PlcFrameProtocol.Header0, false))
+                break;
 
-        var frameSpan = span.Slice(headerIndex, PlcFrameProtocol.FrameLength);
-        var frameReader = new PlcFrameReader(frameSpan);
+            var frameStart = reader.Position;
 
-        if (!frameReader.TryParse(out snapshot))
-        {
+            // 如果 0x55 是最后一个字节，保留到下一次 ReadAsync 再判断
+            if (reader.Remaining < 2)
+                return false;
+
+            // 跳过 0x55 并验证下一字节为 0xAA
+            reader.Advance(1);
+
+            if (!reader.TryRead(out byte h1) || h1 != PlcFrameProtocol.Header1)
+                continue;
+
+            // 当前 reader 位于 0xAA 之后；检查剩余字节是否足够完整一帧
+            if (reader.Remaining < frameLength - 2)
+            {
+                // 数据不足一帧，保留未消费字节等待下一次 ReadAsync
+                return false;
+            }
+
+            // 将可能跨 segment 的帧复制到连续 stack 缓冲区
+            var frameSequence = buffer.Slice(frameStart, frameLength);
+            frameSequence.CopyTo(frame);
+
+            var frameReader = new PlcFrameReader(frame);
+            if (frameReader.TryParse(out snapshot))
+            {
+                // 成功解析，推进 reader 到帧尾并返回剩余缓冲区
+                reader.Advance(frameLength - 2);
+                buffer = buffer.Slice(reader.Position);
+                return true;
+            }
+
+            // 帧头匹配但校验失败（帧尾/内容损坏），跳过整帧避免在损坏帧体内误识别新帧头
             AutoMesMetrics.RecordPlcFrameParseError();
-            // 帧头匹配但帧尾不匹配，跳过帧头继续扫描
-            buffer = buffer.Slice(headerIndex + 2);
-            return false;
+            reader.Advance(frameLength - 2);
         }
 
-        // 成功解析一帧，推进缓冲区
-        buffer = buffer.Slice(headerIndex + PlcFrameProtocol.FrameLength);
-        return true;
+        // 未找到有效帧：消费除最后 1 字节外的所有字节，保留可能的跨段帧头
+        var consumed = buffer.Length > 1 ? buffer.Length - 1 : 0;
+        buffer = buffer.Slice(consumed);
+        return false;
     }
 
     /// <summary>读取设备寄存器值（返回最新缓存的快照对应字段）</summary>
@@ -231,10 +258,12 @@ public sealed class OpcUaPlcClient : IPlcClient, IAsyncDisposable
     {
         var cts = _cts;
         _cts = null;
-        try { cts?.Cancel(); } catch (ObjectDisposedException) { }
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException ex) { _logger.ZLogDebug(ex, $"OPC UA 客户端取消令牌已释放"); }
         if (cts is not null)
         {
-            try { await Task.Delay(100); } catch { }
+            try { await Task.Delay(100); }
+            catch (Exception ex) { _logger.ZLogDebug(ex, $"OPC UA 客户端停止等待异常"); }
             cts.Dispose();
         }
     }

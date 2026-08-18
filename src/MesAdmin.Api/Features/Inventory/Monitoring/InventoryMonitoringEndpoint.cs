@@ -11,7 +11,7 @@ public class InventoryMonitoringEndpoint : MesEndpointWithoutRequest<InventoryMo
 {
     public override void Configure()
     {
-        Get("/inventory/monitoring");
+        Get("/monitoring");
         Group<InventoryGroup>();
         Roles(MesRoles.ProductionManager, MesRoles.ShiftLeader, MesRoles.WarehouseClerk, MesRoles.QualityEngineer);
         Summary(s => s.Summary = "线边库存实时监控（当前库存 vs 阈值：绿色正常/黄色预警/红色报警）");

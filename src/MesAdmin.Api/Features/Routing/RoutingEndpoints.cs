@@ -16,7 +16,7 @@ public class ListRoutingsEndpoint : MesEndpointWithoutRequest<List<RoutingRespon
 {
     public override void Configure()
     {
-        Get("/routing");
+        Get("/");
         Group<RoutingGroup>();
         Roles(MesRoles.ProductionManager, MesRoles.EquipmentEngineer, MesRoles.QualityEngineer);
         Summary(s => s.Summary = "查询工艺路线列表，支持按产品编码和 ECO 状态过滤");
@@ -63,7 +63,7 @@ public class GetActiveRoutingEndpoint : MesEndpointWithoutRequest<RoutingRespons
 {
     public override void Configure()
     {
-        Get("/routing/active");
+        Get("/active");
         Group<RoutingGroup>();
         Roles(MesRoles.ProductionManager, MesRoles.EquipmentEngineer, MesRoles.QualityEngineer);
         Summary(s => s.Summary = "查询指定产品的当前生效工艺路线");
@@ -100,7 +100,7 @@ public class GetRoutingByIdEndpoint : MesEndpointWithoutRequest<RoutingResponse>
 {
     public override void Configure()
     {
-        Get("/routing/{id}");
+        Get("/{id}");
         Group<RoutingGroup>();
         Roles(MesRoles.ProductionManager, MesRoles.EquipmentEngineer, MesRoles.QualityEngineer);
         Summary(s => s.Summary = "查询工艺路线详情");
@@ -136,7 +136,7 @@ public class CreateRoutingEndpoint : MesEndpoint<CreateRoutingRequest, RoutingRe
 {
     public override void Configure()
     {
-        Post("/routing");
+        Post("/");
         Group<RoutingGroup>();
         Roles(MesRoles.ProductionManager, MesRoles.EquipmentEngineer);
         Summary(s => s.Summary = "创建新的工艺路线（含 31 工序 × 7 站定义 + 参数模板）");
@@ -208,7 +208,7 @@ public class SubmitRoutingEndpoint : MesEndpointWithoutRequest<RoutingResponse>
 {
     public override void Configure()
     {
-        Post("/routing/{id}/submit");
+        Post("/{id}/submit");
         Group<RoutingGroup>();
         Roles(MesRoles.ProductionManager, MesRoles.EquipmentEngineer);
         Summary(s => s.Summary = "提交工艺路线 ECO 审批");
@@ -254,7 +254,7 @@ public class ApproveRoutingEndpoint : MesEndpoint<ApproveRoutingRequest, Routing
 {
     public override void Configure()
     {
-        Post("/routing/{id}/approve");
+        Post("/{id}/approve");
         Group<RoutingGroup>();
         Roles(MesRoles.ProductionManager);
         Summary(s => s.Summary = "审批通过工艺路线 ECO");
@@ -308,7 +308,7 @@ public class ReleaseRoutingEndpoint : MesEndpointWithoutRequest<RoutingResponse>
 {
     public override void Configure()
     {
-        Post("/routing/{id}/release");
+        Post("/{id}/release");
         Group<RoutingGroup>();
         Roles(MesRoles.ProductionManager);
         Summary(s => s.Summary = "发布工艺路线（设为当前有效版本，旧版本自动失效）");
@@ -362,7 +362,7 @@ public class VerifyOperationEndpoint : MesEndpoint<VerifyOperationRequest, Verif
 {
     public override void Configure()
     {
-        Post("/routing/verify");
+        Post("/verify");
         Group<RoutingGroup>();
         Roles(MesRoles.ShiftLeader, MesRoles.ProductionManager);
         Summary(s => s.Summary = "防错三重校验（操作员启动工序前验证物料→BOM→设备参数）");
@@ -432,7 +432,7 @@ public class GetDefaultRoutingEndpoint : MesEndpointWithoutRequest<RoutingRespon
 {
     public override void Configure()
     {
-        Get("/routing/{productCode}/default");
+        Get("/{productCode}/default");
         Group<RoutingGroup>();
         AllowAnonymous();
         Summary(s => s.Summary = "获取 ESP 默认 31 工序工艺路线定义");
