@@ -3,36 +3,21 @@
 
 <PageTitle>仪表盘 — AutoMES</PageTitle>
 
-<MudStack Spacing="6" Class="home-page">
+<MudStack Spacing="4" Class="home-page">
 
     <!-- 页头 -->
-    <MudPaper Elevation="0" Class="mes-toolbar pa-6">
-        <MudStack Spacing="1">
-            <MudText Class="section-kicker">OVERVIEW · 总览与告警</MudText>
-            <MudText Typo="Typo.h4" Class="text-gradient" Style="font-weight:800;">博世 ESP® 制动系统 MES</MudText>
-            <MudText Typo="Typo.body2" Class="section-copy">
-                汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序
-            </MudText>
-        </MudStack>
-    </MudPaper>
+    <MesPageHeader Kicker="OVERVIEW · 总览与告警"
+                   Title="博世 ESP® 制动系统 MES"
+                   TitleClass="text-gradient"
+                   Description="汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序" />
 
     <!-- KPI 卡片 -->
     <MudGrid Spacing="4">
         @foreach (var kpi in _kpis)
         {
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="0" Class="glass-kpi-card" Style="height:100%;">
-                    <MudStack Row AlignItems="AlignItems.Start" Justify="Justify.SpaceBetween">
-                        <MudStack Spacing="1">
-                            <MudText Class="kpi-label">@kpi.Label</MudText>
-                            <MudText Class="kpi-value" Style="@($"color:{kpi.Color};")">@kpi.Value</MudText>
-                            <MudText Class="kpi-sub">@kpi.Sub</MudText>
-                        </MudStack>
-                        <div class="home-kpi-icon" style="@($"background:{kpi.Color}22;color:{kpi.Color};")">
-                            <MudIcon Icon="@kpi.Icon" />
-                        </div>
-                    </MudStack>
-                </MudPaper>
+                <MesKpiCard Label="@kpi.Label" Value="@kpi.Value" Sub="@kpi.Sub"
+                            Icon="@kpi.Icon" Accent="@kpi.Accent" />
             </MudItem>
         }
     </MudGrid>
@@ -56,12 +41,12 @@
 </MudStack>
 
 @code {
-    private readonly (string Label, string Value, string Sub, string Color, string Icon)[] _kpis =
+    private readonly (string Label, string Value, string Sub, string Icon, MesAccent Accent)[] _kpis =
     [
-        ("OEE", "85.2%", "全局设备综合效率", "#D0B4F9", Icons.Material.Filled.Speed),
-        ("合格率", "97.5%", "一次合格率", "#ADE6A8", Icons.Material.Filled.Verified),
-        ("在产工单", "12", "进行中工单数", "#FBE7B6", Icons.Material.Filled.Assignment),
-        ("Andon 报警", "3", "未处理报警", "#F595B0", Icons.Material.Filled.NotificationImportant),
+        ("OEE", "85.2%", "全局设备综合效率", Icons.Material.Filled.Speed, MesAccent.Primary),
+        ("合格率", "97.5%", "一次合格率", Icons.Material.Filled.Verified, MesAccent.Success),
+        ("在产工单", "12", "进行中工单数", Icons.Material.Filled.Assignment, MesAccent.Warning),
+        ("Andon 报警", "3", "未处理报警", Icons.Material.Filled.NotificationImportant, MesAccent.Error),
     ];
 
     private readonly (string Label, string Href, Color Color, string Icon)[] _actions =

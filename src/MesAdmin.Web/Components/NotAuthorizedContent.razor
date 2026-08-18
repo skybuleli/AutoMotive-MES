@@ -9,15 +9,17 @@
         else
         {
             <MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center" Style="min-height: 80vh;">
-                <MudPaper Elevation="4" Class="pa-8 rounded-xl text-center">
-                    <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Error" Size="Size.Large" />
-                    <MudText Typo="Typo.h6" Class="mt-4">权限不足</MudText>
-                    <MudText Typo="Typo.body2" Class="text-secondary mt-2">
-                        您的角色无权访问此页面，请联系管理员。
-                    </MudText>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="/">
-                        返回首页
-                    </MudButton>
+                <MudPaper Elevation="0" Class="module-card pa-8" Style="text-align: center;">
+                    <MudStack Spacing="3" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.Lock" Color="Color.Error" Size="Size.Large" />
+                        <MudText Typo="Typo.h5">权限不足</MudText>
+                        <MudText Typo="Typo.body2" Class="section-copy">
+                            您的角色无权访问此页面，请联系管理员。
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">
+                            返回首页
+                        </MudButton>
+                    </MudStack>
                 </MudPaper>
             </MudContainer>
         }

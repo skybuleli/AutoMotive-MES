@@ -10,35 +10,8 @@ namespace MesAdmin.Web.Themes;
 /// </summary>
 public static class MesTheme
 {
-    /// <summary>暗色主题（默认，车间大屏用）</summary>
-    public static readonly MudTheme DarkTheme = new()
-    {
-        PaletteLight = LightPalette!,
-        PaletteDark = DarkPalette!,
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "12px",
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography
-            {
-                FontFamily = ["Inter Tight", "Helvetica", "Arial", "sans-serif"],
-                FontSize = "0.875rem",
-                FontWeight = "400",
-                LineHeight = "1.5",
-            },
-            H1 = new H1Typography { FontFamily = ["Inter Tight"], FontWeight = "700", LetterSpacing = "-0.03em" },
-            H2 = new H2Typography { FontFamily = ["Inter Tight"], FontWeight = "700", LetterSpacing = "-0.025em" },
-            H3 = new H3Typography { FontFamily = ["Inter Tight"], FontWeight = "700", LetterSpacing = "-0.02em" },
-            H4 = new H4Typography { FontFamily = ["Inter Tight"], FontWeight = "600", LetterSpacing = "-0.018em" },
-            H5 = new H5Typography { FontFamily = ["Inter Tight"], FontWeight = "600", LetterSpacing = "-0.015em" },
-            H6 = new H6Typography { FontFamily = ["Inter Tight"], FontWeight = "600", LetterSpacing = "-0.01em" },
-            Subtitle1 = new Subtitle1Typography { FontFamily = ["Inter Tight"], FontWeight = "600" },
-            Button = new ButtonTypography { FontFamily = ["Inter Tight"], FontWeight = "500", TextTransform = "none" },
-            Caption = new CaptionTypography { FontFamily = ["Inter Tight"], LetterSpacing = "0.02em" },
-        },
-    };
+    // 注意：静态字段按文本顺序初始化，调色板必须先于 CurrentTheme 声明，
+    // 否则 CurrentTheme 初始化时取到的还是 null（曾导致 MudThemeProvider 空引用）。
 
     private static readonly PaletteLight LightPalette = new()
     {
@@ -96,7 +69,7 @@ public static class MesTheme
     {
         Black = "#000000",
         White = "#FFFFFF",
-        Primary = "#D0B4F9",
+        Primary = "#CBA6F7",
         PrimaryContrastText = "#1B1030",
         Secondary = "#93BBFB",
         SecondaryContrastText = "#0E1526",
@@ -124,7 +97,7 @@ public static class MesTheme
         Divider = "#39394B",
         DividerLight = "#2E2E40",
         PrimaryDarken = "#B48EF0",
-        PrimaryLighten = "#DDB9FF",
+        PrimaryLighten = "#DBBFFB",
         SecondaryDarken = "#6E9AF0",
         SecondaryLighten = "#A6C8FF",
         TertiaryDarken = "#8ACF86",
@@ -142,5 +115,35 @@ public static class MesTheme
         HoverOpacity = 0.06,
         RippleOpacity = 0.1,
         Skeleton = "#22222C",
+    };
+
+    /// <summary>当前主题：单一 MudTheme 携带双调色板，由 MudThemeProvider 的 IsDarkMode 切换（暗色默认）</summary>
+    public static readonly MudTheme CurrentTheme = new()
+    {
+        PaletteLight = LightPalette,
+        PaletteDark = DarkPalette,
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "12px",
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["Inter Tight", "Helvetica", "Arial", "sans-serif"],
+                FontSize = "0.875rem",
+                FontWeight = "400",
+                LineHeight = "1.5",
+            },
+            H1 = new H1Typography { FontFamily = ["Inter Tight"], FontWeight = "700", LetterSpacing = "-0.03em" },
+            H2 = new H2Typography { FontFamily = ["Inter Tight"], FontWeight = "700", LetterSpacing = "-0.025em" },
+            H3 = new H3Typography { FontFamily = ["Inter Tight"], FontWeight = "700", LetterSpacing = "-0.02em" },
+            H4 = new H4Typography { FontFamily = ["Inter Tight"], FontWeight = "600", LetterSpacing = "-0.018em" },
+            H5 = new H5Typography { FontFamily = ["Inter Tight"], FontWeight = "600", LetterSpacing = "-0.015em" },
+            H6 = new H6Typography { FontFamily = ["Inter Tight"], FontWeight = "600", LetterSpacing = "-0.01em" },
+            Subtitle1 = new Subtitle1Typography { FontFamily = ["Inter Tight"], FontWeight = "600" },
+            Button = new ButtonTypography { FontFamily = ["Inter Tight"], FontWeight = "500", TextTransform = "none" },
+            Caption = new CaptionTypography { FontFamily = ["Inter Tight"], LetterSpacing = "0.02em" },
+        },
     };
 }

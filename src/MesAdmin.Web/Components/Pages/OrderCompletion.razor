@@ -7,32 +7,25 @@
 @inject IHttpClientFactory HttpFactory
 @inject AuthService Auth
 @inject NavigationManager Navigation
+@inject ILogger<OrderCompletion> PageLogger
 
 <PageTitle>完工审核 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
+<MudStack Spacing="3">
     @* ── 工具栏 ── *@
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T1.8 · Quality Review</MudText>
-                <MudText Typo="Typo.h4">完工审核</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">
-                    质量工程师审核放行 → 成品入库 → 追溯标签打印
-                </MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
-                    待审核 @(_pendingOrders?.Count ?? 0)
-                </MudChip>
-                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
-                    本月完工 @_completedThisMonth
-                </MudChip>
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
-                               OnClick="() => LoadAllAsync()" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+    <MesPageHeader Kicker="T1.8 · Quality Review" Title="完工审核"
+                  Description="质量工程师审核放行 → 成品入库 → 追溯标签打印">
+        <HeaderActions>
+            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                待审核 @(_pendingOrders?.Count ?? 0)
+            </MudChip>
+            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                本月完工 @_completedThisMonth
+            </MudChip>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadAllAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -47,29 +40,27 @@
            Tab 1: 待审核工单（InProgress）
            ═══════════════════════════════════════════ *@
         <MudTabPanel Text="待审核工单" Icon="@Icons.Material.Filled.RateReview">
-            <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
-                @if (_isLoading && _pendingOrders is null)
-                {
-                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
-                        <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
-                        <MudText Typo="Typo.body2" Class="section-copy">加载待审核工单...</MudText>
-                    </MudStack>
-                }
-                else if (_pendingOrders is not null && _pendingOrders.Count == 0)
-                {
-                    <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
-                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
-                        <MudText Typo="Typo.body1">暂无待审核工单</MudText>
-                        <MudText Typo="Typo.body2" Class="section-copy">
-                            所有执行中工单已完成 31 工序编排，等待质量工程师审核放行。
-                        </MudText>
+            @if (_isLoading && _pendingOrders is null)
+            {
+                <div class="mt-3">
+                    <MesStateCard Loading="true" Text="加载待审核工单..." />
+                </div>
+            }
+            else if (_pendingOrders is not null && _pendingOrders.Count == 0)
+            {
+                <div class="mt-3">
+                    <MesStateCard Loading="false" Icon="@Icons.Material.Filled.CheckCircle"
+                                  Text="暂无待审核工单"
+                                  Hint="所有执行中工单已完成 31 工序编排，等待质量工程师审核放行。">
                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="start-production">
                             查看执行中工单
                         </MudButton>
-                    </MudStack>
-                }
-                else if (_pendingOrders is not null)
-                {
+                    </MesStateCard>
+                </div>
+            }
+            else if (_pendingOrders is not null)
+            {
+                <MudStack Spacing="3" Class="mt-3">
                     @foreach (var order in _pendingOrders)
                     {
                         var ops = _operations.GetValueOrDefault(order.Id);
@@ -78,7 +69,7 @@
                         var progressPct = totalCount > 0 ? (double)completedCount / totalCount * 100 : 0;
                         var allOpsDone = ops is not null && ops.All(o => o.Status == "Completed");
 
-                        <MudPaper Class="pa-4 review-order-card" Style="@GetOrderCardStyle(allOpsDone)">
+                        <MudPaper Class="@($"pa-4 review-order-card {(allOpsDone ? "accent-left-success" : "accent-left-warning")}")">
                             <MudStack Spacing="2">
                                 @* 头部：工单信息 *@
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
@@ -142,11 +133,8 @@
                                                 </MudChip>
                                                 @foreach (var op in stationOps)
                                                 {
-                                                    var isDone = op.Status == "Completed";
-                                                    var isFailed = op.Status == "Failed";
-                                                    var dotColor = isDone ? "#4ade80" : isFailed ? "#ef4444" : "#45475A";
                                                     var title = $"{op.Sequence}. {op.OperationName}";
-                                                    <span class="op-dot" style="background:@dotColor; box-shadow:0 0 4px @dotColor;"
+                                                    <span class="op-dot @(op.Status == "Completed" ? "done" : "pending")"
                                                           title="@title"></span>
                                                 }
                                             </div>
@@ -157,14 +145,15 @@
                         </MudPaper>
                     }
                 }
-            </MudPaper>
+                </MudStack>
+            }
         </MudTabPanel>
 
         @* ═══════════════════════════════════════════
            Tab 2: 已完工记录（Completed + GoodsReceipt）
            ═══════════════════════════════════════════ *@
         <MudTabPanel Text="已完工记录" Icon="@Icons.Material.Filled.AssignmentTurnedIn">
-            <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
+            <MudPaper Class="glass-kpi-card pa-4 mt-3">
                 @if (_completedOrders is not null && _completedOrders.Count == 0)
                 {
                     <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">
@@ -264,7 +253,7 @@
             @if (_reviewResult is not null)
             {
                 @* ── 审核结果 + 追溯标签 ── *@
-                <MudPaper Class="pa-6" Style="background:rgba(76,175,80,0.06); border:1px solid rgba(76,175,80,0.25); border-radius:16px; text-align:center;">
+                <MudPaper Class="pa-6" Style="background:rgba(var(--mes-ok-rgb),0.06); border:1px solid rgba(var(--mes-ok-rgb),0.25); border-radius:var(--mes-r-lg); text-align:center;">
                     <MudStack AlignItems="AlignItems.Center" Spacing="3">
                         <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Large" Color="Color.Success" />
                         <MudStack Spacing="0">
@@ -283,27 +272,25 @@
                             <MudText Typo="Typo.subtitle2" Class="section-kicker">
                                 <MudIcon Icon="@Icons.Material.Filled.QrCode" Size="Size.Small" /> 追溯标签
                             </MudText>
-                            <MudPaper Class="pa-4 label-preview"
-                                      Style="background:#1E1E2E; border:2px dashed var(--mud-palette-primary); border-radius:12px; min-width:320px;">
+                            <MudPaper Class="pa-4 label-preview">
                                 <MudStack AlignItems="AlignItems.Center" Spacing="1">
-                                    <MudText Typo="Typo.overline" Style="color:var(--mud-palette-text-secondary); letter-spacing:2px;">
+                                    <MudText Typo="Typo.overline" Style="letter-spacing:2px;">
                                         @_reviewOrder.ProductCode
                                     </MudText>
-                                    <MudText Typo="Typo.h4" Style="font-weight:700; color:#CBA6F7; font-family:monospace; letter-spacing:1px;">
+                                    <MudText Typo="Typo.h4" Class="kanban-order-no" Style="font-family:var(--mes-mono); letter-spacing:1px;">
                                         @GetLabelCode(_reviewOrder)
                                     </MudText>
-                                    <MudText Typo="Typo.caption" Style="color:#585B70;">
+                                    <MudText Typo="Typo.caption" Class="label-muted">
                                         ESP® 制动系统总成 · Made in Bosch
                                     </MudText>
-                                    <MudText Typo="Typo.caption" Style="color:#585B70; font-family:monospace; font-size:10px;">
+                                    <MudText Typo="Typo.caption" Class="label-muted" Style="font-family:var(--mes-mono); font-size:10px;">
                                         [ 工单 @_reviewOrder.OrderNumber ]
                                     </MudText>
                                     @* ── 二维码模拟 ── *@
-                                    <div style="width:96px; height:96px; background:#11111B; border-radius:8px; margin-top:8px;
-                                                display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:9px; color:#585B70; text-align:center; line-height:1.4; border:1px solid #313244;">
+                                    <div class="label-qr">
                                         QR<br/>@GetLabelCode(_reviewOrder)
                                     </div>
-                                    <MudText Typo="Typo.caption" Style="color:#585B70; font-size:9px;">
+                                    <MudText Typo="Typo.caption" Class="label-muted" Style="font-size:9px;">
                                         质量审核: @_reviewerId · @DateTimeOffset.Now.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                                     </MudText>
                                 </MudStack>
@@ -370,8 +357,7 @@
                                     <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined" Class="station-chip">站@(sg.Key)</MudChip>
                                     @foreach (var op in sg.OrderBy(o => o.Sequence))
                                     {
-                                        var isDone = op.Status == "Completed";
-                                        <span class="op-dot" style="background:@(isDone ? "#4ade80" : "#45475A"); box-shadow:0 0 4px @(isDone ? "#4ade80" : "transparent");"
+                                        <span class="op-dot @(op.Status == "Completed" ? "done" : "pending")"
                                               title="@($"{op.Sequence}. {op.OperationName}")"></span>
                                     }
                                 </div>
@@ -441,24 +427,22 @@
     <DialogContent>
         @if (_labelOrder is not null)
         {
-            <MudStack AlignItems="AlignItems.Center" Spacing="3">
-                <MudPaper Class="pa-6 label-preview"
-                          Style="background:#1E1E2E; border:2px dashed var(--mud-palette-primary); border-radius:12px; min-width:280px;">
+                <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                <MudPaper Class="pa-6 label-preview" Style="min-width:280px;">
                     <MudStack AlignItems="AlignItems.Center" Spacing="1">
-                        <MudText Typo="Typo.overline" Style="color:var(--mud-palette-text-secondary); letter-spacing:2px;">
+                        <MudText Typo="Typo.overline" Style="letter-spacing:2px;">
                             @_labelOrder.ProductCode
                         </MudText>
-                        <MudText Typo="Typo.h3" Style="font-weight:700; color:#CBA6F7; font-family:monospace; letter-spacing:1px;">
+                        <MudText Typo="Typo.h3" Class="kanban-order-no" Style="font-family:var(--mes-mono); letter-spacing:1px;">
                             @GetLabelCode(_labelOrder)
                         </MudText>
-                        <MudText Typo="Typo.caption" Style="color:#585B70;">
+                        <MudText Typo="Typo.caption" Class="label-muted">
                             ESP® 制动系统总成
                         </MudText>
-                        <div style="width:96px; height:96px; background:#11111B; border-radius:8px; margin-top:8px;
-                                    display:flex; align-items:center; justify-content:center; font-family:monospace; font-size:9px; color:#585B70; text-align:center; border:1px solid #313244;">
+                        <div class="label-qr">
                             QR<br/>@GetLabelCode(_labelOrder)
                         </div>
-                        <MudText Typo="Typo.caption" Style="color:#585B70; font-size:9px;">
+                        <MudText Typo="Typo.caption" Class="label-muted" Style="font-size:9px;">
                             工单 @_labelOrder.OrderNumber · @(_labelOrder.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? "")
                         </MudText>
                     </MudStack>
@@ -521,7 +505,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadAllAsync();
-        _timer = new Timer(async _ => await InvokeAsync(LoadAllAsync), null, 15000, 15000);
+        _timer = new Timer(_ => { try { _ = InvokeAsync(LoadAllAsync); } catch (Exception ex) { PageLogger.LogDebug(ex, "完工确认定时刷新失败（组件可能已释放）"); } }, null, 15000, 15000);
     }
 
     private async Task LoadAllAsync()
@@ -560,11 +544,12 @@
                     if (ops is not null && ops.Count > 0)
                         _operations[order.Id] = ops;
                 }
-                catch { /* 单个工单操作加载失败不阻塞整体 */ }
+                catch (Exception ex) { PageLogger.LogWarning(ex, $"单个工单操作加载失败：{order.Id}"); }
             }
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载完工确认工单失败");
             _message = $"加载失败：{ex.Message}";
             _isError = true;
         }
@@ -645,6 +630,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "完工审核异常");
             _message = $"审核异常：{ex.Message}";
             _isError = true;
         }
@@ -692,6 +678,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "关闭工单异常");
             _message = $"关闭异常：{ex.Message}";
             _isError = true;
         }
@@ -727,11 +714,6 @@
             : order.OrderNumber;
         return $"ESP9-{datePart}-{suffix}";
     }
-
-    private static string GetOrderCardStyle(bool allOpsDone)
-        => allOpsDone
-            ? "margin-bottom:12px; border-left:3px solid var(--mud-palette-success);"
-            : "margin-bottom:12px; border-left:3px solid var(--mud-palette-warning);";
 
     private static string GetReviewerDisplay(OrderSummary order)
     {

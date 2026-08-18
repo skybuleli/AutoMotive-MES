@@ -1,0 +1,78 @@
+@* 全站统一指标卡：玻璃拟态 + 等宽数字排版 + 可选图标 / 强调色 / 副文案。 *@
+<MudPaper Class="@CardClass" Style="height:100%;">
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Spacing="2">
+        <MudStack Spacing="1" Class="flex-grow-1">
+            <MudText Typo="Typo.caption" Class="kpi-label">@Label</MudText>
+            <MudText Typo="Typo.h3" Class="@ValueClass" Style="@ValueStyle">@Value</MudText>
+            @if (!string.IsNullOrEmpty(Sub))
+            {
+                <MudText Typo="Typo.caption" Class="kpi-sub">@Sub</MudText>
+            }
+            @if (Footer is not null)
+            {
+                @Footer
+            }
+        </MudStack>
+        @if (!string.IsNullOrEmpty(Icon))
+        {
+            <div class="home-kpi-icon" style="@IconStyle">
+                <MudIcon Icon="@Icon" Size="Size.Medium" />
+            </div>
+        }
+    </MudStack>
+    @if (ChildContent is not null)
+    {
+        <MudStack Spacing="2" Class="mt-4">
+            @ChildContent
+        </MudStack>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+
+    [Parameter] public string Value { get; set; } = string.Empty;
+
+    [Parameter] public string? Sub { get; set; }
+
+    [Parameter] public string? Icon { get; set; }
+
+    /// <summary>顶部强调条（accent-top-*）；不指定则无强调条。</summary>
+    [Parameter] public MesAccent? Accent { get; set; }
+
+    /// <summary>数值附加类（如 oee-grade-s 上色）。</summary>
+    [Parameter] public string? ValueClass { get; set; }
+
+    /// <summary>数值语义着色（优先于 ValueClass 的颜色）。</summary>
+    [Parameter] public MesAccent? ValueAccent { get; set; }
+
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>卡片附加类（如网格内联类）。</summary>
+    [Parameter] public string? Class { get; set; }
+
+    private string CardClass =>
+        $"glass-kpi-card {(Accent is null ? string.Empty : Accent.Value.ToTopClass())} {Class}";
+
+    /// <summary>图标徽章底色 / 前景色随 Accent 语义着色。</summary>
+    private string IconStyle => Accent switch
+    {
+        MesAccent.Success => "background:color-mix(in srgb, var(--mes-ok) 16%, transparent);color:var(--mes-ok);",
+        MesAccent.Warning => "background:color-mix(in srgb, var(--mes-warn) 16%, transparent);color:var(--mes-warn);",
+        MesAccent.Error => "background:color-mix(in srgb, var(--mes-err) 16%, transparent);color:var(--mes-err);",
+        MesAccent.Info => "background:rgba(var(--mes-sky-rgb),0.14);color:var(--mes-sky);",
+        _ => "background:rgba(var(--mes-lav-rgb),0.14);color:var(--mes-lav);",
+    };
+
+    private string ValueStyle => ValueAccent switch
+    {
+        MesAccent.Success => "color:var(--mes-ok);",
+        MesAccent.Warning => "color:var(--mes-warn);",
+        MesAccent.Error => "color:var(--mes-err);",
+        MesAccent.Info => "color:var(--mes-sky);",
+        MesAccent.Primary => "color:var(--mes-lav);",
+        _ => string.Empty,
+    };
+}

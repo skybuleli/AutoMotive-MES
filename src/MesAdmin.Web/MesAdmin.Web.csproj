@@ -21,6 +21,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
     <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>
+    <!-- MUD0002 MudBlazor 主题 API 提示（沿用） -->
     <NoWarn>MUD0002</NoWarn>
   </PropertyGroup>
 

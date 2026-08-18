@@ -5,23 +5,18 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject MesApiClient Api
 @inject NavigationManager Navigation
+@inject ILogger<Routing> PageLogger
 
 <PageTitle>工艺管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T3.5 · M07 Routing Management</MudText>
-                <MudText Typo="Typo.h4">工艺管理</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">工艺路线管理 · ECO 审批流 · 工序参数模板</MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
-                               OnClick="LoadAllAsync" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T3.5 · M07 Routing Management" Title="工艺管理"
+                  Description="工艺路线管理 · ECO 审批流 · 工序参数模板">
+        <HeaderActions>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="LoadAllAsync" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -30,7 +25,7 @@
         </MudAlert>
     }
 
-    <MudPaper Class="pa-4" Style="border-radius:12px;">
+    <MudPaper Class="module-card pa-4">
         <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
                  CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
 
@@ -216,7 +211,7 @@
                     }
                     else
                     {
-                        <MudPaper Class="pa-5" Style="border-radius:12px;">
+                        <MudPaper Class="module-card pa-5">
                             <MudStack Spacing="3">
                                 <MudText Typo="Typo.h6">基于 ESP 默认模板创建新版本</MudText>
                                 <MudText Typo="Typo.body2" Class="section-copy">
@@ -225,7 +220,7 @@
                             </MudStack>
                         </MudPaper>
 
-                        <MudPaper Class="pa-5" Style="border-radius:12px;">
+                        <MudPaper Class="module-card pa-5">
                             <MudGrid Spacing="3">
                                 <MudItem xs="12" sm="6">
                                     <MudTextField @bind-Value="_newRouting.ProductCode"
@@ -267,7 +262,7 @@
 
                     @if (_defaultRouting is not null)
                     {
-                        <MudPaper Class="pa-4" Style="border-radius:12px;">
+                        <MudPaper Class="module-card pa-4">
                             <MudText Typo="Typo.subtitle2" Style="font-weight:600;margin-bottom:12px;">
                                 参考：ESP 默认 @_defaultRouting.OperationCount 工序定义
                             </MudText>
@@ -541,6 +536,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载工艺路线失败");
             _message = $"加载工艺路线失败：{ex.Message}";
             _isError = true;
         }
@@ -604,6 +600,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "提交 ECO 审批失败");
             _message = $"提交 ECO 审批失败：{ex.Message}";
             _isError = true;
         }
@@ -638,6 +635,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "工艺路线审批失败");
             _message = $"审批失败：{ex.Message}";
             _isError = true;
         }
@@ -664,6 +662,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "工艺路线发布生效失败");
             _message = $"发布生效失败：{ex.Message}";
             _isError = true;
         }
@@ -697,8 +696,9 @@
         {
             _defaultRouting = await GetDefaultFallback();
         }
-        catch
+        catch (Exception ex)
         {
+            PageLogger.LogWarning(ex, "加载默认工艺路线失败，使用回退");
             _defaultRouting = await GetDefaultFallback();
         }
         finally
@@ -714,8 +714,9 @@
             var d = await Api.GetAsync<RoutingResponseDto>("api/v1/routing/ESP-9.0/default");
             return d;
         }
-        catch
+        catch (Exception ex)
         {
+            PageLogger.LogWarning(ex, "获取默认工艺路线回退失败");
             return null;
         }
     }
@@ -764,6 +765,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "创建工艺路线失败");
             _message = $"创建工艺路线失败：{ex.Message}";
             _isError = true;
         }

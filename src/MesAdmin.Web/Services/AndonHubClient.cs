@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.SignalR.Client;
 using MesAdmin.Infrastructure.RealTime;
+using ZLogger;
 
 namespace MesAdmin.Web.Services;
 
@@ -33,31 +34,31 @@ public sealed class AndonHubClient : IAsyncDisposable
 
         _connection.On<AndonEventCreatedMessage>("AndonCreated", msg =>
         {
-            _logger.LogInformation("Andon 新报警：{EventNumber}", msg.EventNumber);
+            _logger.ZLogInformation($"Andon 新报警：{msg.EventNumber}");
             OnAndonCreated?.Invoke(msg);
         });
 
         _connection.On<AndonEventEscalatedMessage>("AndonEscalated", msg =>
         {
-            _logger.LogWarning("Andon 升级 L{Level}：{EventId}", msg.NewLevel, msg.EventId);
+            _logger.ZLogWarning($"Andon 升级 L{msg.NewLevel}：{msg.EventId}");
             OnAndonEscalated?.Invoke(msg);
         });
 
         _connection.On<AndonEventAcknowledgedMessage>("AndonAcknowledged", msg =>
         {
-            _logger.LogInformation("Andon 已确认：{EventId}", msg.EventId);
+            _logger.ZLogInformation($"Andon 已确认：{msg.EventId}");
             OnAndonAcknowledged?.Invoke(msg);
         });
 
         _connection.On<AndonEventResolvedMessage>("AndonResolved", msg =>
         {
-            _logger.LogInformation("Andon 已解决：{EventId}", msg.EventId);
+            _logger.ZLogInformation($"Andon 已解决：{msg.EventId}");
             OnAndonResolved?.Invoke(msg);
         });
 
         _connection.On<AndonEventClosedMessage>("AndonClosed", msg =>
         {
-            _logger.LogInformation("Andon 已关闭：{EventId}", msg.EventId);
+            _logger.ZLogInformation($"Andon 已关闭：{msg.EventId}");
             OnAndonClosed?.Invoke(msg);
         });
     }
@@ -73,11 +74,11 @@ public sealed class AndonHubClient : IAsyncDisposable
             if (_disposed || _connection.State == HubConnectionState.Connected) return;
 
             await _connection.StartAsync(ct);
-            _logger.LogInformation("Andon Hub 已连接：{Url}", _connection);
+            _logger.ZLogInformation($"Andon Hub 已连接：{_connection}");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Andon Hub 连接失败（将在后台自动重连）");
+            _logger.ZLogWarning(ex, $"Andon Hub 连接失败（将在后台自动重连）");
         }
         finally
         {

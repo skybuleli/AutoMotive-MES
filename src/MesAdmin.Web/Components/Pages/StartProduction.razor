@@ -7,31 +7,24 @@
 @inject IHttpClientFactory HttpFactory
 @inject AuthService Auth
 @inject NavigationManager Navigation
+@inject ILogger<StartProduction> PageLogger
 
 <PageTitle>开工管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T1.2 · Start Production</MudText>
-                <MudText Typo="Typo.h4">开工管理</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">
-                    齐套通过 ⭢ 开工 ⭢ Saga 31 工序编排 ⭢ 完工
-                </MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">
-                    待开工 @(_releasedOrders?.Count ?? 0)
-                </MudChip>
-                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
-                    执行中 @(_inProgressOrders?.Count ?? 0)
-                </MudChip>
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
-                               OnClick="() => LoadAsync()" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T1.2 · Start Production" Title="开工管理"
+                  Description="齐套通过 ⭢ 开工 ⭢ Saga 31 工序编排 ⭢ 完工">
+        <HeaderActions>
+            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">
+                待开工 @(_releasedOrders?.Count ?? 0)
+            </MudChip>
+            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">
+                执行中 @(_inProgressOrders?.Count ?? 0)
+            </MudChip>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (_errorMessage is not null)
     {
@@ -45,12 +38,7 @@
 
     @if (_isLoading && _releasedOrders is null)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
-                <MudText Typo="Typo.body2" Class="section-copy">加载工单列表...</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="true" Text="加载工单列表..." />
     }
     else
     {
@@ -142,7 +130,7 @@
                         var totalCount = ops?.Count ?? 31;
                         var progressPct = totalCount > 0 ? (double)completedCount / totalCount * 100 : 0;
 
-                        <MudPaper Class="pa-4" Style="background: rgba(30, 30, 46, 0.6); border-radius: 12px; margin-bottom: 8px;">
+                        <MudPaper Class="pa-4 module-card" Style="margin-bottom:8px;">
                             <MudStack Spacing="2">
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                     <MudStack Spacing="0">
@@ -181,13 +169,9 @@
                                                 </MudChip>
                                                 @foreach (var op in stationOps)
                                                 {
-                                                    var isDone = op.Status == "Completed";
-                                                    var isRunning = op.Status == "InProgress";
-                                                    var isFailed = op.Status == "Failed";
-                                                    var dotColor = isDone ? "#4ade80" : isFailed ? "#ef4444" : isRunning ? "#fbbf24" : "#45475A";
                                                     var title = $"{op.Sequence}. {op.OperationName}";
 
-                                                    <span class="op-dot" style="background:@dotColor; box-shadow: 0 0 4px @dotColor;"
+                                                    <span class="op-dot @GetOpDotClass(op.Status)"
                                                           title="@title" @onclick="() => ShowOperationDetail(op)"></span>
                                                 }
                                             </div>
@@ -261,7 +245,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
-        _timer = new Timer(async _ => await InvokeAsync(LoadAsync), null, 10000, 10000);
+        _timer = new Timer(_ => { try { _ = InvokeAsync(LoadAsync); } catch (Exception ex) { PageLogger.LogDebug(ex, "开工页定时刷新失败（组件可能已释放）"); } }, null, 10000, 10000);
     }
 
     private async Task LoadAsync()
@@ -298,14 +282,15 @@
                     if (ops is not null && ops.Count > 0)
                         _operations[order.Id] = ops;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 单个工单操作加载失败不阻塞整体
+                    PageLogger.LogWarning(ex, $"单个工单操作加载失败：{order.Id}");
                 }
             }
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载开工工单失败");
             _errorMessage = $"加载工单失败：{ex.Message}";
         }
         finally
@@ -343,6 +328,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "工单开工异常");
             _errorMessage = $"开工异常：{ex.Message}";
         }
         finally
@@ -366,8 +352,9 @@
             {
                 await StartOrderAsync(order);
             }
-            catch
+            catch (Exception ex)
             {
+                PageLogger.LogWarning(ex, $"单工单开工失败：{order.Id}");
                 failed++;
             }
         }
@@ -392,6 +379,14 @@
         "Failed" => Color.Error,
         "InProgress" => Color.Warning,
         _ => Color.Default
+    };
+
+    private static string GetOpDotClass(string status) => status switch
+    {
+        "Completed" => "done",
+        "Failed" => "failed",
+        "InProgress" => "current",
+        _ => "pending"
     };
 
     public void Dispose() => _timer?.Dispose();

@@ -1,50 +1,72 @@
-﻿<MudNavMenu>
-    <MudNavLink Href="dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+@* 全站唯一导航源：按业务域分组，覆盖全部 17 个路由。 *@
+<MudNavMenu Class="px-3">
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+        仪表盘
+    </MudNavLink>
+    <MudNavLink Href="dashboard" Icon="@Icons.Material.Filled.SpaceDashboard">
         生产看板
     </MudNavLink>
-    <MudNavLink Href="production" Icon="@Icons.Material.Filled.Description">
-        生产工单
-    </MudNavLink>
-    <MudNavLink Href="kit-check" Icon="@Icons.Material.Filled.FactCheck">
-        齐套检查
-    </MudNavLink>
-    <MudNavLink Href="quality-review" Icon="@Icons.Material.Filled.Verified">
-        完工审核
-    </MudNavLink>
-    <MudNavLink Href="start-production" Icon="@Icons.Material.Filled.PlayArrow">
-        开工管理
-    </MudNavLink>
-    <MudNavLink Href="material" Icon="@Icons.Material.Filled.Inventory">
-        物料管理
-    </MudNavLink>
-    <MudNavLink Href="traceability" Icon="@Icons.Material.Filled.Link">
-        全链路追溯
-    </MudNavLink>
-    <MudNavLink Href="inventory" Icon="@Icons.Material.Filled.Inventory2">
-        线边库存
-    </MudNavLink>
-    <MudNavLink Href="spc" Icon="@Icons.Material.Filled.Analytics">
-        SPC 质量管理
-    </MudNavLink>
-    <MudNavLink Href="oee" Icon="@Icons.Material.Filled.PrecisionManufacturing">
-        设备 OEE
-    </MudNavLink>
-    <MudNavLink Href="jit-kanban" Icon="@Icons.Material.Filled.LocalShipping">
-        JIT 看板
-    </MudNavLink>
-    <MudNavLink Href="andon" Icon="@Icons.Material.Filled.NotificationsActive">
-        Andon 报警
-    </MudNavLink>
-    <MudNavLink Href="spare-parts" Icon="@Icons.Material.Filled.Handyman">
-        备件管理
-    </MudNavLink>
-    <MudNavLink Href="routing" Icon="@Icons.Material.Filled.Route">
-        工艺管理
-    </MudNavLink>
-    <MudNavLink Href="scheduling" Icon="@Icons.Material.Filled.Schedule">
-        生产排程
-    </MudNavLink>
-    <MudNavLink Href="sqe" Icon="@Icons.Material.Filled.Business">
-        SQE 供应商质量
-    </MudNavLink>
+
+    <MudNavGroup Title="生产执行" Icon="@Icons.Material.Filled.Description" Expanded>
+        <MudNavLink Href="production" Icon="@Icons.Material.Filled.ListAlt">
+            工单列表
+        </MudNavLink>
+        <MudNavLink Href="production/kanban" Icon="@Icons.Material.Filled.ViewKanban">
+            工单看板
+        </MudNavLink>
+        <MudNavLink Href="kit-check" Icon="@Icons.Material.Filled.FactCheck">
+            齐套检查
+        </MudNavLink>
+        <MudNavLink Href="start-production" Icon="@Icons.Material.Filled.PlayArrow">
+            开工管理
+        </MudNavLink>
+        <MudNavLink Href="quality-review" Icon="@Icons.Material.Filled.Verified">
+            完工审核
+        </MudNavLink>
+        <MudNavLink Href="scheduling" Icon="@Icons.Material.Filled.Schedule">
+            生产排程
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="质量管理" Icon="@Icons.Material.Filled.Analytics">
+        <MudNavLink Href="spc" Icon="@Icons.Material.Filled.QueryStats">
+            SPC 质量管理
+        </MudNavLink>
+        <MudNavLink Href="sqe" Icon="@Icons.Material.Filled.Business">
+            SQE 供应商质量
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="物料与追溯" Icon="@Icons.Material.Filled.Inventory2">
+        <MudNavLink Href="material" Icon="@Icons.Material.Filled.Inventory">
+            物料管理
+        </MudNavLink>
+        <MudNavLink Href="inventory" Icon="@Icons.Material.Filled.LocalGroceryStore">
+            线边库存
+        </MudNavLink>
+        <MudNavLink Href="jit-kanban" Icon="@Icons.Material.Filled.LocalShipping">
+            JIT 看板
+        </MudNavLink>
+        <MudNavLink Href="traceability" Icon="@Icons.Material.Filled.Link">
+            全链路追溯
+        </MudNavLink>
+        <MudNavLink Href="spare-parts" Icon="@Icons.Material.Filled.Handyman">
+            备件管理
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="设备与报警" Icon="@Icons.Material.Filled.PrecisionManufacturing">
+        <MudNavLink Href="oee" Icon="@Icons.Material.Filled.Timeline">
+            设备 OEE
+        </MudNavLink>
+        <MudNavLink Href="andon" Icon="@Icons.Material.Filled.Campaign">
+            Andon 报警
+        </MudNavLink>
+    </MudNavGroup>
+
+    <MudNavGroup Title="基础数据" Icon="@Icons.Material.Filled.Schema">
+        <MudNavLink Href="routing" Icon="@Icons.Material.Filled.Route">
+            工艺管理
+        </MudNavLink>
+    </MudNavGroup>
 </MudNavMenu>

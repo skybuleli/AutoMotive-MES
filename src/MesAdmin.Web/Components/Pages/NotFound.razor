@@ -1,5 +1,19 @@
-﻿@page "/not-found"
+@page "/not-found"
 @layout MainLayout
 
-<h3>Not Found</h3>
-<p>Sorry, the content you are looking for does not exist.</p>
+<PageTitle>页面不存在 - AutoMES</PageTitle>
+
+<div class="d-flex align-center justify-center" style="min-height: 60vh;">
+    <MudPaper Elevation="0" Class="module-card pa-8" Style="max-width: 480px; text-align: center;">
+        <MudStack Spacing="3" AlignItems="AlignItems.Center">
+            <MudText Typo="Typo.h3" Class="kpi-value text-gradient">404</MudText>
+            <MudText Typo="Typo.h5">页面不存在</MudText>
+            <MudText Typo="Typo.body2" Class="section-copy">
+                您访问的内容不存在或已被移动，请从左侧导航重新进入。
+            </MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/">
+                <MudIcon Icon="@Icons.Material.Filled.Home" Size="Size.Small" Class="mr-1" /> 返回首页
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+</div>

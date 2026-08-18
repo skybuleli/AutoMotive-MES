@@ -7,26 +7,21 @@
 @inject IHttpClientFactory HttpFactory
 @inject AuthService Auth
 @inject NavigationManager Navigation
+@inject ILogger<KitCheck> PageLogger
 
 <PageTitle>齐套检查 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T1.4 · Kit Check</MudText>
-                <MudText Typo="Typo.h4">齐套检查</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">BOM 展开 → 库存查询 → 缺料自动 JIT 拉动 → 齐套通过转 Released</MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
-                    待检查 @(_orders?.Count ?? 0)
-                </MudChip>
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
-                               OnClick="() => LoadOrdersAsync()" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T1.4 · Kit Check" Title="齐套检查"
+                  Description="BOM 展开 → 库存查询 → 缺料自动 JIT 拉动 → 齐套通过转 Released">
+        <HeaderActions>
+            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Filled">
+                待检查 @(_orders?.Count ?? 0)
+            </MudChip>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadOrdersAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (_errorMessage is not null)
     {
@@ -40,25 +35,17 @@
 
     @if (_isLoading && _orders is null)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
-                <MudText Typo="Typo.body2" Class="section-copy">加载工单列表...</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="true" Text="加载工单列表..." />
     }
     else if (_orders is not null && _orders.Count == 0)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
-                <MudText Typo="Typo.body1">暂无待齐套检查的工单</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">所有已创建工单已完成齐套检查并放行，或当前无 Created 状态的工单。</MudText>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="production">
-                    前往创建工单
-                </MudButton>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="false" Icon="@Icons.Material.Filled.CheckCircle"
+                      Text="暂无待齐套检查的工单"
+                      Hint="所有已创建工单已完成齐套检查并放行，或当前无 Created 状态的工单。">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="production">
+                前往创建工单
+            </MudButton>
+        </MesStateCard>
     }
     else if (_orders is not null)
     {
@@ -154,7 +141,7 @@
         }
         else if (_result is not null && _result.IsPassed)
         {
-            <MudPaper Class="pa-6" Style="background: rgba(76, 175, 80, 0.08); border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 12px;">
+            <MudPaper Class="pa-6" Style="background:rgba(var(--mes-ok-rgb),0.08); border:1px solid rgba(var(--mes-ok-rgb),0.3); border-radius:var(--mes-r);">
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Large" Color="Color.Success" />
                     <MudText Typo="Typo.h5" Color="Color.Success" Style="font-weight:600;">齐套检查通过</MudText>
@@ -170,7 +157,7 @@
         }
         else if (_result is not null && !_result.IsPassed)
         {
-            <MudPaper Class="pa-4" Style="border-radius: 12px;">
+            <MudPaper Class="pa-4" Style="border-radius:var(--mes-r);">
                 <MudStack Spacing="3">
                     <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
                         <MudText Typo="Typo.body2">
@@ -316,7 +303,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadOrdersAsync();
-        _timer = new Timer(async _ => await InvokeAsync(LoadOrdersAsync), null, 15000, 15000);
+        _timer = new Timer(_ => { try { _ = InvokeAsync(LoadOrdersAsync); } catch (Exception ex) { PageLogger.LogDebug(ex, "齐套检查定时刷新失败（组件可能已释放）"); } }, null, 15000, 15000);
     }
 
     private async Task LoadOrdersAsync()
@@ -338,6 +325,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载齐套检查工单列表失败");
             _errorMessage = $"加载工单列表失败：{ex.Message}";
         }
         finally
@@ -390,6 +378,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "齐套检查执行异常");
             _resultError = $"齐套检查异常：{ex.Message}";
         }
         finally

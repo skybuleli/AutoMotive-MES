@@ -1,0 +1,18 @@
+@* 全站设备状态指示点：发光圆点 + 可选内联文本。 *@
+@if (string.IsNullOrEmpty(Label))
+{
+    <span class="status-dot @Status.ToStatusDotClass()"></span>
+}
+else
+{
+    <span style="display:inline-flex;align-items:center;">
+        <span class="status-dot @Status.ToStatusDotClass()"></span>
+        <MudText Typo="Typo.caption" Class="section-copy">@Label</MudText>
+    </span>
+}
+
+@code {
+    [Parameter] public MesDotStatus Status { get; set; } = MesDotStatus.Offline;
+
+    [Parameter] public string? Label { get; set; }
+}

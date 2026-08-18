@@ -2,10 +2,14 @@
    AutoMES · Obsidian Atelier
    精炼工业质感设计系统 — 深曜石 + 薰衣草极光 + 玻璃拟态
    全局共享类（设计系统单一来源，供所有页面复用）
+
+   明暗双模式：暗色默认；切换由 ThemeService 在 <html> 上设置
+   data-mes-theme="light" 触发下方亮色令牌覆盖组。
+   调色板与 MudBlazor MesTheme（Themes/MesTheme.cs）保持一致。
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-    /* ── 画布（提亮：靛蓝调深灰，非纯黑，层级分明）── */
+    /* ── 画布（靛蓝调深灰，非纯黑，层级分明）── */
     --mes-bg: #191925;
     --mes-bg-2: #1F1F2D;
     --mes-surface: #252533;
@@ -13,14 +17,31 @@
     --mes-surface-3: #38384D;
 
     /* ── 品牌色（提高饱和度以增强对比）── */
-    --mes-lav: #D0B4F9;
-    --mes-lav-strong: #B98CF3;
+    --mes-lav: #CBA6F7;
+    --mes-lav-strong: #B48EF0;
     --mes-lav-soft: rgba(203, 166, 247, 0.20);
     --mes-lav-line: rgba(203, 166, 247, 0.34);
     --mes-sky: #93BBFB;
     --mes-mint: #ADE6A8;
     --mes-gold: #FBE7B6;
     --mes-rose: #F595B0;
+
+    /* RGB 三元组：供 rgba(var(--mes-*-rgb), a) 动态透明度，亮色模式一并覆盖 */
+    --mes-lav-rgb: 203, 166, 247;
+    --mes-sky-rgb: 147, 187, 251;
+    --mes-mint-rgb: 173, 230, 168;
+    --mes-gold-rgb: 249, 226, 175;
+    --mes-rose-rgb: 245, 149, 176;
+
+    /* ── 信号色（工序点 / 强调条，高饱和便于快速识别）── */
+    --mes-ok: #4ADE80;
+    --mes-warn: #FBBF24;
+    --mes-err: #F87171;
+    --mes-idle: #45475A;
+    --mes-ok-rgb: 74, 222, 128;
+    --mes-warn-rgb: 251, 191, 36;
+    --mes-err-rgb: 248, 113, 113;
+    --mes-idle-rgb: 69, 71, 90;
 
     /* ── 文本（高对比）── */
     --mes-text: #F4F4FA;
@@ -49,6 +70,53 @@
     --mes-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, 'Cascadia Code', monospace;
 }
 
+/* ── 亮色模式（车间终端）令牌覆盖：与 MesTheme.LightPalette 对齐 ── */
+:root[data-mes-theme="light"] {
+    --mes-bg: #F5F5FA;
+    --mes-bg-2: #EDEDF5;
+    --mes-surface: #FFFFFF;
+    --mes-surface-2: #F1F1F8;
+    --mes-surface-3: #E4E4EF;
+
+    --mes-lav: #8F6AAF;
+    --mes-lav-strong: #7C5A9E;
+    --mes-lav-soft: rgba(143, 106, 175, 0.12);
+    --mes-lav-line: rgba(143, 106, 175, 0.38);
+    --mes-sky: #3B82F6;
+    --mes-mint: #16A34A;
+    --mes-gold: #D97706;
+    --mes-rose: #DC2626;
+
+    --mes-lav-rgb: 143, 106, 175;
+    --mes-sky-rgb: 59, 130, 246;
+    --mes-mint-rgb: 22, 163, 74;
+    --mes-gold-rgb: 217, 119, 6;
+    --mes-rose-rgb: 220, 38, 38;
+
+    --mes-ok: #16A34A;
+    --mes-warn: #D97706;
+    --mes-err: #DC2626;
+    --mes-idle: #B9BDCC;
+    --mes-ok-rgb: 22, 163, 74;
+    --mes-warn-rgb: 217, 119, 6;
+    --mes-err-rgb: 220, 38, 38;
+    --mes-idle-rgb: 185, 189, 204;
+
+    --mes-text: #1F2937;
+    --mes-text-2: #5B6478;
+    --mes-text-3: #8A91A5;
+
+    --mes-border: rgba(15, 23, 42, 0.10);
+    --mes-border-strong: rgba(15, 23, 42, 0.16);
+
+    --mes-shadow: 0 8px 24px -12px rgba(31, 41, 55, 0.18);
+    --mes-shadow-lg: 0 20px 48px -20px rgba(31, 41, 55, 0.25);
+    --mes-glow: 0 0 0 1px var(--mes-lav-line), 0 18px 48px -22px rgba(143, 106, 175, 0.30);
+
+    --mes-accent: linear-gradient(90deg, #8F6AAF 0%, #5E7BD8 55%, #3F9D5A 100%);
+    --mes-accent-soft: linear-gradient(135deg, rgba(143, 106, 175, 0.14), rgba(94, 123, 216, 0.06));
+}
+
 /* ═══════════════ 基础 ═══════════════ */
 
 html, body {
@@ -65,8 +133,8 @@ html, body {
 a { color: inherit; }
 
 ::selection {
-    background: rgba(203, 166, 247, 0.28);
-    color: #fff;
+    background: rgba(var(--mes-lav-rgb), 0.28);
+    color: inherit;
 }
 
 /* 极光氛围背景 + 极细颗粒 */
@@ -74,9 +142,9 @@ a { color: inherit; }
     min-height: 100vh;
     position: relative;
     background:
-        radial-gradient(900px 500px at 12% -8%, rgba(203, 166, 247, 0.10), transparent 60%),
-        radial-gradient(760px 460px at 100% 0%, rgba(137, 180, 250, 0.08), transparent 55%),
-        radial-gradient(700px 600px at 88% 108%, rgba(166, 227, 161, 0.05), transparent 55%),
+        radial-gradient(900px 500px at 12% -8%, rgba(var(--mes-lav-rgb), 0.10), transparent 60%),
+        radial-gradient(760px 460px at 100% 0%, rgba(var(--mes-sky-rgb), 0.08), transparent 55%),
+        radial-gradient(700px 600px at 88% 108%, rgba(var(--mes-mint-rgb), 0.05), transparent 55%),
         var(--mes-bg);
 }
 
@@ -96,8 +164,8 @@ a { color: inherit; }
     align-items: center;
     justify-content: center;
     background:
-        radial-gradient(600px 400px at 28% 22%, rgba(203, 166, 247, 0.16), transparent 55%),
-        radial-gradient(560px 420px at 74% 82%, rgba(137, 180, 250, 0.12), transparent 55%),
+        radial-gradient(600px 400px at 28% 22%, rgba(var(--mes-lav-rgb), 0.16), transparent 55%),
+        radial-gradient(560px 420px at 74% 82%, rgba(var(--mes-sky-rgb), 0.12), transparent 55%),
         var(--mes-bg);
 }
 
@@ -126,10 +194,11 @@ a { color: inherit; }
 
 /* ═══════════════ 卡片 ═══════════════ */
 
+/* 指标卡（KPI）：玻璃拟态 + 顶部渐变条 + 悬浮微升 */
 .glass-kpi-card {
     position: relative;
     background:
-        linear-gradient(135deg, rgba(203, 166, 247, 0.10), rgba(137, 180, 250, 0.03)),
+        linear-gradient(135deg, rgba(var(--mes-lav-rgb), 0.10), rgba(var(--mes-sky-rgb), 0.03)),
         var(--mes-surface);
     border: 1px solid var(--mes-border-strong);
     border-radius: var(--mes-r-lg);
@@ -162,23 +231,11 @@ a { color: inherit; }
     height: 220px;
     top: -120px;
     right: -80px;
-    background: radial-gradient(circle, rgba(203, 166, 247, 0.18), transparent 65%);
+    background: radial-gradient(circle, rgba(var(--mes-lav-rgb), 0.18), transparent 65%);
     pointer-events: none;
 }
 
-.kpi-card {
-    background: var(--mes-surface) !important;
-    border: 1px solid var(--mes-border-strong);
-    border-radius: var(--mes-r) !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.kpi-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--mes-lav-line);
-    box-shadow: var(--mes-shadow-lg) !important;
-}
-
+/* 内容容器卡：表格 / 表单 / Tab 面板统一容器 */
 .module-card {
     height: 100%;
     background: var(--mes-surface);
@@ -187,14 +244,23 @@ a { color: inherit; }
     box-shadow: var(--mes-shadow);
 }
 
-/* 工具栏 / 页头条 */
-.oee-toolbar,
-.production-toolbar,
-.trace-toolbar,
+/* 登录卡：玻璃拟态认证卡 */
+.login-card {
+    width: min(430px, 92vw);
+    padding: 36px 32px;
+    background:
+        linear-gradient(150deg, rgba(var(--mes-lav-rgb), 0.10), rgba(var(--mes-sky-rgb), 0.04)),
+        var(--mes-surface);
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r-xl);
+    box-shadow: var(--mes-shadow-lg);
+}
+
+/* 工具栏 / 页头条（全站唯一页头类，配合 Shared/MesPageHeader 使用） */
 .mes-toolbar {
     position: relative;
     background:
-        linear-gradient(135deg, rgba(203, 166, 247, 0.08), transparent 60%),
+        linear-gradient(135deg, rgba(var(--mes-lav-rgb), 0.08), transparent 60%),
         var(--mes-surface-2);
     border: 1px solid var(--mes-border-strong);
     border-radius: var(--mes-r-lg);
@@ -202,9 +268,6 @@ a { color: inherit; }
     overflow: hidden;
 }
 
-.oee-toolbar::after,
-.production-toolbar::after,
-.trace-toolbar::after,
 .mes-toolbar::after {
     content: '';
     position: absolute;
@@ -252,6 +315,77 @@ a { color: inherit; }
     gap: 18px;
 }
 
+/* ═══════════════ 表格 / 分页 / 详情（全站统一）═══════════════ */
+
+/* 表格容器：描边圆角 + 表头底色 + 等宽数字 */
+.mes-table-card {
+    overflow: hidden;
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r);
+}
+
+.mes-table-card .mud-table-head {
+    background: var(--mes-surface-2);
+}
+
+.mes-table-card .mud-table-cell {
+    font-variant-numeric: tabular-nums;
+}
+
+/* 分页条：与表格容器同语言 */
+.mes-pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0.85rem;
+    background: var(--mes-surface-2);
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r);
+}
+
+/* 详情键值对（工单详情 / 追溯节点 / 完工审核） */
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 100%;
+    padding: 0.8rem 0.9rem;
+    background: var(--mes-surface-2);
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r);
+    font-variant-numeric: tabular-nums;
+}
+
+.detail-item .detail-label {
+    font-size: 0.76rem;
+}
+
+.detail-item strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* ═══════════════ 强调条工具类（替代内联 border 色）═══════════════ */
+
+.accent-top-primary, .accent-top-success, .accent-top-warning, .accent-top-error, .accent-top-info {
+    border-top: 3px solid;
+}
+.accent-top-primary { border-top-color: var(--mes-lav); }
+.accent-top-success { border-top-color: var(--mes-ok); }
+.accent-top-warning { border-top-color: var(--mes-warn); }
+.accent-top-error   { border-top-color: var(--mes-err); }
+.accent-top-info    { border-top-color: var(--mes-sky); }
+
+.accent-left-primary, .accent-left-success, .accent-left-warning, .accent-left-error, .accent-left-info {
+    border-left: 4px solid;
+}
+.accent-left-primary { border-left-color: var(--mes-lav); }
+.accent-left-success { border-left-color: var(--mes-ok); }
+.accent-left-warning { border-left-color: var(--mes-warn); }
+.accent-left-error   { border-left-color: var(--mes-err); }
+.accent-left-info    { border-left-color: var(--mes-sky); }
+
 /* ═══════════════ 状态指示 ═══════════════ */
 
 .status-dot {
@@ -263,9 +397,9 @@ a { color: inherit; }
     position: relative;
 }
 
-.status-dot.running { background: var(--mes-mint); box-shadow: 0 0 10px rgba(166, 227, 161, 0.85); }
-.status-dot.idle    { background: var(--mes-gold); box-shadow: 0 0 10px rgba(249, 226, 175, 0.7); }
-.status-dot.alarm   { background: var(--mes-rose); box-shadow: 0 0 12px rgba(243, 139, 168, 0.95); animation: glowPulse 1.4s ease-in-out infinite; }
+.status-dot.running { background: var(--mes-mint); box-shadow: 0 0 10px rgba(var(--mes-mint-rgb), 0.85); }
+.status-dot.idle    { background: var(--mes-gold); box-shadow: 0 0 10px rgba(var(--mes-gold-rgb), 0.7); }
+.status-dot.alarm   { background: var(--mes-rose); box-shadow: 0 0 12px rgba(var(--mes-rose-rgb), 0.95); animation: glowPulse 1.4s ease-in-out infinite; }
 .status-dot.offline { background: var(--mes-text-3); box-shadow: none; }
 
 .oee-grade-s { color: var(--mes-mint); }
@@ -275,20 +409,13 @@ a { color: inherit; }
 .andon-pulse { animation: andonPulse 2s ease-in-out infinite; }
 
 @keyframes andonPulse {
-    0%, 100% { opacity: 1; box-shadow: 0 0 10px rgba(243, 139, 168, 0.5); }
-    50%      { opacity: 0.82; box-shadow: 0 0 28px rgba(243, 139, 168, 0.85); }
+    0%, 100% { opacity: 1; box-shadow: 0 0 10px rgba(var(--mes-rose-rgb), 0.5); }
+    50%      { opacity: 0.82; box-shadow: 0 0 28px rgba(var(--mes-rose-rgb), 0.85); }
 }
 
 @keyframes glowPulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(243, 139, 168, 0.6); }
-    50%      { box-shadow: 0 0 22px rgba(243, 139, 168, 1); }
-}
-
-.health-bar {
-    background: rgba(22, 22, 31, 0.9);
-    border: 1px solid var(--mes-border);
-    border-radius: var(--mes-r);
-    padding: 12px 20px;
+    0%, 100% { box-shadow: 0 0 8px rgba(var(--mes-rose-rgb), 0.6); }
+    50%      { box-shadow: 0 0 22px rgba(var(--mes-rose-rgb), 1); }
 }
 
 /* ═══════════════ 动画渐变边框（AGENTS.md 9.3 grad-border）═══════════════ */
@@ -350,6 +477,16 @@ a { color: inherit; }
     border-right: 1px solid var(--mes-border-strong) !important;
 }
 
+:root[data-mes-theme="light"] .mud-appbar.mud-appbar-fixed-top,
+:root[data-mes-theme="light"] .mes-appbar {
+    background: rgba(255, 255, 255, 0.86) !important;
+}
+
+:root[data-mes-theme="light"] .mes-drawer,
+:root[data-mes-theme="light"] .mud-drawer {
+    background: rgba(250, 250, 253, 0.94) !important;
+}
+
 .layout-subtitle { color: var(--mes-text-3); }
 
 /* 首页 KPI 图标徽章 / 快速操作按钮 */
@@ -383,7 +520,7 @@ a { color: inherit; }
     height: 42px;
     border-radius: 12px;
     background: var(--mes-accent);
-    box-shadow: 0 8px 20px -8px rgba(203, 166, 247, 0.7);
+    box-shadow: 0 8px 20px -8px rgba(var(--mes-lav-rgb), 0.7);
     flex-shrink: 0;
 }
 
@@ -397,6 +534,10 @@ a { color: inherit; }
 
 .mud-navmenu .mud-nav-link:hover {
     background: rgba(255, 255, 255, 0.045);
+}
+
+:root[data-mes-theme="light"] .mud-navmenu .mud-nav-link:hover {
+    background: rgba(15, 23, 42, 0.05);
 }
 
 .mud-navmenu .mud-nav-link.active {
@@ -420,11 +561,11 @@ a { color: inherit; }
 }
 
 .mud-button-filled.mud-button-filled-primary {
-    box-shadow: 0 8px 22px -10px rgba(203, 166, 247, 0.6);
+    box-shadow: 0 8px 22px -10px rgba(var(--mes-lav-rgb), 0.6);
 }
 
 .mud-button-filled.mud-button-filled-primary:hover {
-    box-shadow: 0 12px 28px -8px rgba(203, 166, 247, 0.75);
+    box-shadow: 0 12px 28px -8px rgba(var(--mes-lav-rgb), 0.75);
 }
 
 /* 卡片 / Paper 圆角与描边统一 */
@@ -448,7 +589,7 @@ a { color: inherit; }
 }
 
 .mud-table .mud-table-body .mud-table-row:hover {
-    background: rgba(203, 166, 247, 0.10) !important;
+    background: rgba(var(--mes-lav-rgb), 0.10) !important;
 }
 
 .mud-table .mud-table-cell {
@@ -469,7 +610,7 @@ a { color: inherit; }
 .mud-chip { font-weight: 500; }
 
 .mud-input-control .mud-input.mud-input-outlined:focus-within {
-    box-shadow: 0 0 0 3px rgba(203, 166, 247, 0.14);
+    box-shadow: 0 0 0 3px rgba(var(--mes-lav-rgb), 0.14);
     border-radius: var(--mes-r-sm);
 }
 
@@ -479,15 +620,10 @@ a { color: inherit; }
 /* Alert 玻璃感 */
 .mud-alert { border-radius: var(--mes-r) !important; }
 
-/* ═══════════════ 齐套检查 / 开工 / 看板（保留原功能类）═══════════════ */
+/* ═══════════════ 齐套检查 / 开工 / 看板 ═══════════════ */
 
 .kit-check-table { border-radius: var(--mes-r); }
 .kit-check-dialog-content { max-height: 75vh; overflow-y: auto; }
-.kit-check-passed {
-    background: rgba(166, 227, 161, 0.08);
-    border: 1px solid rgba(166, 227, 161, 0.28);
-    border-radius: var(--mes-r);
-}
 
 .operation-timeline { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .station-row { display: flex; align-items: center; gap: 6px; }
@@ -504,13 +640,14 @@ a { color: inherit; }
 
 .op-dot:hover {
     transform: scale(1.45);
-    box-shadow: 0 0 12px rgba(203, 166, 247, 0.6) !important;
+    box-shadow: 0 0 12px rgba(var(--mes-lav-rgb), 0.6) !important;
 }
 
-.dashboard-section { background: transparent; }
-.env-progress { height: 4px; border-radius: 4px; }
-.env-item { padding: 6px 0; border-bottom: 1px solid var(--mes-border); }
-.env-item:last-child { border-bottom: none; }
+/* 工序点状态（替代页面内联色值） */
+.op-dot.done    { background: var(--mes-ok); box-shadow: 0 0 4px var(--mes-ok); }
+.op-dot.failed  { background: var(--mes-err); box-shadow: 0 0 5px var(--mes-err); }
+.op-dot.current { background: var(--mes-warn); box-shadow: 0 0 5px var(--mes-warn); }
+.op-dot.pending { background: var(--mes-idle); }
 
 /* ═══════════════ 工单看板 ═══════════════ */
 
@@ -538,9 +675,9 @@ a { color: inherit; }
 }
 
 .kanban-col-dot.created    { background: var(--mes-text-3); }
-.kanban-col-dot.released   { background: var(--mes-sky); box-shadow: 0 0 8px rgba(147, 187, 251, 0.6); }
-.kanban-col-dot.inprogress { background: var(--mes-lav); box-shadow: 0 0 8px rgba(208, 180, 249, 0.6); }
-.kanban-col-dot.completed  { background: var(--mes-mint); box-shadow: 0 0 8px rgba(173, 230, 168, 0.6); }
+.kanban-col-dot.released   { background: var(--mes-sky); box-shadow: 0 0 8px rgba(var(--mes-sky-rgb), 0.6); }
+.kanban-col-dot.inprogress { background: var(--mes-lav); box-shadow: 0 0 8px rgba(var(--mes-lav-rgb), 0.6); }
+.kanban-col-dot.completed  { background: var(--mes-mint); box-shadow: 0 0 8px rgba(var(--mes-mint-rgb), 0.6); }
 .kanban-col-dot.closed     { background: var(--mes-text-3); }
 
 .kanban-count {
@@ -574,14 +711,102 @@ a { color: inherit; }
     font-variant-numeric: tabular-nums;
 }
 
+/* ═══════════════ 完工审核 / 物料 / SQE 页面专属 ═══════════════ */
+
+/* 审核工单卡：左侧强调条由 accent-left-* 组合 */
+.review-order-card {
+    height: 100%;
+    background: var(--mes-surface);
+    border: 1px solid var(--mes-border-strong);
+    border-left: 4px solid var(--mes-border-strong);
+    border-radius: var(--mes-r-lg);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.review-order-card:hover {
+    box-shadow: var(--mes-shadow);
+}
+
+.completed-table,
+.batch-table {
+    font-variant-numeric: tabular-nums;
+}
+
+.batch-number {
+    font-family: var(--mes-mono);
+    font-weight: 600;
+    color: var(--mes-lav);
+}
+
+.label-chip {
+    font-family: var(--mes-mono);
+    letter-spacing: 0.02em;
+}
+
+/* 追溯标签预览：主题化标签底板 */
+.label-preview {
+    background: var(--mes-bg-2);
+    border: 2px dashed var(--mes-lav);
+    border-radius: var(--mes-r);
+    min-width: 320px;
+}
+
+.label-qr {
+    width: 96px;
+    height: 96px;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mes-bg);
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r-sm);
+    font-family: var(--mes-mono);
+    font-size: 9px;
+    color: var(--mes-text-3);
+    text-align: center;
+    line-height: 1.4;
+}
+
+.label-muted { color: var(--mes-text-3); }
+
+.review-dialog-content,
+.label-dialog-content {
+    max-height: 78vh;
+    overflow-y: auto;
+}
+
+.material-tabs { margin-top: 4px; }
+
+/* 选中态卡片（供应商 / 评分卡） */
+.selected-card {
+    border-color: var(--mes-lav-line) !important;
+    background: var(--mes-lav-soft) !important;
+    box-shadow: var(--mes-glow);
+}
+
+/* ═══════════════ 响应式 ═══════════════ */
+
+@media (max-width: 960px) {
+    .mes-toolbar,
+    .module-card {
+        border-radius: 14px;
+    }
+
+    .mes-pager {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
 /* ═══════════════ 滚动条 ═══════════════ */
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-    background: rgba(203, 166, 247, 0.22);
+    background: rgba(var(--mes-lav-rgb), 0.22);
     border-radius: 8px;
     border: 2px solid transparent;
     background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(203, 166, 247, 0.4); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(var(--mes-lav-rgb), 0.4); background-clip: padding-box; }

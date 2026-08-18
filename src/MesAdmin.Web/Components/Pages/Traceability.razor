@@ -4,21 +4,18 @@
 @using System.Text
 @using MesAdmin.Web.Services
 @inject MesApiClient Api
+@inject ILogger<Traceability> PageLogger
 
 <PageTitle>全链路追溯 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="traceability-page">
-    <MudPaper Class="trace-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">M04 · Traceability</MudText>
-                <MudText Typo="Typo.h4">全链路追溯</MudText>
-            </MudStack>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="M04 · Traceability" Title="全链路追溯">
+        <HeaderActions>
             <MudChip T="string" Color="@(_hashBroken ? Color.Error : Color.Success)" Variant="Variant.Filled" Size="Size.Small">
                 @(_hashBroken ? "哈希异常" : "哈希链正常")
             </MudChip>
-        </MudStack>
-    </MudPaper>
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -96,7 +93,7 @@
     </MudGrid>
 
     <MudPaper Class="module-card pa-5">
-        <MudTable T="TraceabilityLinkDto" Dense Hover Breakpoint="Breakpoint.Sm" Items="@_links" Class="trace-table">
+        <MudTable T="TraceabilityLinkDto" Dense Hover Breakpoint="Breakpoint.Sm" Items="@_links" Class="mes-table-card">
             <HeaderContent>
                 <MudTh>层级</MudTh>
                 <MudTh>VIN / S/N</MudTh>
@@ -175,6 +172,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "追溯查询失败");
             _links.Clear();
             _hashBroken = false;
             _message = $"查询失败：{ex.Message}";

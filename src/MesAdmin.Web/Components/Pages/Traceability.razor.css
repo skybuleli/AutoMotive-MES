@@ -1,9 +1,5 @@
-/* 页面专属样式（共享设计系统类：trace-toolbar / module-card /
-   section-kicker / section-copy 等均见全局 app.css）*/
-
-.traceability-page {
-    color: var(--mud-palette-text-primary);
-}
+/* 页面专属样式（共享设计系统类：mes-toolbar / module-card / mes-table-card /
+   detail-item / section-kicker 等见全局 app.css）*/
 
 .trace-list-card {
     min-height: 520px;
@@ -26,52 +22,19 @@
     width: 48px;
     height: 48px;
     place-items: center;
-    border: 1px solid rgba(203, 166, 247, 0.45);
+    border: 1px solid rgba(var(--mes-lav-rgb), 0.45);
     border-radius: 50%;
-    background: rgba(203, 166, 247, 0.14);
-    color: #cba6f7;
+    background: rgba(var(--mes-lav-rgb), 0.14);
+    color: var(--mes-lav);
     font-weight: 800;
     font-variant-numeric: tabular-nums;
 }
 
-.trace-node-body,
-.detail-item {
-    background: rgba(17, 17, 27, 0.52);
-    border: 1px solid rgba(69, 71, 90, 0.8);
-    border-radius: 12px;
-}
-
 .trace-node-body {
     padding: 0.95rem;
-}
-
-.detail-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    min-height: 100%;
-    padding: 0.75rem 0.85rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.detail-item span {
-    color: var(--mud-palette-text-secondary);
-    font-size: 0.76rem;
-}
-
-.detail-item strong {
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-.trace-table {
-    overflow: hidden;
-    border: 1px solid rgba(69, 71, 90, 0.75);
-    border-radius: 12px;
-}
-
-.trace-table .mud-table-cell {
-    font-variant-numeric: tabular-nums;
+    background: var(--mes-surface-2);
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r);
 }
 
 .trace-export {
@@ -85,11 +48,6 @@
 }
 
 @media (max-width: 960px) {
-    .trace-toolbar,
-    .module-card {
-        border-radius: 14px;
-    }
-
     .trace-node {
         grid-template-columns: 40px minmax(0, 1fr);
     }

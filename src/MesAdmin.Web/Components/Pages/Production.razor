@@ -4,31 +4,26 @@
 @using MesAdmin.Web.Services
 @inject MesApiClient Api
 @inject NavigationManager Navigation
+@inject ILogger<Production> PageLogger
 
 <PageTitle>生产工单 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="production-page">
-    <MudPaper Class="production-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">M01 · Production Order</MudText>
-                <MudText Typo="Typo.h4">生产工单</MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-                <MudSelect T="string" Label="状态" Variant="Variant.Outlined" Dense
-                           Value="@_statusFilterText" ValueChanged="OnStatusFilterChanged" Class="filter-select">
-                    <MudSelectItem Value="@("all")">全部</MudSelectItem>
-                    <MudSelectItem Value="@("Created")">已创建</MudSelectItem>
-                    <MudSelectItem Value="@("Released")">已放行</MudSelectItem>
-                    <MudSelectItem Value="@("InProgress")">执行中</MudSelectItem>
-                   <MudSelectItem Value="@("Completed")">已完工</MudSelectItem>
-                   <MudSelectItem Value="@("Closed")">已关闭</MudSelectItem>
-                   <MudSelectItem Value="@("Cancelled")">已取消</MudSelectItem>
-                </MudSelect>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ReloadAsync" Disabled="@_busy">刷新</MudButton>
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="M01 · Production Order" Title="生产工单">
+        <HeaderActions>
+            <MudSelect T="string" Label="状态" Variant="Variant.Outlined" Dense
+                       Value="@_statusFilterText" ValueChanged="OnStatusFilterChanged" Class="filter-select">
+                <MudSelectItem Value="@("all")">全部</MudSelectItem>
+                <MudSelectItem Value="@("Created")">已创建</MudSelectItem>
+                <MudSelectItem Value="@("Released")">已放行</MudSelectItem>
+                <MudSelectItem Value="@("InProgress")">执行中</MudSelectItem>
+                <MudSelectItem Value="@("Completed")">已完工</MudSelectItem>
+                <MudSelectItem Value="@("Closed")">已关闭</MudSelectItem>
+                <MudSelectItem Value="@("Cancelled")">已取消</MudSelectItem>
+            </MudSelect>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ReloadAsync" Disabled="@_busy">刷新</MudButton>
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -56,7 +51,7 @@
                         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>@_loadError</MudAlert>
                     }
 
-                    <MudTable T="OrderSummary" Dense Hover Breakpoint="Breakpoint.Sm" Items="@_pageOrders" RowsPerPage="@PageSize" Class="orders-table">
+                    <MudTable T="OrderSummary" Dense Hover Breakpoint="Breakpoint.Sm" Items="@_pageOrders" RowsPerPage="@PageSize" Class="mes-table-card">
                         <HeaderContent>
                             <MudTh>工单号</MudTh>
                             <MudTh>状态</MudTh>
@@ -88,7 +83,7 @@
                         </NoRecordsContent>
                     </MudTable>
 
-                    <div class="pager-strip">
+                    <div class="mes-pager">
                         <MudText Typo="Typo.body2" Class="section-copy">
                             第 @_page / @_totalPages 页 · 每页 @PageSize 条
                         </MudText>
@@ -261,6 +256,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载生产工单失败");
             _loadError = $"加载失败：{ex.Message}";
             StateHasChanged();
         }
@@ -269,18 +265,21 @@
     private async Task LoadPageAsync()
     {
         var status = _statusFilterText == "all" ? null : _statusFilterText;
-        var path = status is null
-            ? $"api/v1/orders?page={_page}&size={PageSize}"
-            : $"api/v1/orders?status={status}&page={_page}&size={PageSize}";
-        var (items, total) = await Api.GetWithTotalAsync<List<OrderSummary>>(path);
-        _pageOrders = items ?? [];
-        _totalOrders = total ?? _pageOrders.Count;
-        _totalPages = Math.Max(1, (int)Math.Ceiling(_totalOrders / (double)PageSize));
-        if (_page > _totalPages)
+        while (true)
         {
-            _page = _totalPages;
-            await LoadPageAsync();
-            return;
+            var path = status is null
+                ? $"api/v1/orders?page={_page}&size={PageSize}"
+                : $"api/v1/orders?status={status}&page={_page}&size={PageSize}";
+            var (items, total) = await Api.GetWithTotalAsync<List<OrderSummary>>(path);
+            _pageOrders = items ?? [];
+            _totalOrders = total ?? _pageOrders.Count;
+            _totalPages = Math.Max(1, (int)Math.Ceiling(_totalOrders / (double)PageSize));
+            if (_page > _totalPages)
+            {
+                _page = _totalPages;
+                continue;
+            }
+            break;
         }
         _loadError = null;
     }
@@ -293,7 +292,7 @@
             if (!await RedirectToLoginOnUnauthorizedAsync(ex))
                 _loadError = $"刷新失败：{ex.Message}";
         }
-        catch (Exception ex) { _loadError = $"刷新失败：{ex.Message}"; }
+        catch (Exception ex) { PageLogger.LogError(ex, "刷新生产工单失败"); _loadError = "刷新失败，请稍后重试"; }
     }
 
     private async Task OnStatusFilterChanged(string value)
@@ -334,7 +333,7 @@
             if (!await RedirectToLoginOnUnauthorizedAsync(ex))
                 _selectedDetail = null;
         }
-        catch { _selectedDetail = null; }
+        catch (Exception ex) { PageLogger.LogWarning(ex, "加载工单详情失败"); _selectedDetail = null; }
     }
 
     private void CloseDetailDialog() => _detailDialogOpen = false;
@@ -420,7 +419,7 @@
                 _isError = true;
             }
         }
-        catch (Exception ex) { _message = ex.Message; _isError = true; }
+        catch (Exception ex) { PageLogger.LogError(ex, "创建生产工单失败"); _message = "创建生产工单失败，请稍后重试"; _isError = true; }
         finally { _busy = false; }
     }
 

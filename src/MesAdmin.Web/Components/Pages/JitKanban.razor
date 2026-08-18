@@ -6,26 +6,21 @@
 @using MesAdmin.Web.Services
 @inject IHttpClientFactory HttpFactory
 @inject AuthService Auth
+@inject ILogger<JitKanban> PageLogger
 
 <PageTitle>JIT 看板拉动 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T1.14 · JIT Kanban</MudText>
-                <MudText Typo="Typo.h4">JIT 看板拉动</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">空料箱扫码 → 电子看板 → 仓库 PDA → 送达确认</MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
-                    待处理 @(_pending?.Count ?? 0)
-                </MudChip>
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
-                               OnClick="() => LoadDataAsync()" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T1.14 · JIT Kanban" Title="JIT 看板拉动"
+                  Description="空料箱扫码 → 电子看板 → 仓库 PDA → 送达确认">
+        <HeaderActions>
+            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                待处理 @(_pending?.Count ?? 0)
+            </MudChip>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadDataAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (_errorMessage is not null)
     {
@@ -34,29 +29,19 @@
 
     @if (_isLoading && _pending is null)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
-                <MudText Typo="Typo.body2" Class="section-copy">加载 JIT 拉动信号...</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="true" Text="加载 JIT 拉动信号..." />
     }
     else if (_pending is not null)
     {
         @* ── 待处理信号看板 ── *@
-        <MudText Typo="Typo.subtitle1" Class="section-kicker" Style="margin-top:8px;">
+        <MudText Typo="Typo.subtitle1" Class="section-kicker">
             <MudIcon Icon="@Icons.Material.Filled.PendingActions" Size="Size.Small" /> 待处理拉动
         </MudText>
 
         @if (_pending.Count == 0)
         {
-            <MudPaper Class="glass-kpi-card pa-8">
-                <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
-                    <MudText Typo="Typo.body1">暂无待处理 JIT 拉动信号</MudText>
-                    <MudText Typo="Typo.body2" Class="section-copy">所有物料库存充足，线边库存正常</MudText>
-                </MudStack>
-            </MudPaper>
+            <MesStateCard Loading="false" Icon="@Icons.Material.Filled.CheckCircle"
+                          Text="暂无待处理 JIT 拉动信号" Hint="所有物料库存充足，线边库存正常" />
         }
         else
         {
@@ -122,7 +107,7 @@
         }
 
         @* ── 手动创建信号 ── *@
-        <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
+        <MudPaper Class="glass-kpi-card pa-4 mt-3">
             <MudStack Spacing="2">
                 <MudText Typo="Typo.subtitle2" Class="section-kicker">
                     <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /> 手动创建 JIT 拉动
@@ -254,7 +239,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadDataAsync();
-        _timer = new Timer(async _ => await InvokeAsync(LoadDataAsync), null, 15000, 15000);
+        _timer = new Timer(_ => { try { _ = InvokeAsync(LoadDataAsync); } catch (Exception ex) { PageLogger.LogDebug(ex, "JIT 看板定时刷新失败（组件可能已释放）"); } }, null, 15000, 15000);
     }
 
     private async Task LoadDataAsync()
@@ -274,6 +259,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载 JIT 拉料信号失败");
             _errorMessage = $"加载失败：{ex.Message}";
         }
         finally
@@ -311,6 +297,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "JIT 送达确认失败");
             _errorMessage = $"送达确认失败：{ex.Message}";
         }
     }
@@ -344,6 +331,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "JIT 信号取消失败");
             _errorMessage = $"取消失败：{ex.Message}";
         }
     }
@@ -388,6 +376,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "JIT 信号创建失败");
             _createError = $"创建失败：{ex.Message}";
         }
         finally

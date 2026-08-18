@@ -5,21 +5,18 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject MesApiClient Api
 @inject NavigationManager Navigation
+@inject ILogger<SqeQuality> PageLogger
 
 <PageTitle>SQE 供应商质量 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">M08 · SQE Supplier Quality</MudText>
-                <MudText Typo="Typo.h4">SQE 供应商质量管理</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">供应商评分卡 · PPAP 文档管理 · 关键物料管控</MudText>
-            </MudStack>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="M08 · SQE Supplier Quality" Title="SQE 供应商质量管理"
+                  Description="供应商评分卡 · PPAP 文档管理 · 关键物料管控">
+        <HeaderActions>
             <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
                            OnClick="() => LoadAllAsync()" Size="Size.Small" />
-        </MudStack>
-    </MudPaper>
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -28,7 +25,7 @@
         </MudAlert>
     }
 
-    <MudPaper Class="pa-4" Style="border-radius:12px;">
+    <MudPaper Class="module-card pa-4">
         <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
                  CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
 
@@ -81,7 +78,7 @@
                         <div class="inventory-grid">
                             @foreach (var supplier in _filteredSuppliers)
                             {
-                                <MudPaper Class="@GetSupplierCardClass(supplier)"
+                                <MudPaper Class="@($"{GetSupplierCardClass(supplier)} {GetSupplierCardAccent(supplier)}")"
                                           Style="@GetSupplierCardStyle(supplier)"
                                           @onclick="() => SelectSupplier(supplier)">
                                     <MudStack Spacing="2">
@@ -328,7 +325,7 @@
                         <div class="inventory-grid">
                             @foreach (var setting in _criticalSettings)
                             {
-                                <MudPaper Class="glass-kpi-card" Style="@(setting.ControlLevel >= 3 ? "border-left:4px solid var(--mud-palette-error);" : "border-left:4px solid var(--mud-palette-warning);")">
+                                <MudPaper Class="@($"glass-kpi-card {(setting.ControlLevel >= 3 ? "accent-left-error" : "accent-left-warning")}")">
                                     <MudStack Spacing="2">
                                         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                             <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
@@ -686,6 +683,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载 SQE 数据失败");
             _message = $"加载数据失败：{ex.Message}";
             _isError = true;
         }
@@ -775,6 +773,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "创建供应商失败");
             _message = $"创建供应商失败：{ex.Message}";
             _isError = true;
         }
@@ -796,8 +795,9 @@
         {
             _scoreCards = await Api.GetScoreCardsAsync(_selectedSupplier.Id) ?? [];
         }
-        catch
+        catch (Exception ex)
         {
+            PageLogger.LogWarning(ex, $"加载供应商评分卡失败：{_selectedSupplier.Id}");
             _scoreCards = [];
         }
         finally
@@ -845,6 +845,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "创建评分卡失败");
             _message = $"创建评分卡失败：{ex.Message}";
             _isError = true;
         }
@@ -881,6 +882,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载 PPAP 文档失败");
             _message = $"加载 PPAP 文档失败：{ex.Message}";
             _isError = true;
         }
@@ -919,6 +921,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "创建 PPAP 文档失败");
             _message = $"创建 PPAP 文档失败：{ex.Message}";
             _isError = true;
         }
@@ -945,6 +948,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "提交 PPAP 失败");
             _message = $"提交 PPAP 失败：{ex.Message}";
             _isError = true;
         }
@@ -979,6 +983,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "批准 PPAP 失败");
             _message = $"批准 PPAP 失败：{ex.Message}";
             _isError = true;
         }
@@ -1013,6 +1018,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "拒绝 PPAP 失败");
             _message = $"拒绝 PPAP 失败：{ex.Message}";
             _isError = true;
         }
@@ -1035,6 +1041,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载管控设置失败");
             _message = $"加载管控设置失败：{ex.Message}";
             _isError = true;
         }
@@ -1071,6 +1078,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "创建管控设置失败");
             _message = $"创建管控设置失败：{ex.Message}";
             _isError = true;
         }
@@ -1134,15 +1142,16 @@
     private static string GetSupplierCardStyle(SupplierDto s)
     {
         if (!s.IsActive) return "opacity:0.6;";
-        return s.Tier switch
-        {
-            "Preferred" => "border-left:4px solid var(--mud-palette-success);",
-            "Qualified" => "",
-            "Conditional" => "border-left:4px solid var(--mud-palette-warning);",
-            "Disqualified" => "border-left:4px solid var(--mud-palette-error);",
-            _ => ""
-        };
+        return string.Empty;
     }
+
+    private static string GetSupplierCardAccent(SupplierDto s) => s.Tier switch
+    {
+        "Preferred" => "accent-left-success",
+        "Conditional" => "accent-left-warning",
+        "Disqualified" => "accent-left-error",
+        _ => ""
+    };
 
     private static string GetPpapStatusLabel(string status) => status switch
     {

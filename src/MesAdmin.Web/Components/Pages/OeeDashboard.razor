@@ -8,13 +8,9 @@
 
 <PageTitle>设备 OEE - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">M05 · Equipment OEE</MudText>
-                <MudText Typo="Typo.h4">设备综合效率</MudText>
-            </MudStack>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="M05 · Equipment OEE" Title="设备综合效率">
+        <HeaderActions>
             @if (Hub.Health is not null)
             {
                 <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
@@ -34,8 +30,8 @@
                     </MudStack>
                 </MudStack>
             }
-        </MudStack>
-    </MudPaper>
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrEmpty(_statusMessage))
     {
@@ -46,13 +42,7 @@
 
     @if (_snapshot.Count == 0)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack Spacing="2" AlignItems="AlignItems.Center">
-                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
-                <MudText Typo="Typo.body2" Class="section-copy">等待设备数据采集...</MudText>
-                <MudText Typo="Typo.caption" Class="section-copy">PLC 管道启动后约 5s 开始推送 OEE</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="true" Text="等待设备数据采集..." Hint="PLC 管道启动后约 5s 开始推送 OEE" />
     }
     else
     {
@@ -63,7 +53,7 @@
                     <MudStack Spacing="2">
                         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                             <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
-                                <span class="status-dot @GetStatusClass(oee)"></span>
+                                <MesStatusDot Status="@GetDotStatus(oee)" />
                                 <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@oee.EquipmentCode</MudText>
                             </MudStack>
                             <MudChip T="string" Color="@GetGradeColor(oee.Grade)" Size="Size.Small" Variant="Variant.Outlined">
@@ -131,13 +121,13 @@
             StateHasChanged();
         });
 
-    private static string GetStatusClass(OeeRecord oee)
+    private static MesDotStatus GetDotStatus(OeeRecord oee)
         => oee.Oee switch
         {
-            >= 0.85 => "running",
-            >= 0.70 => "idle",
-            > 0 => "alarm",
-            _ => "offline",
+            >= 0.85 => MesDotStatus.Running,
+            >= 0.70 => MesDotStatus.Idle,
+            > 0 => MesDotStatus.Alarm,
+            _ => MesDotStatus.Offline,
         };
 
     private static Color GetGradeColor(OeeGrade grade)

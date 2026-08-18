@@ -5,21 +5,18 @@
 @using Microsoft.JSInterop
 @inject IJSRuntime JSRuntime
 @inject MesApiClient Api
+@inject ILogger<Scheduling> PageLogger
 
 <PageTitle>生产排程 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">M09 · Production Scheduling</MudText>
-                <MudText Typo="Typo.h4">生产排程管理</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">甘特图排程 · 产能管理 · 紧急插单 · 有限产能引擎</MudText>
-            </MudStack>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="M09 · Production Scheduling" Title="生产排程管理"
+                  Description="甘特图排程 · 产能管理 · 紧急插单 · 有限产能引擎">
+        <HeaderActions>
             <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
                            OnClick="() => LoadAllAsync()" Size="Size.Small" />
-        </MudStack>
-    </MudPaper>
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -28,7 +25,7 @@
         </MudAlert>
     }
 
-    <MudPaper Class="pa-4" Style="border-radius:12px;">
+    <MudPaper Class="module-card pa-4">
         <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
                  CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
 
@@ -271,9 +268,6 @@
     </DialogActions>
 </MudDialog>
 
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
-<script src="~/js/gantt-interop.js"></script>
-
 @code {
     private int _activeTab;
     private bool _isLoading, _isError;
@@ -326,6 +320,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载排程数据失败");
             _message = $"加载数据失败：{ex.Message}";
             _isError = true;
         }
@@ -354,6 +349,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载甘特图数据失败");
             _message = $"加载甘特图数据失败：{ex.Message}";
             _isError = true;
         }
@@ -378,6 +374,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载排程列表失败");
             _message = $"加载排程列表失败：{ex.Message}";
             _isError = true;
         }
@@ -407,6 +404,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "排程操作失败");
             _message = $"操作失败：{ex.Message}";
             _isError = true;
         }
@@ -432,6 +430,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "排程操作失败");
             _message = $"操作失败：{ex.Message}";
             _isError = true;
         }
@@ -457,6 +456,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "排程操作失败");
             _message = $"操作失败：{ex.Message}";
             _isError = true;
         }
@@ -496,6 +496,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "插单失败");
             _message = $"插单失败：{ex.Message}";
             _isError = true;
         }
@@ -518,6 +519,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载产能数据失败");
             _message = $"加载产能数据失败：{ex.Message}";
             _isError = true;
         }

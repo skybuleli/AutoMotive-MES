@@ -9,6 +9,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
+    <script>
+        // 首帧恢复主题偏好（暗色为默认），必须在样式表加载前执行以避免闪烁
+        try {
+            if (localStorage.getItem('mes.theme') === 'light')
+                document.documentElement.setAttribute('data-mes-theme', 'light');
+        } catch (e) { console.debug('主题偏好读取失败', e); }
+    </script>
     <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["MesAdmin.Web.styles.css"]" />
@@ -20,10 +27,14 @@
     <HeadOutlet />
 </head>
 
-<body style="background:#0B0B12;">
+<body style="background:#191925;">
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+    <script src="@Assets["js/theme-interop.js"]"></script>
+    <script src="@Assets["js/spc-chart-interop.js"]"></script>
+    <script src="@Assets["js/gantt-interop.js"]"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 

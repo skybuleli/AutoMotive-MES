@@ -6,35 +6,30 @@
 @using MesAdmin.Infrastructure.RealTime
 @inject MesApiClient Api
 @inject AndonHubClient AndonHub
+@inject ILogger<Andon> PageLogger
 
 <PageTitle>Andon 报警 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T2.20 · Andon Alarm System</MudText>
-                <MudText Typo="Typo.h4">Andon 三级报警</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">L1 工位声光 · L2 班组长 PDA · L3 生产经理 · 自动升级</MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
-                    L3 @_stats.EscalatedL3Count
-                </MudChip>
-                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
-                    L2 @_stats.EscalatedL2Count
-                </MudChip>
-                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">
-                    待确认 @_stats.ActiveCount
-                </MudChip>
-                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
-                    今日 @_stats.TodayCount
-                </MudChip>
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
-                               OnClick="LoadDataAsync" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T2.20 · Andon Alarm System" Title="Andon 三级报警"
+                  Description="L1 工位声光 · L2 班组长 PDA · L3 生产经理 · 自动升级">
+        <HeaderActions>
+            <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                L3 @_stats.EscalatedL3Count
+            </MudChip>
+            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                L2 @_stats.EscalatedL2Count
+            </MudChip>
+            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">
+                待确认 @_stats.ActiveCount
+            </MudChip>
+            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                今日 @_stats.TodayCount
+            </MudChip>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
+                           OnClick="LoadDataAsync" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (_errorMessage is not null)
     {
@@ -44,7 +39,7 @@
     }
 
     @* ── 过滤栏 ── *@
-    <MudPaper Class="pa-3" Style="border-radius:12px;">
+    <MudPaper Class="module-card pa-3">
         <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
             <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
                 <MudButton OnClick='() => SetFilter("all")'
@@ -72,22 +67,12 @@
 
     @if (_isLoading && _events.Count == 0)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
-                <MudText Typo="Typo.body2" Class="section-copy">加载报警数据...</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="true" Text="加载报警数据..." />
     }
     else if (_events.Count == 0)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
-                <MudText Typo="Typo.body1">暂无报警</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">所有设备运行正常。</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="false" Icon="@Icons.Material.Filled.CheckCircle"
+                      Text="暂无报警" Hint="所有设备运行正常。" />
     }
     else
     {
@@ -316,6 +301,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载报警数据失败");
             _errorMessage = $"加载报警数据失败：{ex.Message}";
         }
         finally
@@ -331,7 +317,7 @@
             var stats = await Api.GetAndonStatsAsync();
             if (stats is not null) _stats = stats;
         }
-        catch { }
+        catch (Exception ex) { PageLogger.LogWarning(ex, "加载 Andon 统计失败"); }
     }
 
     private async Task SetFilter(string status)

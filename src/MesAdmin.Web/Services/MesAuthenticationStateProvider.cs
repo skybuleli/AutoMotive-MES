@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.Extensions.Logging;
+using ZLogger;
 
 namespace MesAdmin.Web.Services;
 
@@ -8,7 +10,9 @@ namespace MesAdmin.Web.Services;
 /// 自定义 AuthenticationStateProvider，从 ProtectedLocalStorage 读取 JWT。
 /// SSR 预渲染阶段 ProtectedLocalStorage 不可用，捕获异常返回匿名状态。
 /// </summary>
-public class MesAuthenticationStateProvider(ProtectedLocalStorage localStorage) : AuthenticationStateProvider
+public class MesAuthenticationStateProvider(
+    ProtectedLocalStorage localStorage,
+    ILogger<MesAuthenticationStateProvider> logger) : AuthenticationStateProvider
 {
     private const string TokenKey = "mes_auth_token";
     private const string JwtRoleClaim = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
@@ -48,7 +52,7 @@ public class MesAuthenticationStateProvider(ProtectedLocalStorage localStorage) 
         base.NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(Anonymous)));
     }
 
-    private static ClaimsIdentity ParseToken(string token)
+    private ClaimsIdentity ParseToken(string token)
     {
         try
         {
@@ -76,8 +80,9 @@ public class MesAuthenticationStateProvider(ProtectedLocalStorage localStorage) 
 
             return new ClaimsIdentity(claims, "jwt");
         }
-        catch
+        catch (Exception ex)
         {
+            logger.ZLogDebug(ex, $"JWT 解析失败，返回匿名身份");
             return new ClaimsIdentity();
         }
     }

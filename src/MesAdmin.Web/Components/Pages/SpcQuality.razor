@@ -6,19 +6,13 @@
 @using Microsoft.JSInterop
 @inject IJSRuntime JSRuntime
 @inject MesApiClient Api
+@inject ILogger<SpcQuality> PageLogger
 
 <PageTitle>SPC 质量管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T2.5 · SPC Quality Management</MudText>
-                <MudText Typo="Typo.h4">SPC 质量管理</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">控制图 · 检验记录 · 不合格品处置 · 8D 闭环</MudText>
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T2.5 · SPC Quality Management" Title="SPC 质量管理"
+                  Description="控制图 · 检验记录 · 不合格品处置 · 8D 闭环" />
 
     @if (_errorMessage is not null)
     {
@@ -28,7 +22,7 @@
     }
 
     @* ── Tab 导航 ── *@
-    <MudPaper Class="pa-4" Style="border-radius:12px;">
+    <MudPaper Class="module-card pa-4">
         <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
                  CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
 
@@ -131,6 +125,145 @@
                                 </MudTd>
                                 <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
                             </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            <MudTabPanel Text="检验记录" Icon="@Icons.Material.Filled.FactCheck">
+                <MudStack Spacing="3" Class="pa-4">
+                    <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButtonGroup Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small">
+                            <MudButton OnClick='() => OnRecordStageChanged("Iq")'
+                                       Variant='@(_recordStage == "Iq" ? Variant.Filled : Variant.Outlined)'
+                                       Color='@(_recordStage == "Iq" ? Color.Primary : Color.Default)'>
+                                IQC 来料检验
+                            </MudButton>
+                            <MudButton OnClick='() => OnRecordStageChanged("Ipqc")'
+                                       Variant='@(_recordStage == "Ipqc" ? Variant.Filled : Variant.Outlined)'
+                                       Color='@(_recordStage == "Ipqc" ? Color.Primary : Color.Default)'>
+                                IPQC 过程巡检
+                            </MudButton>
+                        </MudButtonGroup>
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
+                                       OnClick="LoadQualityRecordsAsync" Size="Size.Small" />
+                    </MudStack>
+
+                    @if (_isLoading && _qualityRecords.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body2" Class="section-copy">加载检验记录...</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else if (_qualityRecords.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无 @GetStageLabel(_recordStage) 记录</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">检验完成后记录将自动出现在此处。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_qualityRecords" Dense="true" Hover="true" Striped="true"
+                                  Elevation="0" Class="module-card">
+                            <HeaderContent>
+                                <MudTh>编码</MudTh>
+                                <MudTh>名称</MudTh>
+                                <MudTh>批次</MudTh>
+                                <MudTh>供应商</MudTh>
+                                <MudTh>检验计划</MudTh>
+                                <MudTh>抽样</MudTh>
+                                <MudTh>不合格</MudTh>
+                                <MudTh>判定</MudTh>
+                                <MudTh>检验员</MudTh>
+                                <MudTh>时间</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="编码">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.ProductCode</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="名称">@context.ProductName</MudTd>
+                                <MudTd DataLabel="批次">@(context.BatchNumber ?? "-")</MudTd>
+                                <MudTd DataLabel="供应商">@(context.SupplierCode ?? "-")</MudTd>
+                                <MudTd DataLabel="计划">@context.InspectionPlanName</MudTd>
+                                <MudTd DataLabel="抽样">@context.SampleSize</MudTd>
+                                <MudTd DataLabel="不合格">
+                                    <MudText Typo="Typo.body2" Color="@(context.DefectCount > 0 ? Color.Error : Color.Success)">
+                                        @context.DefectCount
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="判定">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetVerdictColor(context.Verdict)" Variant="Variant.Outlined">
+                                        @GetVerdictLabel(context.Verdict)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="检验员">@context.InspectorId</MudTd>
+                                <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudIconButton Icon="@(IsRecordExpanded(context.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                                   OnClick="() => ToggleRecordExpanded(context.Id)"
+                                                   Size="Size.Small" Color="Color.Primary" />
+                                </MudTd>
+                            </RowTemplate>
+                            <ChildRowContent>
+                                @if (IsRecordExpanded(context.Id))
+                                {
+                                    <MudTr>
+                                        <MudTd ColSpan="11" Class="pa-0" Style="border-top:none;">
+                                            @if (context.Characteristics.Count == 0)
+                                            {
+                                                <MudText Typo="Typo.body2" Class="section-copy pa-3">暂无特性实测值（检验尚未记录测量数据）</MudText>
+                                            }
+                                            else
+                                            {
+                                                <MudStack Spacing="1" Class="pa-3">
+                                                    <MudText Typo="Typo.caption" Class="kpi-label">
+                                                        检验特性（@context.Characteristics.Count 项）
+                                                    </MudText>
+                                                    <MudTable Items="@context.Characteristics" Dense="true" Elevation="0" Class="detail-table">
+                                                        <HeaderContent>
+                                                            <MudTh>特性编码</MudTh>
+                                                            <MudTh>特性名称</MudTh>
+                                                            <MudTh>标准值</MudTh>
+                                                            <MudTh>下限 LSL</MudTh>
+                                                            <MudTh>上限 USL</MudTh>
+                                                            <MudTh>实测值</MudTh>
+                                                            <MudTh>判定</MudTh>
+                                                        </HeaderContent>
+                                                        <RowTemplate Context="mc">
+                                                            <MudTd DataLabel="编码">@mc.CharacteristicCode</MudTd>
+                                                            <MudTd DataLabel="名称">@mc.CharacteristicName</MudTd>
+                                                            <MudTd DataLabel="标准值">@FormatMeasured(mc.StandardValue, mc.Unit)</MudTd>
+                                                            <MudTd DataLabel="LSL">@FormatMeasured(mc.LowerSpecLimit, mc.Unit)</MudTd>
+                                                            <MudTd DataLabel="USL">@FormatMeasured(mc.UpperSpecLimit, mc.Unit)</MudTd>
+                                                            <MudTd DataLabel="实测值">@FormatMeasured(mc.ActualValue, mc.Unit)</MudTd>
+                                                            <MudTd DataLabel="判定">
+                                                                @if (mc.ActualValue is null)
+                                                                {
+                                                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">待测</MudChip>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <MudChip T="string" Size="Size.Small" Color="@(mc.IsFailed ? Color.Error : Color.Success)" Variant="Variant.Outlined">
+                                                                        @(mc.IsFailed ? "NG" : "OK")
+                                                                    </MudChip>
+                                                                }
+                                                            </MudTd>
+                                                        </RowTemplate>
+                                                    </MudTable>
+                                                </MudStack>
+                                            }
+                                        </MudTd>
+                                    </MudTr>
+                                }
+                            </ChildRowContent>
                         </MudTable>
                     }
                 </MudStack>
@@ -488,7 +621,7 @@
                         </MudPaper>
                     </div>
 
-                    <MudPaper Class="pa-5" Style="border-radius:12px;">
+                    <MudPaper Class="module-card pa-5">
                         <MudStack Spacing="2">
                             <MudText Typo="Typo.subtitle1" Style="font-weight:600;">SPC 判异规则状态</MudText>
                             <MudText Typo="Typo.body2" Class="section-copy">
@@ -497,7 +630,7 @@
                         </MudStack>
                     </MudPaper>
 
-                    <MudPaper Class="pa-5" Style="border-radius:12px;">
+                    <MudPaper Class="module-card pa-5">
                         <MudStack Spacing="2">
                             <MudText Typo="Typo.subtitle1" Style="font-weight:600;">过程能力状态</MudText>
                             <MudTable Items="@CharacteristicOptions.Select(c => new { Code = c, Name = GetCharacteristicName(c) })"
@@ -525,10 +658,6 @@
         </MudTabs>
     </MudPaper>
 </MudStack>
-
-@* ECharts script *@
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
-<script src="~/js/spc-chart-interop.js"></script>
 
 @code {
     private int _activeTab;
@@ -568,6 +697,11 @@
     // ── 告警 ──
     private int _activeAlertCount;
 
+    // ── 检验记录 ──
+    private string _recordStage = "Iq";
+    private List<QualityRecordDto> _qualityRecords = [];
+    private HashSet<string> _expandedRecordIds = [];
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -576,6 +710,7 @@
             await LoadAlertsAsync();
             await LoadNcrsAsync();
             await LoadEightDReportsAsync();
+            await LoadQualityRecordsAsync();
             StateHasChanged();
         }
     }
@@ -600,6 +735,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载 SPC 数据失败");
             _errorMessage = $"加载 SPC 数据失败：{ex.Message}";
         }
         finally
@@ -670,9 +806,9 @@
             _spcAlerts = await Api.GetSpcAlertsAsync() ?? [];
             _activeAlertCount = _spcAlerts.Count(a => !a.IsAcknowledged);
         }
-        catch
+        catch (Exception ex)
         {
-            // non-critical
+            PageLogger.LogDebug(ex, "非关键操作失败（已忽略）");
         }
     }
 
@@ -690,6 +826,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载 NCR 列表失败");
             _errorMessage = $"加载 NCR 列表失败：{ex.Message}";
         }
         finally
@@ -785,6 +922,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载 8D 报告列表失败");
             _errorMessage = $"加载 8D 报告列表失败：{ex.Message}";
         }
         finally
@@ -851,6 +989,76 @@
     }
 
     // ═══════════════════════════════════════════════════════════════
+    //  检验记录
+    // ═══════════════════════════════════════════════════════════════
+
+    private async Task LoadQualityRecordsAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _qualityRecords = await Api.GetQualityRecordsAsync(_recordStage) ?? [];
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载检验记录失败");
+            _errorMessage = $"加载检验记录失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnRecordStageChanged(string stage)
+    {
+        _recordStage = stage;
+        await LoadQualityRecordsAsync();
+    }
+
+    private bool IsRecordExpanded(string id) => _expandedRecordIds.Contains(id);
+
+    private void ToggleRecordExpanded(string id)
+    {
+        if (!_expandedRecordIds.Add(id))
+            _expandedRecordIds.Remove(id);
+    }
+
+    private static string FormatMeasured(double? value, string unit)
+    {
+        if (value is null) return "-";
+        var v = value.Value.ToString("0.##");
+        return string.IsNullOrWhiteSpace(unit) ? v : $"{v} {unit}";
+    }
+
+    private static string GetStageLabel(string stage) => stage switch
+    {
+        "Iq" => "IQC 来料检验",
+        "Ipqc" => "IPQC 过程巡检",
+        "Oqc" => "OQC 出货检验",
+        "FirstArticle" => "首件检验",
+        "OnlineTest" => "在线功能测试",
+        _ => stage
+    };
+
+    private static string GetVerdictLabel(string verdict) => verdict switch
+    {
+        "Passed" => "合格",
+        "Failed" => "不合格",
+        "ConditionalPass" => "让步接收",
+        _ => "待判定"
+    };
+
+    private static Color GetVerdictColor(string verdict) => verdict switch
+    {
+        "Passed" => Color.Success,
+        "Failed" => Color.Error,
+        "ConditionalPass" => Color.Warning,
+        _ => Color.Default
+    };
+
+    // ═══════════════════════════════════════════════════════════════
     //  辅助方法
     // ═══════════════════════════════════════════════════════════════
 
@@ -889,9 +1097,9 @@
             _ = JSRuntime.InvokeVoidAsync("spcCharts.disposeChart", "xbarChart");
             _ = JSRuntime.InvokeVoidAsync("spcCharts.disposeChart", "rChart");
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore disposal errors
+            PageLogger.LogDebug(ex, "释放资源时忽略异常");
         }
     }
 }

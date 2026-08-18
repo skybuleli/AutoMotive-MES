@@ -1,19 +1,24 @@
 @using MesAdmin.Web.Services
+@using MesAdmin.Web.Themes
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
 @inject AuthService Auth
+@inject ThemeService Theme
 
-<MudThemeProvider />
+<MudThemeProvider Theme="MesTheme.CurrentTheme" IsDarkMode="@Theme.IsDark" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
     <MudAppBar Elevation="0" Color="Color.Transparent" Class="mes-appbar" Dense>
-        <MudIconButton Icon="@Icons.Material.Filled.Menu"
-                       Color="Color.Inherit"
-                       Edge="Edge.Start"
-                       OnClick="ToggleDrawer" />
+        <MudTooltip Text="展开/收起导航">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                           Color="Color.Inherit"
+                           Edge="Edge.Start"
+                           AriaLabel="展开或收起导航"
+                           OnClick="ToggleDrawer" />
+        </MudTooltip>
 
         <MudStack Spacing="0" Class="ml-1">
             <MudText Typo="Typo.h6" Class="text-gradient" Style="font-weight:800;letter-spacing:-0.02em;">AutoMES</MudText>
@@ -24,17 +29,46 @@
 
         <AuthorizeView>
             <Authorized>
-                <MudBadge Content="3" Color="Color.Error" Overlap>
-                    <MudIconButton Icon="@Icons.Material.Filled.Notifications" Color="Color.Inherit" />
-                </MudBadge>
+                <MudTooltip Text="@ThemeToggleText">
+                    <MudIconButton Icon="@ThemeToggleIcon"
+                                   Color="Color.Inherit"
+                                   AriaLabel="@ThemeToggleLabel"
+                                   OnClick="ToggleThemeAsync" />
+                </MudTooltip>
 
-                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="ms-3" OnClick="LogoutAsync">
+                <MudTooltip Text="查看现场报警">
+                    <MudBadge Content="@("!")" Color="Color.Error" Overlap="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.NotificationsActive"
+                                       Color="Color.Inherit"
+                                       AriaLabel="查看现场报警"
+                                       Href="/andon" />
+                    </MudBadge>
+                </MudTooltip>
+
+                <MudMenu Icon="@Icons.Material.Filled.AddCircleOutline"
+                         Color="Color.Inherit"
+                         AriaLabel="打开快捷操作"
+                         AnchorOrigin="Origin.BottomRight"
+                         TransformOrigin="Origin.TopRight">
+                    <MudMenuItem Href="/production" Icon="@Icons.Material.Filled.Assignment">工单管理</MudMenuItem>
+                    <MudMenuItem Href="/kit-check" Icon="@Icons.Material.Filled.FactCheck">齐套检查</MudMenuItem>
+                    <MudMenuItem Href="/start-production" Icon="@Icons.Material.Filled.PlayArrow">开工管理</MudMenuItem>
+                    <MudMenuItem Href="/traceability" Icon="@Icons.Material.Filled.Search">追溯查询</MudMenuItem>
+                </MudMenu>
+
+                <MudButton Variant="Variant.Text" Color="Color.Inherit" Class="mes-user-action" OnClick="LogoutAsync">
                     <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" Class="mr-1" />
                     退出
-                </MudChip>
+                </MudButton>
             </Authorized>
             <NotAuthorized>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="GoLogin">
+                <MudTooltip Text="@ThemeToggleLabel">
+                    <MudIconButton Icon="@ThemeToggleIcon"
+                                   Color="Color.Inherit"
+                                   AriaLabel="@ThemeToggleLabel"
+                                   OnClick="ToggleThemeAsync" />
+                </MudTooltip>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" Class="ms-2" OnClick="GoLogin">
                     登录
                 </MudButton>
             </NotAuthorized>
@@ -50,7 +84,7 @@
         <MudDrawerHeader Class="px-4 py-4">
             <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
                 <div class="mes-brand-mark">
-                    <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" Style="color:#0B0B12;" />
+                    <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" Style="color:var(--mes-bg);" />
                 </div>
                 <MudStack Spacing="0">
                     <MudText Typo="Typo.subtitle1" Style="font-weight:600;">生产执行中台</MudText>
@@ -59,38 +93,12 @@
             </MudStack>
         </MudDrawerHeader>
 
-        <MudNavMenu Class="px-3">
-            <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
-                仪表盘
-            </MudNavLink>
-            <MudNavGroup Title="生产工单" Icon="@Icons.Material.Filled.Description" Expanded>
-                <MudNavLink Href="production" Icon="@Icons.Material.Filled.List">
-                    工单列表
-                </MudNavLink>
-                <MudNavLink Href="production/kanban" Icon="@Icons.Material.Filled.ViewKanban">
-                    工单看板
-                </MudNavLink>
-            </MudNavGroup>
-            <MudNavLink Href="material" Icon="@Icons.Material.Filled.Inventory2">
-                物料管理
-            </MudNavLink>
-            <MudNavLink Href="traceability" Icon="@Icons.Material.Filled.Route">
-                全链路追溯
-            </MudNavLink>
-            <MudNavLink Href="spc" Icon="@Icons.Material.Filled.Analytics">
-                SPC 质量
-            </MudNavLink>
-            <MudNavLink Href="oee" Icon="@Icons.Material.Filled.Timeline">
-                设备 OEE
-            </MudNavLink>
-            <MudNavLink Href="andon" Icon="@Icons.Material.Filled.Campaign">
-                Andon 报警
-            </MudNavLink>
-        </MudNavMenu>
+        <NavMenu />
     </MudDrawer>
 
-    <MudMainContent Class="mes-main">
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-8">
+    <MudMainContent Class="mes-main" id="main-content">
+        <a class="mes-skip-link" href="#main-content">跳到主要内容</a>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-8 mes-content">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -101,6 +109,14 @@
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
+    private string ThemeToggleText => Theme.IsDark ? "切换亮色主题（车间终端）" : "切换暗色主题";
+
+    private string ThemeToggleLabel => Theme.IsDark ? "切换亮色主题" : "切换暗色主题";
+
+    private string ThemeToggleIcon => Theme.IsDark
+        ? Icons.Material.Filled.LightMode
+        : Icons.Material.Filled.DarkMode;
+
     private void GoLogin() => Navigation.NavigateTo("/login");
 
     private async Task LogoutAsync()
@@ -109,18 +125,49 @@
         Navigation.NavigateTo("/login", forceLoad: true);
     }
 
+    private async Task ToggleThemeAsync()
+    {
+        await Theme.ToggleAsync();
+    }
+
+    protected override void OnInitialized()
+    {
+        Theme.Changed += StateHasChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Theme.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+
     private string GetPageTitle()
     {
         var path = Navigation.ToBaseRelativePath(Navigation.Uri);
         return path switch
         {
             "" => "总览与告警",
+            "dashboard" => "生产看板",
             "production" => "生产工单管理",
+            "production/kanban" => "工单看板",
+            "kit-check" => "齐套检查",
+            "start-production" => "开工管理",
+            "quality-review" => "完工质量审核",
             "material" => "物料与批次",
             "traceability" => "追溯链路",
+            "inventory" => "线边库存",
             "spc" => "SPC 质量控制",
+            "sqe" => "供应商质量管理",
             "oee" => "设备效率",
+            "jit-kanban" => "JIT 拉动看板",
             "andon" => "现场报警",
+            "spare-parts" => "备件管理",
+            "routing" => "工艺路线管理",
+            "scheduling" => "生产排程",
+            "login" => "登录",
             _ => "制造执行系统"
         };
     }

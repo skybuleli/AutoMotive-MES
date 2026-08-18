@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using MesAdmin.Domain.Models;
+using ZLogger;
 
 namespace MesAdmin.Web.Services;
 
@@ -69,11 +70,11 @@ public sealed class OeeHubClient : IAsyncDisposable
             if (_disposed || _connection.State == HubConnectionState.Connected) return;
 
             await _connection.StartAsync(ct);
-            _logger.LogInformation("OEE Hub 已连接：{Url}", _connection);
+            _logger.ZLogInformation($"OEE Hub 已连接：{_connection}");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "OEE Hub 连接失败（将在后台自动重连）");
+            _logger.ZLogWarning(ex, $"OEE Hub 连接失败（将在后台自动重连）");
         }
         finally
         {

@@ -5,23 +5,18 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject MesApiClient Api
 @inject NavigationManager Navigation
+@inject ILogger<SparePart> PageLogger
 
 <PageTitle>备件管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T2.18 · Spare Parts Management</MudText>
-                <MudText Typo="Typo.h4">备件管理</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">备件库存看板 · 出入库管理 · 采购申请审批</MudText>
-            </MudStack>
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
-                               OnClick="() => LoadAllAsync()" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T2.18 · Spare Parts Management" Title="备件管理"
+                  Description="备件库存看板 · 出入库管理 · 采购申请审批">
+        <HeaderActions>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadAllAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -30,7 +25,7 @@
         </MudAlert>
     }
 
-    <MudPaper Class="pa-4" Style="border-radius:12px;">
+    <MudPaper Class="module-card pa-4">
         <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
                  CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
 
@@ -94,7 +89,7 @@
                         <div class="inventory-grid">
                             @foreach (var part in _allParts)
                             {
-                                <MudPaper Class="glass-kpi-card" Style="@GetStockCardStyle(part.StockLevel)">
+                                <MudPaper Class="@($"glass-kpi-card {GetStockCardAccent(part.StockLevel)}")">
                                     <MudStack Spacing="2">
                                         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                             <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
@@ -716,6 +711,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载备件数据失败");
             _message = $"加载数据失败：{ex.Message}";
             _isError = true;
         }
@@ -735,6 +731,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载采购申请失败");
             _message = $"加载采购申请失败：{ex.Message}";
             _isError = true;
         }
@@ -819,6 +816,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "备件补货失败");
             _message = $"补货失败：{ex.Message}";
             _isError = true;
         }
@@ -855,6 +853,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "备件盘点更新失败");
             _message = $"盘点更新失败：{ex.Message}";
             _isError = true;
         }
@@ -894,6 +893,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "创建备件失败");
             _message = $"创建备件失败：{ex.Message}";
             _isError = true;
         }
@@ -918,6 +918,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载备件使用记录失败");
             _message = $"加载使用记录失败：{ex.Message}";
             _isError = true;
         }
@@ -961,6 +962,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "创建采购申请失败");
             _message = $"创建采购申请失败：{ex.Message}";
             _isError = true;
         }
@@ -996,6 +998,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "取消采购申请失败");
             _message = $"取消采购申请失败：{ex.Message}";
             _isError = true;
         }
@@ -1031,6 +1034,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "审批采购申请失败");
             _message = $"审批采购申请失败：{ex.Message}";
             _isError = true;
         }
@@ -1055,6 +1059,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, $"{part.MaterialCode} 库存检查失败");
             _message = $"{part.MaterialCode} 库存检查失败：{ex.Message}";
             _isError = true;
         }
@@ -1108,11 +1113,11 @@
         _ => Color.Default
     };
 
-    private static string GetStockCardStyle(string level) => level switch
+    private static string GetStockCardAccent(string level) => level switch
     {
-        "Red" => "border-left: 4px solid var(--mud-palette-error);",
-        "Yellow" => "border-left: 4px solid var(--mud-palette-warning);",
-        "Normal" => "border-left: 4px solid var(--mud-palette-success);",
+        "Red" => "accent-left-error",
+        "Yellow" => "accent-left-warning",
+        "Normal" => "accent-left-success",
         _ => ""
     };
 

@@ -6,35 +6,30 @@
 @using MesAdmin.Web.Services
 @inject IHttpClientFactory HttpFactory
 @inject AuthService Auth
+@inject ILogger<InventoryMonitoring> PageLogger
 
 <PageTitle>线边库存监控 - AutoMES</PageTitle>
 
-<MudStack Spacing="3" Class="oee-page">
-    <MudPaper Class="oee-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-            <MudStack Spacing="1">
-                <MudText Typo="Typo.overline" Class="section-kicker">T1.13 · Line-Side Inventory</MudText>
-                <MudText Typo="Typo.h4">线边库存实时监控</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">每 30 秒自动刷新 · 阈值配置后生效</MudText>
-            </MudStack>
-            <MudStack Row Spacing="3" AlignItems="AlignItems.Center">
-                @if (_data is not null)
-                {
-                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
-                        红色报警 @_data.RedCount
-                    </MudChip>
-                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
-                        黄色预警 @_data.YellowCount
-                    </MudChip>
-                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
-                        正常 @(_data.Items.Count - _data.YellowCount - _data.RedCount)
-                    </MudChip>
-                }
-                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
-                               OnClick="() => LoadDataAsync()" Size="Size.Small" />
-            </MudStack>
-        </MudStack>
-    </MudPaper>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="T1.13 · Line-Side Inventory" Title="线边库存实时监控"
+                  Description="每 30 秒自动刷新 · 阈值配置后生效">
+        <HeaderActions>
+            @if (_data is not null)
+            {
+                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                    红色报警 @_data.RedCount
+                </MudChip>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">
+                    黄色预警 @_data.YellowCount
+                </MudChip>
+                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                    正常 @(_data.Items.Count - _data.YellowCount - _data.RedCount)
+                </MudChip>
+            }
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadDataAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (_errorMessage is not null)
     {
@@ -45,35 +40,19 @@
 
     @if (_isLoading && _data is null)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
-                <MudText Typo="Typo.body2" Class="section-copy">加载库存数据...</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="true" Text="加载库存数据..." />
     }
     else if (_data is not null && _data.Items.Count == 0)
     {
-        <MudPaper Class="glass-kpi-card pa-8">
-            <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Large" Color="Color.Primary" />
-                <MudText Typo="Typo.body1">暂无库存监控数据</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">请先在系统中配置物料库存阈值，启用后本页面将自动显示各物料当前库存状态。</MudText>
-            </MudStack>
-        </MudPaper>
+        <MesStateCard Loading="false" Icon="@Icons.Material.Filled.Inventory2"
+                      Text="暂无库存监控数据"
+                      Hint="请先在系统中配置物料库存阈值，启用后本页面将自动显示各物料当前库存状态。" />
     }
     else if (_data is not null)
     {
         <div class="inventory-grid">
             @foreach (var item in _data.Items)
             {
-                var alertColor = item.AlertLevel switch
-                {
-                    "Red" => "var(--mud-palette-error, #ef4444)",
-                    "Yellow" => "var(--mud-palette-warning, #fbbf24)",
-                    _ => "var(--mud-palette-success, #4ade80)"
-                };
-
                 var isRed = item.AlertLevel == "Red";
                 var isYellow = item.AlertLevel == "Yellow";
 
@@ -81,7 +60,7 @@
                     <MudStack Spacing="2">
                         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                             <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
-                                <span class="status-dot" style="background: @alertColor; box-shadow: 0 0 8px @alertColor;"></span>
+                                <MesStatusDot Status="@(isRed ? MesDotStatus.Alarm : isYellow ? MesDotStatus.Idle : MesDotStatus.Running)" />
                                 <MudText Typo="Typo.subtitle1" Style="font-weight:600;">
                                     @item.MaterialCode
                                     @if (item.IsCritical)
@@ -101,7 +80,7 @@
                         <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
                             <MudStack Spacing="0">
                                 <MudText Typo="Typo.caption" Class="kpi-label">当前库存</MudText>
-                                <MudText Typo="Typo.h4" Style="@($"color:{alertColor};font-weight:600")">
+                                <MudText Typo="Typo.h4" Style="@($"color:{(isRed ? "var(--mes-err)" : isYellow ? "var(--mes-warn)" : "var(--mes-ok)")};font-weight:600")">
                                     @item.CurrentQuantity.ToString("F0")
                                     <MudText Typo="Typo.caption" Style="display:inline; color: var(--mud-palette-text-secondary);">@item.Unit</MudText>
                                 </MudText>
@@ -155,15 +134,15 @@
         await LoadDataAsync();
         _countdown = 30;
 
-        _timer = new Timer(async _ =>
+        _timer = new Timer(_ =>
         {
             _countdown--;
             if (_countdown <= 0)
             {
                 _countdown = 30;
-                await LoadDataAsync();
+                _ = LoadDataAsync();
             }
-            await InvokeAsync(StateHasChanged);
+            _ = InvokeAsync(StateHasChanged);
         }, null, 1000, 1000);
     }
 
@@ -183,6 +162,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载库存数据失败");
             _errorMessage = $"加载库存数据失败：{ex.Message}";
         }
         finally

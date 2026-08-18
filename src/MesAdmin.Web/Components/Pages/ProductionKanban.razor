@@ -4,22 +4,19 @@
 @using MesAdmin.Web.Services
 @inject MesApiClient Api
 @inject NavigationManager Navigation
+@inject ILogger<ProductionKanban> PageLogger
 
 <PageTitle>工单看板 - AutoMES</PageTitle>
 
-<MudStack Spacing="5">
-    <MudPaper Elevation="0" Class="mes-toolbar pa-5">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-            <MudStack Spacing="1">
-                <MudText Class="section-kicker">PRODUCTION · 工单看板</MudText>
-                <MudText Typo="Typo.h5" Style="font-weight:700;">生产工单看板</MudText>
-                <MudText Typo="Typo.body2" Class="section-copy">按状态泳道浏览工单流转 · 点击卡片查看详情</MudText>
-            </MudStack>
+<MudStack Spacing="3">
+    <MesPageHeader Kicker="PRODUCTION · 工单看板" Title="生产工单看板"
+                  Description="按状态泳道浏览工单流转 · 点击卡片查看详情">
+        <HeaderActions>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="ReloadAsync">
                 刷新
             </MudButton>
-        </MudStack>
-    </MudPaper>
+        </HeaderActions>
+    </MesPageHeader>
 
     @if (!string.IsNullOrWhiteSpace(_loadError))
     {
@@ -87,6 +84,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "加载看板数据失败");
             _loadError = $"加载失败：{ex.Message}";
             StateHasChanged();
         }
@@ -114,8 +112,9 @@
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
+                PageLogger.LogWarning(ex, $"加载 {label} 看板列失败");
                 columns.Add(new KanbanColumn(label, key, []));
             }
         }

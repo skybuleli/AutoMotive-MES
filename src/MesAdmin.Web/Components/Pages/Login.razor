@@ -4,20 +4,23 @@
 @using MesAdmin.Web.Services
 @inject AuthService Auth
 @inject NavigationManager Navigation
+@inject ILogger<Login> PageLogger
 
 <PageTitle>登录 - AutoMES</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="d-flex align-center justify-center">
-    <MudPaper Elevation="4" Class="pa-8 rounded-xl" Style="width: 100%; max-width: 420px;">
+    <MudPaper Elevation="0" Class="login-card">
         <MudStack Spacing="4" AlignItems="AlignItems.Center">
-            <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
-                <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" />
-            </MudAvatar>
+            <div class="mes-brand-mark">
+                <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" Style="color:var(--mes-bg);" />
+            </div>
 
-            <MudText Typo="Typo.h5">AutoMES 登录</MudText>
-            <MudText Typo="Typo.body2" Class="text-secondary">
-                ESP 总成工厂 · 制造执行中台
-            </MudText>
+            <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h5" Style="font-weight:600;">AutoMES 登录</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy">
+                    ESP 总成工厂 · 制造执行中台
+                </MudText>
+            </MudStack>
 
             <MudTextField @bind-Value="_username"
                           Label="用户名"
@@ -108,8 +111,13 @@
                 _error = "用户名或密码错误";
             }
         }
+        catch (HttpRequestException ex) when (ex.HttpRequestError == HttpRequestError.ConnectionError)
+        {
+            _error = "无法连接后端 API 服务，请先启动：dotnet run --project src/MesAdmin.Api";
+        }
         catch (Exception ex)
         {
+            PageLogger.LogError(ex, "登录失败");
             _error = $"登录异常：{ex.Message}";
         }
         finally
