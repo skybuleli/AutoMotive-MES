@@ -10,10 +10,15 @@
     <base href="/" />
     <ResourcePreloader />
     <script>
-        // 首帧恢复主题偏好（暗色为默认），必须在样式表加载前执行以避免闪烁
+        // 首帧恢复主题偏好（暗色为默认），必须在样式表加载前执行以避免闪烁；
+        // body 尚未解析，内联背景在 DOMContentLoaded 时设置（防止暗色默认下的白闪）。
         try {
-            if (localStorage.getItem('mes.theme') === 'light')
+            var light = localStorage.getItem('mes.theme') === 'light';
+            if (light)
                 document.documentElement.setAttribute('data-mes-theme', 'light');
+            document.addEventListener('DOMContentLoaded', function () {
+                document.body.style.background = light ? '#F5F5FA' : '#191925';
+            });
         } catch (e) { console.debug('主题偏好读取失败', e); }
     </script>
     <link rel="stylesheet" href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" />
@@ -27,7 +32,7 @@
     <HeadOutlet />
 </head>
 
-<body style="background:#191925;">
+<body>
     <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <ReconnectModal />
     <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>

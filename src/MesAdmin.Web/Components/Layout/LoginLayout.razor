@@ -13,3 +13,18 @@
 <div class="login-layout">
     @Body
 </div>
+
+@code {
+    /// <summary>
+    /// 登录页无 AppBar/主题按钮，必须在电路就绪后恢复用户偏好，
+    /// 否则 MudThemeProvider 恒为暗色调色板，与 CSS 亮色令牌不一致。
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Theme.InitializeAsync();
+            StateHasChanged();
+        }
+    }
+}
