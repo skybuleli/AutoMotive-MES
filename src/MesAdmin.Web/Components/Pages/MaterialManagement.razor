@@ -10,7 +10,7 @@
 
 <PageTitle>物料管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     @* ── 工具栏 ── *@
     <MesPageHeader Kicker="T1.12 - T1.18 · Material Management" Title="物料管理"
                   Description="来料入库 → 批次管理 → 投料绑定 · 全链路物料追踪">
@@ -36,8 +36,8 @@
            Tab 1: 批次管理
            ═══════════════════════════════════════════ *@
         <MudTabPanel Text="批次管理" Icon="@Icons.Material.Filled.Inventory2">
-            <MudPaper Class="glass-kpi-card pa-4 mt-3">
-                <MudStack Spacing="3">
+            <MudPaper Class="glass-kpi-card pa-4 mt-2">
+                <MudStack Spacing="2">
                     @* 筛选行 *@
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudTextField @bind-Value="_batchFilter" Label="物料编码筛选"
@@ -176,8 +176,8 @@
            Tab 2: 来料入库（GS1-128扫码）
            ═══════════════════════════════════════════ *@
         <MudTabPanel Text="来料入库" Icon="@Icons.Material.Filled.QrCodeScanner">
-            <MudPaper Class="glass-kpi-card pa-4 mt-3">
-                <MudStack Spacing="3">
+            <MudPaper Class="glass-kpi-card pa-4 mt-2">
+                <MudStack Spacing="2">
                     <MudStack Spacing="1">
                         <MudText Typo="Typo.subtitle1" Class="section-kicker">
                             <MudIcon Icon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Small" /> GS1-128 条码入库
@@ -187,7 +187,7 @@
                         </MudText>
                     </MudStack>
 
-                    <MudGrid Spacing="3">
+                    <MudGrid Spacing="2">
                         <MudItem xs="12" md="6">
                             <MudTextField @bind-Value="_receive.Barcode" Label="GS1-128 条码"
                                           Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -256,8 +256,8 @@
            Tab 3: 投料绑定
            ═══════════════════════════════════════════ *@
         <MudTabPanel Text="投料绑定" Icon="@Icons.Material.Filled.Link">
-            <MudPaper Class="glass-kpi-card pa-4 mt-3">
-                <MudStack Spacing="3">
+            <MudPaper Class="glass-kpi-card pa-4 mt-2">
+                <MudStack Spacing="2">
                     <MudStack Spacing="1">
                         <MudText Typo="Typo.subtitle1" Class="section-kicker">
                             <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" /> 投料批次绑定
@@ -267,7 +267,7 @@
                         </MudText>
                     </MudStack>
 
-                    <MudGrid Spacing="3">
+                    <MudGrid Spacing="2">
                         <MudItem xs="12" md="4">
                             <MudTextField @bind-Value="_bind.OrderId" Label="工单 Id"
                                           Variant="Variant.Outlined" Margin="Margin.Dense" />

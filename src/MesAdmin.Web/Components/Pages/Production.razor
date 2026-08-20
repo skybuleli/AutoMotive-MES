@@ -8,7 +8,7 @@
 
 <PageTitle>生产工单 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="M01 · Production Order" Title="生产工单">
         <HeaderActions>
             <MudSelect T="string" Label="状态" Variant="Variant.Outlined" Dense
@@ -32,10 +32,10 @@
         </MudAlert>
     }
 
-    <MudGrid Spacing="3">
+    <MudGrid Spacing="2">
         <MudItem xs="12" lg="8">
-            <MudPaper Class="module-card order-list-card pa-5">
-                <MudStack Spacing="3">
+            <MudPaper Class="module-card order-list-card pa-4">
+                <MudStack Spacing="2">
                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudStack Spacing="0">
                             <MudText Typo="Typo.h6">工单列表</MudText>
@@ -99,8 +99,8 @@
         </MudItem>
 
         <MudItem xs="12" lg="4">
-            <MudPaper Class="module-card pa-5">
-                <MudStack Spacing="3">
+            <MudPaper Class="module-card pa-4">
+                <MudStack Spacing="2">
                     <MudText Typo="Typo.h6">创建工单</MudText>
 
                     <MudSelect T="string" Label="产品编码" Variant="Variant.Outlined" Dense @bind-Value="_productCode">

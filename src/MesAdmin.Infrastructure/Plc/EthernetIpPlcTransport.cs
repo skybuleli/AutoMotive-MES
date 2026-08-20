@@ -328,14 +328,22 @@ public sealed class EthernetIpPlcTransport : IPlcTransport
     public Task<object> ReadRegisterAsync(string address, string tag, CancellationToken ct = default)
     {
         if (_useRealClient)
-            _logger.ZLogWarning($"EtherNet/IP 直接读寄存器 {address}.{tag} 需在活动连接中执行（建议通过实时订阅）");
+        {
+            // 生产模式：禁止静默返回 0 —— 缓存未命中必须显式失败（OpcUaPlcClient 已先查实时快照）
+            throw new NotSupportedException(
+                $"EtherNet/IP 直接读寄存器 {address}.{tag} 不受支持（生产模式）；请通过实时订阅读取，或检查设备是否已连接。");
+        }
         return Task.FromResult<object>(0);
     }
 
     public Task WriteRegisterAsync(string address, string tag, object value, CancellationToken ct = default)
     {
         if (_useRealClient)
-            _logger.ZLogWarning($"EtherNet/IP 直接写寄存器 {address}.{tag} 需在活动连接中执行");
+        {
+            // 生产模式：禁止静默 no-op —— 未实现真实写入时必须显式失败
+            throw new NotSupportedException(
+                $"EtherNet/IP 直接写寄存器 {address}.{tag} 尚未实现（生产模式）；请通过 PLC 侧组态写入或实现 CIP Write Tag 服务（0x4D）。");
+        }
         return Task.CompletedTask;
     }
 

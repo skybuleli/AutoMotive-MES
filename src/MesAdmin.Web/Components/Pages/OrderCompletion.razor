@@ -11,7 +11,7 @@
 
 <PageTitle>完工审核 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     @* ── 工具栏 ── *@
     <MesPageHeader Kicker="T1.8 · Quality Review" Title="完工审核"
                   Description="质量工程师审核放行 → 成品入库 → 追溯标签打印">
@@ -42,13 +42,13 @@
         <MudTabPanel Text="待审核工单" Icon="@Icons.Material.Filled.RateReview">
             @if (_isLoading && _pendingOrders is null)
             {
-                <div class="mt-3">
+                <div class="mt-2">
                     <MesStateCard Loading="true" Text="加载待审核工单..." />
                 </div>
             }
             else if (_pendingOrders is not null && _pendingOrders.Count == 0)
             {
-                <div class="mt-3">
+                <div class="mt-2">
                     <MesStateCard Loading="false" Icon="@Icons.Material.Filled.CheckCircle"
                                   Text="暂无待审核工单"
                                   Hint="所有执行中工单已完成 31 工序编排，等待质量工程师审核放行。">
@@ -60,7 +60,7 @@
             }
             else if (_pendingOrders is not null)
             {
-                <MudStack Spacing="3" Class="mt-3">
+                <MudStack Spacing="2" Class="mt-2">
                     @foreach (var order in _pendingOrders)
                     {
                         var ops = _operations.GetValueOrDefault(order.Id);
@@ -153,7 +153,7 @@
            Tab 2: 已完工记录（Completed + GoodsReceipt）
            ═══════════════════════════════════════════ *@
         <MudTabPanel Text="已完工记录" Icon="@Icons.Material.Filled.AssignmentTurnedIn">
-            <MudPaper Class="glass-kpi-card pa-4 mt-3">
+            <MudPaper Class="glass-kpi-card pa-4 mt-2">
                 @if (_completedOrders is not null && _completedOrders.Count == 0)
                 {
                     <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-6">

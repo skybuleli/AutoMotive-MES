@@ -22,7 +22,8 @@ public sealed partial record CreateIqcRecordCommand(
     int SampleSize,
     int AcceptNumber,
     int RejectNumber,
-    string? AqlScheme) : IWriteCommand<QualityRecord>;
+    string? AqlScheme,
+    List<MeasuredCharacteristic> Characteristics) : IWriteCommand<QualityRecord>;
 
 internal sealed class CreateIqcRecordHandler(
     IQualityRecordRepository repo) : ICommandHandler<CreateIqcRecordCommand, QualityRecord>
@@ -34,7 +35,7 @@ internal sealed class CreateIqcRecordHandler(
             cmd.MaterialCode, cmd.MaterialName, cmd.BatchNumber,
             cmd.SupplierCode, cmd.SupplierName, cmd.InspectorId,
             cmd.SampleSize, cmd.AcceptNumber, cmd.RejectNumber,
-            cmd.AqlScheme);
+            cmd.AqlScheme, cmd.Characteristics);
 
         await repo.AddAsync(record, ct);
         await repo.SaveChangesAsync(ct);

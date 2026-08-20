@@ -14,6 +14,10 @@ public class SapRejectionRepository(MesDbContext db) : ISapRejectionRepository
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id, ct);
 
+    public Task<SapRejectionRecord?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default)
+        => db.SapRejectionRecords
+            .FirstOrDefaultAsync(r => r.Id == id, ct);
+
     public Task<List<SapRejectionRecord>> GetPendingWritebackAsync(CancellationToken ct = default)
         => db.SapRejectionRecords
             .AsNoTracking()

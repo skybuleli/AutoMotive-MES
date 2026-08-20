@@ -11,7 +11,7 @@
 
 <PageTitle>开工管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="T1.2 · Start Production" Title="开工管理"
                   Description="齐套通过 ⭢ 开工 ⭢ Saga 31 工序编排 ⭢ 完工">
         <HeaderActions>
@@ -44,7 +44,7 @@
     {
         @* ── 待开工工单（Released） ── *@
         <MudPaper Class="glass-kpi-card pa-4">
-            <MudStack Spacing="3">
+            <MudStack Spacing="2">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                     <MudText Typo="Typo.subtitle1" Class="section-kicker">
                         <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" /> 待开工
@@ -98,15 +98,22 @@
                             <MudTd DataLabel="BOM">@context.BomVersion</MudTd>
                             <MudTd DataLabel="创建时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
                             <MudTd DataLabel="操作">
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                          Disabled="@IsStarting(context.Id)"
-                                          OnClick="() => StartOrderAsync(context)">
-                                    @if (IsStarting(context.Id))
-                                    {
-                                        <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Class="mr-1" />
-                                    }
-                                    <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" /> 开工
-                                </MudButton>
+                                <MudStack Row Spacing="1">
+                                    <MudButton Variant="Variant.Text" Color="Color.Info" Size="Size.Small"
+                                               Href="@($"/first-article?orderId={context.Id}")"
+                                               StartIcon="@Icons.Material.Filled.FactCheck">
+                                        首件检验
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                              Disabled="@IsStarting(context.Id)"
+                                              OnClick="() => StartOrderAsync(context)">
+                                        @if (IsStarting(context.Id))
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Class="mr-1" />
+                                        }
+                                        <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small" /> 开工
+                                    </MudButton>
+                                </MudStack>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
@@ -118,7 +125,7 @@
         @if (_inProgressOrders is not null && _inProgressOrders.Count > 0)
         {
             <MudPaper Class="glass-kpi-card pa-4" Style="margin-top:12px;">
-                <MudStack Spacing="3">
+                <MudStack Spacing="2">
                     <MudText Typo="Typo.subtitle1" Class="section-kicker">
                         <MudIcon Icon="@Icons.Material.Filled.PrecisionManufacturing" Size="Size.Small" /> 执行中
                     </MudText>

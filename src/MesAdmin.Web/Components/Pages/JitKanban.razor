@@ -10,7 +10,7 @@
 
 <PageTitle>JIT 看板拉动 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="T1.14 · JIT Kanban" Title="JIT 看板拉动"
                   Description="空料箱扫码 → 电子看板 → 仓库 PDA → 送达确认">
         <HeaderActions>
@@ -33,153 +33,252 @@
     }
     else if (_pending is not null)
     {
-        @* ── 待处理信号看板 ── *@
-        <MudText Typo="Typo.subtitle1" Class="section-kicker">
-            <MudIcon Icon="@Icons.Material.Filled.PendingActions" Size="Size.Small" /> 待处理拉动
-        </MudText>
-
-        @if (_pending.Count == 0)
-        {
-            <MesStateCard Loading="false" Icon="@Icons.Material.Filled.CheckCircle"
-                          Text="暂无待处理 JIT 拉动信号" Hint="所有物料库存充足，线边库存正常" />
-        }
-        else
-        {
-            <div class="inventory-grid">
-                @foreach (var signal in _pending)
-                {
-                    var elapsed = (DateTimeOffset.UtcNow - signal.CreatedAt);
-                    var isUrgent = elapsed.TotalMinutes > 10;
-
-                    <MudPaper Class="@($"glass-kpi-card {(isUrgent ? "andon-pulse" : "")}")">
-                        <MudStack Spacing="2">
-                            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                                <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
-                                    <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small"
-                                             Color="@(isUrgent ? Color.Error : Color.Warning)" />
-                                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@signal.MaterialCode</MudText>
-                                </MudStack>
-                                <MudChip T="string" Color="@(isUrgent ? Color.Error : Color.Warning)"
-                                         Size="Size.Small" Variant="Variant.Filled">
-                                    @(elapsed.TotalMinutes.ToString("F0")) 分钟
-                                </MudChip>
-                            </MudStack>
-
-                            <MudText Typo="Typo.body2">@signal.MaterialName</MudText>
-
-                            <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
-                                <MudStack Spacing="0">
-                                    <MudText Typo="Typo.caption" Class="kpi-label">需求数量</MudText>
-                                    <MudText Typo="Typo.h4" Color="Color.Warning" Style="font-weight:600;">
-                                        @signal.ShortageQuantity.ToString("F0")
-                                        <MudText Typo="Typo.caption" Style="display:inline;color:var(--mud-palette-text-secondary);">@signal.Unit</MudText>
-                                    </MudText>
-                                </MudStack>
-                                <MudStack Spacing="0">
-                                    <MudText Typo="Typo.caption" Class="kpi-label">目标工位</MudText>
-                                    <MudText Typo="Typo.body2">@signal.TargetStation</MudText>
-                                </MudStack>
-                                <MudStack Spacing="0">
-                                    <MudText Typo="Typo.caption" Class="kpi-label">工单</MudText>
-                                    <MudText Typo="Typo.body2">@signal.OrderNumber</MudText>
-                                </MudStack>
-                            </MudStack>
-
-                            <MudStack Row Spacing="2" Justify="Justify.FlexEnd">
-                                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
-                                          OnClick="() => OpenDeliveryDialog(signal)">
-                                    <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" /> 送达确认
-                                </MudButton>
-                                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
-                                          OnClick="() => OpenCancelDialog(signal)">
-                                    取消
-                                </MudButton>
-                            </MudStack>
-
-                            <MudText Typo="Typo.caption" Class="kpi-sub">
-                                创建：@signal.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")
-                                @if (isUrgent) { <span style="color:var(--mud-palette-error);"> ⚠ 超时</span> }
-                            </MudText>
-                        </MudStack>
-                    </MudPaper>
-                }
-            </div>
-        }
-
-        @* ── 手动创建信号 ── *@
-        <MudPaper Class="glass-kpi-card pa-4 mt-3">
-            <MudStack Spacing="2">
-                <MudText Typo="Typo.subtitle2" Class="section-kicker">
-                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /> 手动创建 JIT 拉动
-                </MudText>
-                <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-                    <MudTextField @bind-Value="_newSignal.MaterialCode" Label="物料编码"
-                                  Variant="Variant.Outlined" Margin="Margin.Dense" For="@(() => _newSignal.MaterialCode)"
-                                  Style="min-width:160px;" />
-                    <MudTextField @bind-Value="_newSignal.MaterialName" Label="物料名称"
-                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:160px;" />
-                    <MudTextField @bind-Value="_newSignal.QuantityStr" Label="数量"
-                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:80px;" />
-                    <MudTextField @bind-Value="_newSignal.Unit" Label="单位"
-                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:60px;" />
-                    <MudTextField @bind-Value="_newSignal.TargetStation" Label="目标工位"
-                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:120px;" />
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                              Disabled="@_isCreating" OnClick="() => CreateSignalAsync()">
-                        <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" /> 发送拉动
-                    </MudButton>
+        @* ── 顶部摘要条（折叠时关键信息仍可见）── *@
+        <MudPaper Class="glass-kpi-card pa-3">
+            <MudStack Row Spacing="4" Justify="Justify.SpaceAround" Wrap="Wrap.Wrap">
+                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h5" Color="Color.Warning" Style="font-weight:600;">@_pending.Count</MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">待处理拉动</MudText>
                 </MudStack>
-                @if (!string.IsNullOrEmpty(_createError))
-                {
-                    <MudText Typo="Typo.caption" Color="Color.Error">@_createError</MudText>
-                }
+                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h5" Color="Color.Error" Style="font-weight:600;">@_urgentCount</MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">超时(&gt;10分钟)</MudText>
+                </MudStack>
+                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h5" Color="Color.Success" Style="font-weight:600;">@_deliveredToday</MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">今日已送达</MudText>
+                </MudStack>
+                <MudStack Spacing="0" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h5" Style="font-weight:600;">@(_history?.Total ?? 0)</MudText>
+                    <MudText Typo="Typo.caption" Class="kpi-sub">累计记录</MudText>
+                </MudStack>
             </MudStack>
         </MudPaper>
 
-        @* ── 已送达记录 ── *@
-        @if (_history?.Items.Count > 0)
-        {
-            <MudText Typo="Typo.subtitle1" Class="section-kicker" Style="margin-top:8px;">
-                <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" /> 最近送达记录
-            </MudText>
-            <MudPaper Class="glass-kpi-card pa-4">
-                <MudTable Items="@_history.Items" Dense Hover Class="mb-4">
-                    <ColGroup>
-                        <col style="width: 140px" />
-                        <col style="width: 120px" />
-                        <col style="width: 80px" />
-                        <col style="width: 100px" />
-                        <col style="width: 80px" />
-                        <col style="width: 110px" />
-                        <col />
-                    </ColGroup>
-                    <HeaderContent>
-                        <MudTh>物料编码</MudTh>
-                        <MudTh>物料名称</MudTh>
-                        <MudTh>数量</MudTh>
-                        <MudTh>目标工位</MudTh>
-                        <MudTh>状态</MudTh>
-                        <MudTh>送达确认</MudTh>
-                        <MudTh>时间</MudTh>
-                    </HeaderContent>
-                    <RowTemplate>
-                        <MudTd DataLabel="物料编码">@context.MaterialCode</MudTd>
-                        <MudTd DataLabel="物料名称">@context.MaterialName</MudTd>
-                        <MudTd DataLabel="数量">@context.ShortageQuantity.ToString("F0") @context.Unit</MudTd>
-                        <MudTd DataLabel="目标工位">@context.TargetStation</MudTd>
-                        <MudTd DataLabel="状态">
-                            <MudChip T="string" Size="Size.Small"
-                                     Color="@(context.Status=="Delivered"?Color.Success:context.Status=="Cancelled"?Color.Error:Color.Warning)"
-                                     Variant="Variant.Outlined">@context.Status</MudChip>
-                        </MudTd>
-                        <MudTd DataLabel="送达确认">@context.DeliveredBy</MudTd>
-                        <MudTd DataLabel="时间">
-                            @(context.DeliveredAt?.ToLocalTime().ToString("HH:mm:ss") ?? context.CreatedAt.ToLocalTime().ToString("HH:mm:ss"))
-                        </MudTd>
-                    </RowTemplate>
-                </MudTable>
-            </MudPaper>
-        }
+        @* ── 三个区域折叠面板（互斥，默认展开第 1 区）── *@
+        <MudExpansionPanels MultiExpansion="false" Class="mes-jit-panels">
+
+            @* ① 待处理信号看板（默认展开） *@
+            <MudExpansionPanel Expanded="@(_expandedSection == "pending")"
+                               ExpandedChanged="@((bool v) => OnSectionToggle("pending", v))">
+                <TitleContent>
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Class="flex-grow-1">
+                        <MudIcon Icon="@Icons.Material.Filled.PendingActions" Size="Size.Small" Color="Color.Warning" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">待处理拉动</MudText>
+                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">@_pending.Count</MudChip>
+                        @if (_urgentCount > 0)
+                        {
+                            <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                                @_urgentCount 超时
+                            </MudChip>
+                        }
+                        <div class="flex-grow-1"></div>
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                  OnClick="ToggleCreatePanel">
+                            <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /> 新建拉动
+                        </MudButton>
+                    </MudStack>
+                </TitleContent>
+                <ChildContent>
+                    @if (_pending.Count == 0)
+                    {
+                        <MesStateCard Loading="false" Icon="@Icons.Material.Filled.CheckCircle"
+                                      Text="暂无待处理 JIT 拉动信号" Hint="所有物料库存充足，线边库存正常" />
+                    }
+                    else
+                    {
+                        <div class="inventory-grid">
+                            @foreach (var signal in _pending)
+                            {
+                                var elapsed = (DateTimeOffset.UtcNow - signal.CreatedAt);
+                                var isUrgent = elapsed.TotalMinutes > 10;
+
+                                <MudPaper Class="@($"glass-kpi-card {(isUrgent ? "andon-pulse" : "")}")">
+                                    <MudStack Spacing="2">
+                                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                                <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small"
+                                                         Color="@(isUrgent ? Color.Error : Color.Warning)" />
+                                                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@signal.MaterialCode</MudText>
+                                            </MudStack>
+                                            <MudChip T="string" Color="@(isUrgent ? Color.Error : Color.Warning)"
+                                                     Size="Size.Small" Variant="Variant.Filled">
+                                                @(elapsed.TotalMinutes.ToString("F0")) 分钟
+                                            </MudChip>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.body2">@signal.MaterialName</MudText>
+
+                                        <MudStack Row Spacing="4" Justify="Justify.SpaceBetween">
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">需求数量</MudText>
+                                                <MudText Typo="Typo.h4" Color="Color.Warning" Style="font-weight:600;">
+                                                    @signal.ShortageQuantity.ToString("F0")
+                                                    <MudText Typo="Typo.caption" Style="display:inline;color:var(--mud-palette-text-secondary);">@signal.Unit</MudText>
+                                                </MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">目标工位</MudText>
+                                                <MudText Typo="Typo.body2">@signal.TargetStation</MudText>
+                                            </MudStack>
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.caption" Class="kpi-label">工单</MudText>
+                                                <MudText Typo="Typo.body2">@signal.OrderNumber</MudText>
+                                            </MudStack>
+                                        </MudStack>
+
+                                        <MudStack Row Spacing="2" Justify="Justify.FlexEnd">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                                      OnClick="() => OpenDeliveryDialog(signal)">
+                                                <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Small" /> 送达确认
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
+                                                      OnClick="() => OpenCancelDialog(signal)">
+                                                取消
+                                            </MudButton>
+                                        </MudStack>
+
+                                        <MudText Typo="Typo.caption" Class="kpi-sub">
+                                            创建：@signal.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")
+                                            @if (isUrgent) { <span style="color:var(--mud-palette-error);"> ⚠ 超时</span> }
+                                        </MudText>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                        </div>
+                    }
+
+                    @* ── 手动创建信号（面板内折叠，默认收起）── *@
+                    @if (_showCreateForm)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-4 mt-3">
+                            <MudStack Spacing="2">
+                                <MudText Typo="Typo.subtitle2" Class="section-kicker">
+                                    <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" /> 手动创建 JIT 拉动
+                                </MudText>
+                                <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                    <MudTextField @bind-Value="_newSignal.MaterialCode" Label="物料编码"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense" For="@(() => _newSignal.MaterialCode)"
+                                                  Style="min-width:150px;" />
+                                    <MudTextField @bind-Value="_newSignal.MaterialName" Label="物料名称"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:150px;" />
+                                    <MudTextField @bind-Value="_newSignal.QuantityStr" Label="数量"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:70px;" />
+                                    <MudTextField @bind-Value="_newSignal.Unit" Label="单位"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:56px;" />
+                                    <MudTextField @bind-Value="_newSignal.TargetStation" Label="目标工位"
+                                                  Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:110px;" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                              Disabled="@_isCreating" OnClick="() => CreateSignalAsync()">
+                                        <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" /> 发送拉动
+                                    </MudButton>
+                                </MudStack>
+                                @if (!string.IsNullOrEmpty(_createError))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Error">@_createError</MudText>
+                                }
+                            </MudStack>
+                        </MudPaper>
+                    }
+                </ChildContent>
+            </MudExpansionPanel>
+
+            @* ② 手动创建（默认折叠） *@
+            <MudExpansionPanel Expanded="@(_expandedSection == "create")"
+                               ExpandedChanged="@((bool v) => OnSectionToggle("create", v))">
+                <TitleContent>
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.AddCircle" Size="Size.Small" Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">手动创建 JIT 拉动</MudText>
+                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Outlined">快捷入口</MudChip>
+                    </MudStack>
+                </TitleContent>
+                <ChildContent>
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="pa-2">
+                        <MudTextField @bind-Value="_newSignal.MaterialCode" Label="物料编码"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" For="@(() => _newSignal.MaterialCode)"
+                                      Style="min-width:150px;" />
+                        <MudTextField @bind-Value="_newSignal.MaterialName" Label="物料名称"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:150px;" />
+                        <MudTextField @bind-Value="_newSignal.QuantityStr" Label="数量"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:70px;" />
+                        <MudTextField @bind-Value="_newSignal.Unit" Label="单位"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:56px;" />
+                        <MudTextField @bind-Value="_newSignal.TargetStation" Label="目标工位"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:110px;" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                  Disabled="@_isCreating" OnClick="() => CreateSignalAsync()">
+                            <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" /> 发送拉动
+                        </MudButton>
+                    </MudStack>
+                    @if (!string.IsNullOrEmpty(_createError))
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error">@_createError</MudText>
+                    }
+                </ChildContent>
+            </MudExpansionPanel>
+
+            @* ③ 最近送达记录（默认折叠） *@
+            <MudExpansionPanel Expanded="@(_expandedSection == "history")"
+                               ExpandedChanged="@((bool v) => OnSectionToggle("history", v))">
+                <TitleContent>
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" Color="Color.Default" />
+                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">最近送达记录</MudText>
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">
+                            @(_history?.Items.Count ?? 0) / @(_history?.Total ?? 0)
+                        </MudChip>
+                    </MudStack>
+                </TitleContent>
+                <ChildContent>
+                    @if (_history?.Items.Count > 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-4">
+                            <MudTable Items="@_history.Items" Dense Hover Class="mb-4">
+                                <ColGroup>
+                                    <col style="width: 140px" />
+                                    <col style="width: 120px" />
+                                    <col style="width: 80px" />
+                                    <col style="width: 100px" />
+                                    <col style="width: 80px" />
+                                    <col style="width: 110px" />
+                                    <col />
+                                </ColGroup>
+                                <HeaderContent>
+                                    <MudTh>物料编码</MudTh>
+                                    <MudTh>物料名称</MudTh>
+                                    <MudTh>数量</MudTh>
+                                    <MudTh>目标工位</MudTh>
+                                    <MudTh>状态</MudTh>
+                                    <MudTh>送达确认</MudTh>
+                                    <MudTh>时间</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="物料编码">@context.MaterialCode</MudTd>
+                                    <MudTd DataLabel="物料名称">@context.MaterialName</MudTd>
+                                    <MudTd DataLabel="数量">@context.ShortageQuantity.ToString("F0") @context.Unit</MudTd>
+                                    <MudTd DataLabel="目标工位">@context.TargetStation</MudTd>
+                                    <MudTd DataLabel="状态">
+                                        <MudChip T="string" Size="Size.Small"
+                                                 Color="@(context.Status=="Delivered"?Color.Success:context.Status=="Cancelled"?Color.Error:Color.Warning)"
+                                                 Variant="Variant.Outlined">@context.Status</MudChip>
+                                    </MudTd>
+                                    <MudTd DataLabel="送达确认">@context.DeliveredBy</MudTd>
+                                    <MudTd DataLabel="时间">
+                                        @(context.DeliveredAt?.ToLocalTime().ToString("HH:mm:ss") ?? context.CreatedAt.ToLocalTime().ToString("HH:mm:ss"))
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MesStateCard Loading="false" Icon="@Icons.Material.Filled.History"
+                                      Text="暂无送达记录" Hint="完成送达确认后，记录将显示在这里" />
+                    }
+                </ChildContent>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
     }
 </MudStack>
 
@@ -236,6 +335,12 @@
     private readonly NewSignalModel _newSignal = new();
     private Timer? _timer;
 
+    // 折叠面板状态：默认展开第 1 区（待处理拉动）
+    private string _expandedSection = "pending";
+    private bool _showCreateForm;
+    private int _urgentCount;
+    private int _deliveredToday;
+
     protected override async Task OnInitializedAsync()
     {
         await LoadDataAsync();
@@ -256,6 +361,11 @@
 
             _pending = await client.GetFromJsonAsync<List<JitSignalItem>>("api/v1/jit-kanban/pending");
             _history = await client.GetFromJsonAsync<JitHistoryData>("api/v1/jit-kanban/history?page=1&size=10");
+
+            // 摘要统计：超时待处理 + 今日已送达（近 10 条范围内）
+            _urgentCount = _pending?.Count(s => (DateTimeOffset.UtcNow - s.CreatedAt).TotalMinutes > 10) ?? 0;
+            var today = DateTimeOffset.Now.Date;
+            _deliveredToday = _history?.Items.Count(s => s.DeliveredAt is not null && s.DeliveredAt.Value.ToLocalTime().Date == today) ?? 0;
         }
         catch (Exception ex)
         {
@@ -266,6 +376,22 @@
         {
             _isLoading = false;
         }
+    }
+
+    /// <summary>折叠面板切换（互斥：一次只开一个区域）。</summary>
+    private void OnSectionToggle(string section, bool expanded)
+    {
+        if (expanded)
+            _expandedSection = section;
+        else if (_expandedSection == section)
+            _expandedSection = "";
+    }
+
+    /// <summary>待处理面板头部「新建拉动」：展开待处理区并显示创建表单。</summary>
+    private void ToggleCreatePanel()
+    {
+        _showCreateForm = true;
+        _expandedSection = "pending";
     }
 
     private void OpenDeliveryDialog(JitSignalItem signal)

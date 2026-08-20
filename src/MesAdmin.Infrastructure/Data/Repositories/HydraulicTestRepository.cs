@@ -10,6 +10,9 @@ public class HydraulicTestRepository(MesDbContext db) : IHydraulicTestRepository
     public Task<HydraulicTestResult?> GetByIdAsync(Ulid id, CancellationToken ct = default)
         => db.Set<HydraulicTestResult>().AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
 
+    public Task<HydraulicTestResult?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default)
+        => db.Set<HydraulicTestResult>().FirstOrDefaultAsync(r => r.Id == id, ct);
+
     public Task<List<HydraulicTestResult>> GetByEquipmentAsync(string equipmentCode, int limit = 50, CancellationToken ct = default)
         => db.Set<HydraulicTestResult>().AsNoTracking()
             .Where(r => r.EquipmentCode == equipmentCode)
@@ -37,4 +40,13 @@ public class HydraulicTestRepository(MesDbContext db) : IHydraulicTestRepository
 
     public Task<int> SaveChangesAsync(CancellationToken ct = default)
         => db.SaveChangesAsync(ct);
+
+    public async Task<(int Qualified, int Defective)> CountByCompletedPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+    {
+        var qualified = await db.Set<HydraulicTestResult>().AsNoTracking()
+            .CountAsync(r => r.CompletedAt >= start && r.CompletedAt < end && r.Status == HydraulicTestStatus.Passed, ct);
+        var defective = await db.Set<HydraulicTestResult>().AsNoTracking()
+            .CountAsync(r => r.CompletedAt >= start && r.CompletedAt < end && r.Status == HydraulicTestStatus.Failed, ct);
+        return (qualified, defective);
+    }
 }

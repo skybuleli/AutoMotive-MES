@@ -2,11 +2,37 @@ using FastEndpoints;
 using FluentValidation;
 using MemoryPack;
 using MesAdmin.Api.Infrastructure;
+using MesAdmin.Application.Interfaces;
 using MesAdmin.Application.Security;
 using MesAdmin.Application.Features.Quality;
 using MesAdmin.Domain.Models;
 
 namespace MesAdmin.Api.Features.Quality.Iqc;
+
+/// <summary>
+/// 内置标准 IQC 来料检验模板（检验计划表为空时的回退特性集）。
+/// 覆盖来料材质/尺寸/外观/标识等关键检验项，规格界限可满足 AQL 抽样判定。
+/// </summary>
+internal static class StandardIqcTemplate
+{
+    public static List<MeasuredCharacteristic> Create()
+    {
+        static MeasuredCharacteristic M(string code, string name, double std, string unit, double? usl = null, double? lsl = null)
+            => MeasuredCharacteristic.Create(code, name, std, unit, usl, lsl);
+
+        return
+        [
+            M("DIM-01", "外形尺寸长", 120.0, "mm", 120.5, 119.5),
+            M("DIM-02", "外形尺寸宽", 80.0, "mm", 80.5, 79.5),
+            M("DIM-03", "安装孔直径", 12.0, "mm", 12.05, 11.95),
+            M("TOR-01", "紧固扭矩", 22.0, "Nm", 23.0, 21.0),
+            M("MAT-01", "材质硬度", 85.0, "HRB", 90.0, 80.0),
+            M("VIS-01", "外观检查", 1.0, "-", null, null),
+            M("VIS-02", "标识/标签完整性", 1.0, "-", null, null),
+            M("PKG-01", "包装与防护", 1.0, "-", null, null),
+        ];
+    }
+}
 
 // ═══════════════════════════════════════════
 //  POST /api/v1/quality/iqc — 创建 IQC 检验记录
@@ -24,11 +50,12 @@ public class CreateIqcEndpoint : MesEndpoint<CreateIqcRequest, QualityRecordResp
 
     public override async Task HandleAsync(CreateIqcRequest req, CancellationToken ct)
     {
-        if (!Ulid.TryParse(req.InspectionPlanId, out var planId))
-        {
-            AddError("InspectionPlanId", "无效的检验计划 Id");
-            ThrowIfAnyErrors();
-        }
+        // 检验计划 Id 可选：提供有效 Id 时复制计划特性；为空/无效时回退到内置标准 IQC 模板，
+        // 保证「创建 → 录入实测值 → 完成判定」全流程可用（计划表为空也能跑通）。
+        // 无有效计划时返回 Ulid.Empty 哨兵值，禁止生成随机幽灵 Id（会伪造不存在的计划引用）。
+        var planRepo = Resolve<IInspectionPlanRepository>();
+        var (planId, characteristics) = await InspectionPlanResolver.ResolveAsync(
+            req.InspectionPlanId, planRepo, StandardIqcTemplate.Create, ct);
 
         var record = await new CreateIqcRecordCommand(
             planId,
@@ -42,7 +69,8 @@ public class CreateIqcEndpoint : MesEndpoint<CreateIqcRequest, QualityRecordResp
             req.SampleSize,
             req.AcceptNumber,
             req.RejectNumber,
-            req.AqlScheme).ExecuteAsync(ct);
+            req.AqlScheme,
+            characteristics).ExecuteAsync(ct);
 
         Response = QualityMapper.ToRecordResponse(record);
         await SendDualAsync(ct);

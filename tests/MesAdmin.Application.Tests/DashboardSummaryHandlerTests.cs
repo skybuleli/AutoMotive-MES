@@ -11,7 +11,8 @@ public class DashboardSummaryHandlerTests
     {
         var orders = new ConcurrencyCheckingOrderRepository();
         var alerts = new ConcurrencyCheckingAlertRepository();
-        var handler = new DashboardSummaryHandler(orders, alerts);
+        var hydraulics = new FakeHydraulicRepository();
+        var handler = new DashboardSummaryHandler(orders, alerts, hydraulics);
 
         var summary = await handler.ExecuteAsync(new DashboardSummaryQuery(), default);
 
@@ -23,6 +24,44 @@ public class DashboardSummaryHandlerTests
         Assert.Equal(6, summary.ActiveAlerts);
         Assert.Equal(7, summary.RedAlerts);
         Assert.Equal(8, summary.YellowAlerts);
+    }
+
+    [Fact]
+    public async Task Execute_ShouldReturnTodayQualifiedAndDefectiveFromHydraulicTests()
+    {
+        var orders = new ConcurrencyCheckingOrderRepository();
+        var alerts = new ConcurrencyCheckingAlertRepository();
+        var hydraulics = new FakeHydraulicRepository(qualified: 120, defective: 3);
+        var handler = new DashboardSummaryHandler(orders, alerts, hydraulics);
+
+        var summary = await handler.ExecuteAsync(new DashboardSummaryQuery(), default);
+
+        Assert.Equal(120, summary.TodayQualified);
+        Assert.Equal(3, summary.TodayDefective);
+    }
+
+    private sealed class FakeHydraulicRepository : IHydraulicTestRepository
+    {
+        private readonly int _qualified;
+        private readonly int _defective;
+
+        public FakeHydraulicRepository(int qualified = 0, int defective = 0)
+        {
+            _qualified = qualified;
+            _defective = defective;
+        }
+
+        public Task<(int Qualified, int Defective)> CountByCompletedPeriodAsync(DateTimeOffset start, DateTimeOffset end, CancellationToken ct = default)
+            => Task.FromResult((_qualified, _defective));
+
+        public Task<HydraulicTestResult?> GetByIdAsync(Ulid id, CancellationToken ct = default) => Task.FromResult<HydraulicTestResult?>(null);
+        public Task<HydraulicTestResult?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default) => Task.FromResult<HydraulicTestResult?>(null);
+        public Task<List<HydraulicTestResult>> GetByEquipmentAsync(string equipmentCode, int limit = 50, CancellationToken ct = default) => Task.FromResult(new List<HydraulicTestResult>());
+        public Task<List<HydraulicTestResult>> GetByOrderIdAsync(Ulid orderId, CancellationToken ct = default) => Task.FromResult(new List<HydraulicTestResult>());
+        public Task<HydraulicTestResult?> GetLatestByEquipmentAsync(string equipmentCode, CancellationToken ct = default) => Task.FromResult<HydraulicTestResult?>(null);
+        public Task AddAsync(HydraulicTestResult result, CancellationToken ct = default) => Task.CompletedTask;
+        public void Update(HydraulicTestResult result) { }
+        public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(1);
     }
 
     private sealed class ConcurrencyGate

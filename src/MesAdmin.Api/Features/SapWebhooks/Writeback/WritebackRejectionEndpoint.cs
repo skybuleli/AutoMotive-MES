@@ -23,8 +23,9 @@ public class WritebackRejectionEndpoint : MesEndpointWithoutRequest<WritebackRes
 
     public override void Configure()
     {
-        Post("/rejections/{RejectionId:regex(^[a-fA-F0-9]{{26}}$)}/writeback");
-        Group<SapWebhookGroup>();
+        // Ulid 为 26 位 base32（0-9A-V），原 hex 正则永远匹配不上，导致该端点 404
+        Post("/rejections/{RejectionId:regex(^[0-9A-Za-z]{{26}}$)}/writeback");
+        Group<SapWritebackGroup>();
         Summary(s =>
         {
             s.Summary = "手动触发 SAP 拒单回写";
@@ -38,7 +39,7 @@ public class WritebackRejectionEndpoint : MesEndpointWithoutRequest<WritebackRes
             ?? throw new InvalidOperationException("缺少拒单 ID");
         var rejectionId = Ulid.Parse(rejectionIdStr);
 
-        var rejection = await _rejectionRepo.GetByIdAsync(rejectionId, ct);
+        var rejection = await _rejectionRepo.GetByIdTrackedAsync(rejectionId, ct);
         if (rejection is null)
         {
             HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;

@@ -8,6 +8,20 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 RuntimeSafetyGuards.ValidateNoSimulationInProduction(builder.Configuration, builder.Environment.EnvironmentName);
 
+// ── 端口冲突自动避让（仅非生产环境；生产环境端口必须稳定） ──
+if (!builder.Environment.IsProduction())
+{
+    var configuredUrls = builder.Configuration[WebHostDefaults.ServerUrlsKey];
+    if (!string.IsNullOrWhiteSpace(configuredUrls))
+    {
+        var (resolvedUrls, changed) = PortFallback.Resolve(configuredUrls);
+        if (changed)
+        {
+            builder.WebHost.UseUrls(resolvedUrls);
+        }
+    }
+}
+
 builder.Host.UseDefaultServiceProvider((context, options) =>
 {
     options.ValidateScopes = context.HostingEnvironment.IsDevelopment();

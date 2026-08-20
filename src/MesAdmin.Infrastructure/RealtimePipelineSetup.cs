@@ -100,7 +100,8 @@ public static class RealtimePipelineSetup
                 sp.GetRequiredService<ProfinetPlcTransport>(),        // Profi:  EQ-ASM-01/02
             };
             var logger = sp.GetRequiredService<ILogger<PlcDriverFactory>>();
-            return new PlcDriverFactory(transports, logger);
+            // 生产模式（Plc:UseRealClients=true）禁止静默降级到 Simulated（RuntimeSafetyGuards 承诺）
+            return new PlcDriverFactory(transports, logger, allowSimulatedFallback: !useRealClients);
         });
 
         // OPC UA 兼容客户端（帧解析层，使用 PlcDriverFactory 读取多协议数据）

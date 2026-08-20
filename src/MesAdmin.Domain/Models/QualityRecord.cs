@@ -116,7 +116,8 @@ public partial class QualityRecord
         int sampleSize,
         int acceptNumber,
         int rejectNumber,
-        string? aqlScheme = null)
+        string? aqlScheme = null,
+        List<MeasuredCharacteristic>? characteristics = null)
     {
         ValidateRequired(materialCode, nameof(materialCode));
         ValidateRequired(batchNumber, nameof(batchNumber));
@@ -139,7 +140,7 @@ public partial class QualityRecord
             RejectNumber = rejectNumber,
             InspectorId = inspectorId.Trim(),
             Verdict = InspectionVerdict.Pending,
-            Characteristics = [],
+            Characteristics = characteristics ?? [],
             CreatedAt = DateTimeOffset.UtcNow,
         };
     }

@@ -9,7 +9,7 @@
 
 <PageTitle>SQE 供应商质量 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="M08 · SQE Supplier Quality" Title="SQE 供应商质量管理"
                   Description="供应商评分卡 · PPAP 文档管理 · 关键物料管控">
         <HeaderActions>
@@ -33,7 +33,7 @@
                Tab 1: 供应商评分卡
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="供应商评分卡" Icon="@Icons.Material.Filled.Score">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                                    OnClick="() => _showCreateSupplierDialog = true">
@@ -169,7 +169,7 @@
                Tab 2: PPAP 文档管理
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="PPAP 文档" Icon="@Icons.Material.Filled.Description">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudSelect T="string" Label="选择供应商" Variant="Variant.Outlined" Dense
                                    @bind-Value="_ppapSupplierFilter" @bind-Value:after="LoadPpapDocumentsAsync"
@@ -294,7 +294,7 @@
                Tab 3: 关键物料管控设置
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="关键物料管控" Icon="@Icons.Material.Filled.Shield">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                                    OnClick="() => _showCreateSettingDialog = true">

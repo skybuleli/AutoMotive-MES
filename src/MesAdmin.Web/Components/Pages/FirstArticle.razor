@@ -1,0 +1,795 @@
+@page "/first-article"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject MesApiClient Api
+@inject NavigationManager Navigation
+@inject ILogger<FirstArticle> PageLogger
+
+<PageTitle>首件检验 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="T1.5 · First Article Inspection" Title="首件检验"
+                  Description="每班次/换型/设备维修后强制 · 控制计划 23 项逐项检验 · 质量工程师审核放行">
+        <HeaderActions>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    @* ── 工单选择 + 摘要 ── *@
+    <MudPaper Class="module-card pa-4">
+        <MudStack Spacing="2">
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudSelect T="string" Label="选择工单" Variant="Variant.Outlined" Dense
+                           Value="_selectedOrderId" ValueChanged="OnOrderSelected"
+                           Style="min-width:320px;">
+                    @foreach (var o in _orderOptions)
+                    {
+                        <MudSelectItem Value="@o.Id">
+                            @o.OrderNumber · @o.ProductCode · @GetOrderStatusLabel(o.Status)
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           Disabled="@(string.IsNullOrWhiteSpace(_selectedOrderId))"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="() => _showCreateDialog = true">
+                    新建首件检验
+                </MudButton>
+                <MudSpacer />
+                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                    检验单 @_inspections.Count
+                </MudChip>
+                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                    合格 @_passedCount
+                </MudChip>
+                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">
+                    不合格 @_failedCount
+                </MudChip>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">
+                    待处理 @_pendingCount
+                </MudChip>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @* ── 检验列表 ── *@
+    <MudPaper Class="module-card pa-4">
+        @if (_isLoading && _inspections.Count == 0)
+        {
+            <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                <MudText Typo="Typo.body2" Class="section-copy">加载首件检验...</MudText>
+            </MudStack>
+        }
+        else if (string.IsNullOrWhiteSpace(_selectedOrderId))
+        {
+            <MudPaper Class="glass-kpi-card pa-6">
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Large" Color="Color.Primary" />
+                    <MudText Typo="Typo.body1">请先选择工单</MudText>
+                    <MudText Typo="Typo.body2" Class="section-copy">从上方下拉框选择待开工/执行中的工单，查看或创建首件检验。</MudText>
+                </MudStack>
+            </MudPaper>
+        }
+        else if (_inspections.Count == 0)
+        {
+            <MudPaper Class="glass-kpi-card pa-6">
+                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Large" Color="Color.Primary" />
+                    <MudText Typo="Typo.body1">该工单暂无首件检验记录</MudText>
+                    <MudText Typo="Typo.body2" Class="section-copy">每班次/换型/设备维修后强制执行，点击「新建首件检验」创建。</MudText>
+                </MudStack>
+            </MudPaper>
+        }
+        else
+        {
+            <MudTable Items="@_inspections" Dense Hover Breakpoint="Breakpoint.Sm" Elevation="0" Class="module-card">
+                <ColGroup>
+                    <col style="width:110px" />
+                    <col style="min-width:120px" />
+                    <col style="width:90px" />
+                    <col style="width:90px" />
+                    <col style="width:90px" />
+                    <col style="width:110px" />
+                    <col style="width:140px" />
+                    <col style="width:90px" />
+                </ColGroup>
+                <HeaderContent>
+                    <MudTh>检验单号</MudTh>
+                    <MudTh>检验类型</MudTh>
+                    <MudTh>状态</MudTh>
+                    <MudTh>操作人</MudTh>
+                    <MudTh>审核人</MudTh>
+                    <MudTh>创建时间</MudTh>
+                    <MudTh>结论</MudTh>
+                    <MudTh>操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="检验单号">
+                        <MudText Typo="Typo.caption" Class="mono" Style="font-family:monospace;">
+                            @context.Id[..Math.Min(8, context.Id.Length)]
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="检验类型">@GetInspectionTypeLabel(context.InspectionType)</MudTd>
+                    <MudTd DataLabel="状态">
+                        <MudChip T="string" Size="Size.Small" Color="@GetInspectionStatusColor(context.Status)"
+                                 Variant="Variant.Outlined">
+                            @GetInspectionStatusLabel(context.Status)
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="操作人">@context.OperatorId</MudTd>
+                    <MudTd DataLabel="审核人">@(context.InspectorId ?? "-")</MudTd>
+                    <MudTd DataLabel="创建时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                    <MudTd DataLabel="结论">
+                        <MudText Typo="Typo.caption" Class="kpi-sub" Style="max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                            @(context.Conclusion ?? "-")
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="操作">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                   OnClick="() => OpenDetailAsync(context)">
+                            检验 / 详情
+                        </MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   对话框: 新建首件检验
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreateDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建首件检验</MudText>
+            @if (_selectedOrder is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedOrder.OrderNumber · @_selectedOrder.ProductCode</MudText>
+                <MudText Typo="Typo.caption" Class="kpi-label">
+                    将按 ESP-9.0 控制计划生成 23 个检验项。
+                </MudText>
+                <MudSelect T="string" Label="检验类型" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           @bind-Value="_newInspectionType">
+                    <MudSelectItem Value="@("ShiftStart")">班次首件</MudSelectItem>
+                    <MudSelectItem Value="@("Changeover")">换型首件</MudSelectItem>
+                    <MudSelectItem Value="@("AfterMaintenance")">设备维修后</MudSelectItem>
+                </MudSelect>
+                <MudTextField @bind-Value="_newOperatorId" Label="操作人（员工号）"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreateDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(string.IsNullOrWhiteSpace(_newOperatorId))"
+                   OnClick="CreateInspectionAsync">
+            创建
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 检验详情（录入实测值 + 审核放行）
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showDetailDialog" FullWidth="true" MaxWidth="MaxWidth.Large" Class="pa-2">
+    <TitleContent>
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">首件检验详情</MudText>
+                <MudText Typo="Typo.caption" Class="kpi-sub">
+                    @(_detailInspection is null ? "" : _detailInspection.OrderNumber + " · " + _detailInspection.ProductCode)
+                </MudText>
+            </MudStack>
+            @if (_detailInspection is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="@GetInspectionStatusColor(_detailInspection.Status)"
+                         Variant="Variant.Filled">
+                    @GetInspectionStatusLabel(_detailInspection.Status)
+                </MudChip>
+            }
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (_detailInspection is not null)
+        {
+            <MudStack Spacing="2">
+                <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                        检验类型：@GetInspectionTypeLabel(_detailInspection.InspectionType)
+                    </MudChip>
+                    <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">
+                        操作人：@_detailInspection.OperatorId
+                    </MudChip>
+                    <MudChip T="string" Color="@(_recordedCount == _detailInspection.Items.Count ? Color.Success : Color.Warning)"
+                             Size="Size.Small" Variant="Variant.Outlined">
+                        已记录 @_recordedCount / @_detailInspection.Items.Count
+                    </MudChip>
+                </MudStack>
+
+                @if (_detailInspection.Status == "Passed" || _detailInspection.Status == "Failed")
+                {
+                    <MudAlert Severity="@(_detailInspection.Status == "Passed" ? Severity.Success : Severity.Error)"
+                              Variant="Variant.Outlined" Dense>
+                        结论：@_detailInspection.Conclusion · 审核人 @_detailInspection.InspectorId
+                    </MudAlert>
+                }
+
+                <MudTable Items="@_detailInspection.Items" Dense Hover Breakpoint="Breakpoint.Sm" Elevation="0" Class="module-card">
+                    <ColGroup>
+                        <col style="width:80px" />
+                        <col style="min-width:130px" />
+                        <col style="width:70px" />
+                        <col style="width:110px" />
+                        <col style="width:60px" />
+                        <col style="width:150px" />
+                        <col style="width:90px" />
+                    </ColGroup>
+                    <HeaderContent>
+                        <MudTh>编码</MudTh>
+                        <MudTh>检验项</MudTh>
+                        <MudTh>标准值</MudTh>
+                        <MudTh>规格限</MudTh>
+                        <MudTh>单位</MudTh>
+                        <MudTh>实测值 / 录入</MudTh>
+                        <MudTh>判定</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="编码">
+                            <MudText Typo="Typo.caption" Class="mono">@context.CharacteristicCode</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="检验项">@context.CharacteristicName</MudTd>
+                        <MudTd DataLabel="标准值">@context.StandardValue.ToString("G")</MudTd>
+                        <MudTd DataLabel="规格限">
+                            @FormatLimits(context)
+                        </MudTd>
+                        <MudTd DataLabel="单位">@context.Unit</MudTd>
+                        <MudTd DataLabel="实测值">
+                            @if (HasLimits(context))
+                            {
+                                @if (_itemInputs.TryGetValue(context.CharacteristicCode, out var editingValue) && editingValue.HasValue)
+                                {
+                                    @* 编辑态（新建录入 或 修改已有值） *@
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudNumericField T="double?" @bind-Value="_itemInputs[context.CharacteristicCode]"
+                                                         Variant="Variant.Outlined" Margin="Margin.Dense" Dense
+                                                         Style="width:110px;" />
+                                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                   Disabled="@(!_itemInputs.TryGetValue(context.CharacteristicCode, out var v) || v is null)"
+                                                   OnClick="() => SaveItemValueAsync(context)">
+                                            保存
+                                        </MudButton>
+                                    </MudStack>
+                                }
+                                else if (context.ActualValue is not null)
+                                {
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                            @context.ActualValue.Value.ToString("G")
+                                        </MudText>
+                                        @if (CanEdit)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                                       OnClick="() => StartEditItem(context)">
+                                                修改
+                                            </MudButton>
+                                        }
+                                    </MudStack>
+                                }
+                                else if (CanEdit)
+                                {
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudNumericField T="double?" @bind-Value="_itemInputs[context.CharacteristicCode]"
+                                                         Variant="Variant.Outlined" Margin="Margin.Dense" Dense
+                                                         Style="width:110px;" />
+                                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                   Disabled="@(!_itemInputs.TryGetValue(context.CharacteristicCode, out var v) || v is null)"
+                                                   OnClick="() => SaveItemValueAsync(context)">
+                                            保存
+                                        </MudButton>
+                                    </MudStack>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Class="kpi-sub">未记录</MudText>
+                                }
+                            }
+                            else
+                            {
+                                @* 定性检验项（无规格限）：合格勾选 = 记录 1.0 *@
+                                if (context.ActualValue is not null)
+                                {
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">合格已确认</MudText>
+                                }
+                                else if (CanEdit)
+                                {
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                   OnClick="() => SavePassItemAsync(context, true)">
+                                            合格
+                                        </MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                                   StartIcon="@Icons.Material.Filled.Cancel"
+                                                   OnClick="() => SavePassItemAsync(context, false)">
+                                            不合格
+                                        </MudButton>
+                                    </MudStack>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Class="kpi-sub">未记录</MudText>
+                                }
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="判定">
+                            @if (context.ActualValue is not null)
+                            {
+                                if (context.IsPass)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                                        合格
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">
+                                        不合格
+                                    </MudChip>
+                                }
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="kpi-sub">-</MudText>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_detailInspection is not null && CanComplete)
+        {
+            <MudText Typo="Typo.caption" Class="kpi-sub" Style="margin-right:8px;">
+                未记录 @(_detailInspection.Items.Count - _recordedCount) 项将判为不合格
+            </MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Verified"
+                       OnClick="() => _showCompleteDialog = true">
+                完成审核（放行）
+            </MudButton>
+        }
+        <MudButton Variant="Variant.Text" OnClick="() => _showDetailDialog = false">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 完成审核确认
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCompleteDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">完成首件检验审核</MudText>
+            @if (_detailInspection is not null)
+            {
+                <MudText Typo="Typo.body2">
+                    @_detailInspection.OrderNumber · @GetInspectionTypeLabel(_detailInspection.InspectionType)
+                </MudText>
+                <MudAlert Severity="@(_recordedCount < _detailInspection.Items.Count ? Severity.Warning : Severity.Info)"
+                          Variant="Variant.Outlined" Dense>
+                    已记录 @_recordedCount / @_detailInspection.Items.Count 项。
+                    @if (_recordedCount < _detailInspection.Items.Count)
+                    {
+                        <text>未记录的 @(_detailInspection.Items.Count - _recordedCount) 项将自动判为不合格（结论为 Failed）。</text>
+                    }
+                </MudAlert>
+                <MudTextField @bind-Value="_completeInspectorId" Label="审核人（质量工程师工号）"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCompleteDialog = false">返回</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(string.IsNullOrWhiteSpace(_completeInspectorId))"
+                   OnClick="CompleteInspectionAsync">
+            确认放行
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _isLoading, _isError;
+    private string? _message;
+
+    // ── 工单选择 ──
+    private List<OrderSummary> _orderOptions = [];
+    private string _selectedOrderId = string.Empty;
+    private OrderSummary? _selectedOrder;
+
+    // ── 检验列表 ──
+    private List<InspectionDto> _inspections = [];
+    private int _passedCount, _failedCount, _pendingCount;
+
+    // ── 新建对话框 ──
+    private bool _showCreateDialog;
+    private string _newInspectionType = "ShiftStart";
+    private string _newOperatorId = string.Empty;
+
+    // ── 详情对话框 ──
+    private bool _showDetailDialog;
+    private InspectionDto? _detailInspection;
+    private Dictionary<string, double?> _itemInputs = [];
+    private int _recordedCount;
+
+    // ── 完成审核对话框 ──
+    private bool _showCompleteDialog;
+    private string _completeInspectorId = string.Empty;
+
+    private bool CanEdit => _detailInspection is not null
+        && _detailInspection.Status is "Pending" or "InProgress";
+
+    private bool CanComplete => _detailInspection is not null
+        && _detailInspection.Status is "Pending" or "InProgress";
+
+    // ═══════════════════════════════════════════
+    // 页面初始化
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 支持 /first-article?orderId=xxx 直达（开工页「首件检验」入口）
+        var uri = new Uri(Navigation.Uri);
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        _preselectOrderId = query["orderId"];
+
+        await LoadOrdersAsync();
+    }
+
+    private string? _preselectOrderId;
+
+    private async Task LoadOrdersAsync()
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            var released = await Api.GetAsync<List<OrderSummary>>("api/v1/orders?status=Released&page=1&size=100") ?? [];
+            var inProgress = await Api.GetAsync<List<OrderSummary>>("api/v1/orders?status=InProgress&page=1&size=100") ?? [];
+            _orderOptions = released.Concat(inProgress)
+                .DistinctBy(o => o.Id)
+                .OrderBy(o => o.CreatedAt)
+                .ToList();
+
+            // 选中：query 参数优先，其次第一单
+            var target = _preselectOrderId;
+            if (string.IsNullOrWhiteSpace(target))
+                target = _orderOptions.FirstOrDefault()?.Id;
+            if (!string.IsNullOrWhiteSpace(target) && _orderOptions.Any(o => o.Id == target))
+            {
+                await OnOrderSelected(target);
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载工单列表失败");
+            _message = $"加载工单失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnOrderSelected(string? orderId)
+    {
+        if (string.IsNullOrWhiteSpace(orderId))
+        {
+            _selectedOrderId = string.Empty;
+            _selectedOrder = null;
+            _inspections = [];
+            return;
+        }
+
+        _selectedOrderId = orderId;
+        _selectedOrder = _orderOptions.FirstOrDefault(o => o.Id == orderId);
+        _isLoading = true;
+        try
+        {
+            _inspections = await Api.GetOrderInspectionsAsync(orderId) ?? [];
+            ComputeStats();
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载首件检验列表失败");
+            _inspections = [];
+            _message = $"加载首件检验失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedOrderId))
+        {
+            await LoadOrdersAsync();
+            return;
+        }
+        await OnOrderSelected(_selectedOrderId);
+    }
+
+    private void ComputeStats()
+    {
+        _passedCount = _inspections.Count(i => i.Status == "Passed");
+        _failedCount = _inspections.Count(i => i.Status == "Failed");
+        _pendingCount = _inspections.Count(i => i.Status is "Pending" or "InProgress");
+    }
+
+    // ═══════════════════════════════════════════
+    // 创建检验
+    // ═══════════════════════════════════════════
+
+    private async Task CreateInspectionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedOrderId) || string.IsNullOrWhiteSpace(_newOperatorId)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, status) = await Api.CreateInspectionAsync(
+                _selectedOrderId, _newInspectionType, _newOperatorId.Trim());
+            if (ok && data is not null)
+            {
+                _showCreateDialog = false;
+                _newOperatorId = string.Empty;
+                _inspections.Insert(0, data);
+                ComputeStats();
+                _message = $"首件检验已创建（{GetInspectionTypeLabel(data.InspectionType)}，共 {data.Items.Count} 项）";
+                _isError = false;
+                await OpenDetailAsync(data);
+            }
+            else
+            {
+                _message = $"创建失败（HTTP {status}）：需班组长或质量工程师权限";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "创建首件检验失败");
+            _message = $"创建首件检验失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 详情 + 录入实测值
+    // ═══════════════════════════════════════════
+
+    private async Task OpenDetailAsync(InspectionDto inspection)
+    {
+        _isLoading = true;
+        try
+        {
+            var fresh = await Api.GetInspectionAsync(inspection.OrderId, inspection.Id);
+            if (fresh is null)
+            {
+                _message = "首件检验不存在或已被删除";
+                _isError = true;
+                return;
+            }
+
+            _detailInspection = fresh;
+            _itemInputs = fresh.Items.ToDictionary(i => i.CharacteristicCode, _ => (double?)null);
+            _recordedCount = fresh.Items.Count(i => i.ActualValue is not null);
+            _completeInspectorId = string.Empty;
+            _showDetailDialog = true;
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载首件检验详情失败");
+            _message = $"加载详情失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void StartEditItem(InspectionItemDto item)
+    {
+        _itemInputs[item.CharacteristicCode] = item.ActualValue;
+    }
+
+    private async Task SaveItemValueAsync(InspectionItemDto item)
+    {
+        if (_detailInspection is null) return;
+        if (!_itemInputs.TryGetValue(item.CharacteristicCode, out var v) || v is null) return;
+
+        _isLoading = true;
+        try
+        {
+            var (ok, data, status) = await Api.RecordInspectionValueAsync(
+                _detailInspection.OrderId, _detailInspection.Id, item.CharacteristicCode, v.Value);
+            if (ok && data is not null)
+            {
+                _detailInspection = data;
+                _itemInputs.Remove(item.CharacteristicCode);
+                _recordedCount = data.Items.Count(i => i.ActualValue is not null);
+                _message = $"{item.CharacteristicCode} 实测值 {v.Value.ToString("G")} 已记录";
+                _isError = false;
+            }
+            else
+            {
+                _message = $"记录失败（HTTP {status}）：需质量工程师权限";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "记录检验项失败");
+            _message = $"记录失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SavePassItemAsync(InspectionItemDto item, bool pass)
+    {
+        if (_detailInspection is null) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, status) = await Api.RecordInspectionValueAsync(
+                _detailInspection.OrderId, _detailInspection.Id, item.CharacteristicCode, pass ? 1.0 : 0.0);
+            if (ok && data is not null)
+            {
+                _detailInspection = data;
+                _recordedCount = data.Items.Count(i => i.ActualValue is not null);
+                _message = pass
+                    ? $"{item.CharacteristicCode} 合格已确认"
+                    : $"{item.CharacteristicCode} 已记录（不合格）";
+                _isError = false;
+            }
+            else
+            {
+                _message = $"记录失败（HTTP {status}）：需质量工程师权限";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "记录定性检验项失败");
+            _message = $"记录失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 完成审核（放行）
+    // ═══════════════════════════════════════════
+
+    private async Task CompleteInspectionAsync()
+    {
+        if (_detailInspection is null || string.IsNullOrWhiteSpace(_completeInspectorId)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, status) = await Api.CompleteInspectionAsync(
+                _detailInspection.OrderId, _detailInspection.Id, _completeInspectorId.Trim());
+            if (ok && data is not null)
+            {
+                _showCompleteDialog = false;
+                _detailInspection = data;
+                _recordedCount = data.Items.Count(i => i.ActualValue is not null);
+                _message = data.Status == "Passed"
+                    ? $"首件检验审核通过，工单可继续开工"
+                    : $"首件检验判定为不合格：{data.Conclusion}";
+                _isError = data.Status != "Passed";
+
+                // 同步列表状态
+                var idx = _inspections.FindIndex(i => i.Id == data.Id);
+                if (idx >= 0) _inspections[idx] = data;
+                ComputeStats();
+            }
+            else
+            {
+                _message = $"审核失败（HTTP {status}）：需质量工程师权限";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "完成首件检验失败");
+            _message = $"审核失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 辅助方法
+    // ═══════════════════════════════════════════
+
+    private static bool HasLimits(InspectionItemDto item)
+        => item.UpperLimit.HasValue || item.LowerLimit.HasValue;
+
+    private static string FormatLimits(InspectionItemDto item)
+    {
+        if (HasLimits(item))
+        {
+            var upper = item.UpperLimit?.ToString("G") ?? "∞";
+            var lower = item.LowerLimit?.ToString("G") ?? "-∞";
+            return $"[{lower}, {upper}]";
+        }
+        return "定性";
+    }
+
+    private static string GetInspectionTypeLabel(string type) => type switch
+    {
+        "ShiftStart" => "班次首件",
+        "Changeover" => "换型首件",
+        "AfterMaintenance" => "设备维修后",
+        _ => type
+    };
+
+    private static string GetInspectionStatusLabel(string status) => status switch
+    {
+        "Pending" => "待检验",
+        "InProgress" => "检验中",
+        "Passed" => "合格",
+        "Failed" => "不合格",
+        _ => status
+    };
+
+    private static Color GetInspectionStatusColor(string status) => status switch
+    {
+        "Pending" => Color.Warning,
+        "InProgress" => Color.Info,
+        "Passed" => Color.Success,
+        "Failed" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static string GetOrderStatusLabel(string status) => status switch
+    {
+        "Released" => "待开工",
+        "InProgress" => "执行中",
+        "Completed" => "已完成",
+        "Closed" => "已关闭",
+        "Created" => "已创建",
+        "Cancelled" => "已取消",
+        _ => status
+    };
+}

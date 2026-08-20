@@ -1,9 +1,16 @@
 @page "/"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@using MesAdmin.Web.Services
+@using MesAdmin.Domain.Models
+@inject IHttpClientFactory HttpFactory
+@inject AuthService Auth
+@inject OeeHubClient Hub
+@inject ILogger<Home> PageLogger
 
 <PageTitle>仪表盘 — AutoMES</PageTitle>
 
-<MudStack Spacing="4" Class="home-page">
+<MudStack Spacing="3" Class="home-page">
 
     <!-- 页头 -->
     <MesPageHeader Kicker="OVERVIEW · 总览与告警"
@@ -12,7 +19,7 @@
                    Description="汽车安全件 Tier-1 供应商全链路制造执行系统 · 7 站 31 工序" />
 
     <!-- KPI 卡片 -->
-    <MudGrid Spacing="4">
+    <MudGrid Spacing="3">
         @foreach (var kpi in _kpis)
         {
             <MudItem xs="12" sm="6" md="3">
@@ -23,9 +30,9 @@
     </MudGrid>
 
     <!-- 快速操作 -->
-    <MudStack Spacing="3">
+    <MudStack Spacing="2">
         <MudText Typo="Typo.h6" Style="font-weight:600;">快速操作</MudText>
-        <MudGrid Spacing="3">
+        <MudGrid Spacing="2">
             @foreach (var act in _actions)
             {
                 <MudItem xs="6" sm="3">
@@ -41,12 +48,46 @@
 </MudStack>
 
 @code {
-    private readonly (string Label, string Value, string Sub, string Icon, MesAccent Accent)[] _kpis =
+    private DashboardSummaryDto? _summary;
+    private IReadOnlyList<OeeRecord> _snapshot = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSummaryAsync();
+        await Hub.StartAsync();
+        _snapshot = Hub.Snapshot();
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        try
+        {
+            var token = await Auth.GetTokenAsync();
+            var client = HttpFactory.CreateClient("MesApi");
+            if (token is not null)
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            _summary = await client.GetFromJsonAsync<DashboardSummaryDto>("api/v1/dashboard/summary");
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogWarning(ex, "加载总览汇总失败（静默重试）");
+        }
+    }
+
+    private double AvgOee => _snapshot.Count > 0 ? _snapshot.Average(o => o.Oee) : 0;
+
+    private int TodayTotal => (_summary?.TodayQualified ?? 0) + (_summary?.TodayDefective ?? 0);
+
+    private double PassRate => TodayTotal > 0 ? (double)(_summary?.TodayQualified ?? 0) / TodayTotal : 0;
+
+    private (string Label, string Value, string Sub, string Icon, MesAccent Accent)[] _kpis =>
     [
-        ("OEE", "85.2%", "全局设备综合效率", Icons.Material.Filled.Speed, MesAccent.Primary),
-        ("合格率", "97.5%", "一次合格率", Icons.Material.Filled.Verified, MesAccent.Success),
-        ("在产工单", "12", "进行中工单数", Icons.Material.Filled.Assignment, MesAccent.Warning),
-        ("Andon 报警", "3", "未处理报警", Icons.Material.Filled.NotificationImportant, MesAccent.Error),
+        ("OEE", AvgOee.ToString("P1"), "全局设备综合效率", Icons.Material.Filled.Speed, MesAccent.Primary),
+        ("合格率", PassRate.ToString("P1"), "今日一次合格率", Icons.Material.Filled.Verified, MesAccent.Success),
+        ("在产工单", (_summary?.InProgressCount ?? 0).ToString(), "进行中工单数", Icons.Material.Filled.Assignment, MesAccent.Warning),
+        ("Andon 报警", (_summary?.ActiveAlerts ?? 0).ToString(), "未处理报警", Icons.Material.Filled.NotificationImportant, MesAccent.Error),
     ];
 
     private readonly (string Label, string Href, Color Color, string Icon)[] _actions =
@@ -56,4 +97,14 @@
         ("触发 Andon", "andon", Color.Error, Icons.Material.Filled.Campaign),
         ("追溯查询", "traceability", Color.Warning, Icons.Material.Filled.Search),
     ];
+
+    public void Dispose() => Hub.DisposeAsync().AsTask().ContinueWith(_ => { }, TaskScheduler.Default);
+
+    // ── DTO（与 ProductionDashboard 对齐）──
+
+    public record DashboardSummaryDto(
+        int CreatedCount, int ReleasedCount, int InProgressCount,
+        int CompletedCount, int ClosedCount,
+        int ActiveAlerts, int RedAlerts, int YellowAlerts,
+        int TodayQualified, int TodayDefective);
 }

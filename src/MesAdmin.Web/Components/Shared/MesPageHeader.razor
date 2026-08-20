@@ -1,15 +1,15 @@
 @* 全站统一页头：kicker 小标 + 标题 + 描述 + 右侧操作区（HeaderActions）。 *@
-<MudPaper Class="mes-toolbar pa-5" Role="banner">
-    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
-        <MudStack Spacing="1" Class="mes-page-heading">
+<MudPaper Class="mes-toolbar pa-3" Role="banner">
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+        <MudStack Spacing="0" Class="mes-page-heading">
             @if (!string.IsNullOrEmpty(Kicker))
             {
                 <MudText Typo="Typo.overline" Class="section-kicker">@Kicker</MudText>
             }
-            <MudText Typo="Typo.h4" Class="@($"mes-page-title {TitleClass}")">@Title</MudText>
+            <MudText Typo="Typo.h5" Class="@($"mes-page-title {TitleClass}")">@Title</MudText>
             @if (!string.IsNullOrEmpty(Description))
             {
-                <MudText Typo="Typo.body1" Class="section-copy mes-page-description">@Description</MudText>
+                <MudText Typo="Typo.body2" Class="section-copy mes-page-description">@Description</MudText>
             }
         </MudStack>
         @if (HeaderActions is not null)

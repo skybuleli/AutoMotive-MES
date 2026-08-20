@@ -56,29 +56,33 @@ public sealed class QualityReportService : BackgroundService
                 var now = DateTimeOffset.UtcNow;
                 var emailEnabled = _config.GetValue<bool>("QualityReports:Email:Enabled");
 
+                // 说明：now.Date 的 Kind 为 Unspecified，隐式转 DateTimeOffset 会套本地偏移（+08:00），
+                // Npgsql 写 timestamptz 会报错，因此统一用 UtcDay 显式构造 UTC 偏移。
+                var todayUtc = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
+
                 // 日报：每日 06:00
                 if (emailEnabled && now.Hour == 6 && now.Minute == 0)
                 {
-                    var yesterday = now.Date.AddDays(-1);
+                    var yesterday = todayUtc.AddDays(-1);
                     await GenerateAndSendReportAsync(ReportPeriod.Daily,
-                        yesterday, now.Date, "daily", ct);
+                        yesterday, todayUtc, "daily", ct);
                 }
 
                 // 周报：每周一 06:00
                 if (emailEnabled && now.DayOfWeek == DayOfWeek.Monday && now.Hour == 6 && now.Minute == 0)
                 {
-                    var lastWeek = now.Date.AddDays(-7);
+                    var lastWeek = todayUtc.AddDays(-7);
                     await GenerateAndSendReportAsync(ReportPeriod.Weekly,
-                        lastWeek, now.Date, "weekly", ct);
+                        lastWeek, todayUtc, "weekly", ct);
                 }
 
                 // 月报：每月 1日 06:00
                 if (emailEnabled && now.Day == 1 && now.Hour == 6 && now.Minute == 0)
                 {
-                    var lastMonth = now.Date.AddMonths(-1);
-                    var monthStart = new DateTimeOffset(lastMonth.Year, lastMonth.Month, 1, 0, 0, 0, now.Offset);
+                    var lastMonth = todayUtc.AddMonths(-1);
+                    var monthStart = new DateTimeOffset(lastMonth.Year, lastMonth.Month, 1, 0, 0, 0, TimeSpan.Zero);
                     await GenerateAndSendReportAsync(ReportPeriod.Monthly,
-                        monthStart, now.Date, "monthly", ct);
+                        monthStart, todayUtc, "monthly", ct);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

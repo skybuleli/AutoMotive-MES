@@ -288,10 +288,10 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
     {
         if (_useRealClient)
         {
-            // 生产模式：通过 Modbus TCP 读保持寄存器
-            // var mbap = BuildReadRequest(ModbusFunctionCode.ReadHoldingRegisters, startAddr: 0, quantity: 8);
-            // var response = await SendModbusRequestAsync(address, mbap, ct);
-            // return ParseModbusResponse(response, tag);
+            // 生产模式：禁止静默返回 0 —— 直接寄存器读需在活动连接中通过 Pipe 订阅获取，
+            // 缓存未命中说明设备未在实时快照中，必须显式失败而非返回伪造数据。
+            throw new NotSupportedException(
+                $"Modbus TCP 直接读寄存器 {address}.{tag} 不受支持（生产模式）；请通过实时订阅读取，或检查设备是否已连接。");
         }
 
         if (_state.TryGetValue(address, out var s))
@@ -309,12 +309,12 @@ public sealed class ModbusTcpPlcTransport : IPlcTransport
 
     public Task WriteRegisterAsync(string address, string tag, object value, CancellationToken ct = default)
     {
-        // Modbus TCP 写单个寄存器 (FuncCode=0x06) 或写多个寄存器 (FuncCode=0x10)
         if (_useRealClient)
         {
-            // 生产模式实现
-            // var mbap = BuildWriteRequest(ModbusFunctionCode.WriteSingleRegister, register: 0, value: Convert.ToUInt16(value));
-            // await SendModbusRequestAsync(address, mbap, ct);
+            // 生产模式：禁止静默 no-op —— 未实现真实写入时必须显式失败，
+            // 避免调用方误以为参数已写入 PLC（Saga 幂等保护会掩盖此缺陷）。
+            throw new NotSupportedException(
+                $"Modbus TCP 直接写寄存器 {address}.{tag} 尚未实现（生产模式）；请通过 PLC 侧组态写入或实现 Modbus 写单寄存器（FuncCode 0x06）。");
         }
 
         _logger.ZLogInformation($"Modbus TCP 写入 {address}.{tag} = {value}");

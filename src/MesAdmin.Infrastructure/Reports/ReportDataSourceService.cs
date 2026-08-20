@@ -227,12 +227,39 @@ public sealed class ReportDataSourceService
             new("合格率", $"{yieldRate:F1}", "%", yieldRate >= 98 ? Colors.Green.Medium : Colors.Red.Medium),
         };
 
+        // 按产品汇总产量（消除占位空表）
+        var productRows = periodOrders
+            .GroupBy(o => o.ProductCode)
+            .OrderByDescending(g => g.Sum(o => o.QualifiedQuantity + o.DefectiveQuantity))
+            .Select(g => new TableRow(new Dictionary<string, string>
+            {
+                ["product"] = g.Key,
+                ["orders"] = g.Count().ToString(),
+                ["qty"] = g.Sum(o => o.QualifiedQuantity + o.DefectiveQuantity).ToString("N0"),
+                ["qualified"] = g.Sum(o => o.QualifiedQuantity).ToString("N0"),
+                ["defective"] = g.Sum(o => o.DefectiveQuantity).ToString("N0"),
+                ["yield"] = (g.Sum(o => o.QualifiedQuantity + o.DefectiveQuantity) > 0
+                    ? (double)g.Sum(o => o.QualifiedQuantity) / g.Sum(o => o.QualifiedQuantity + o.DefectiveQuantity) * 100 : 100.0).ToString("F1"),
+            }))
+            .ToList();
+
         return new ReportRenderData(
             ReportType.ProductionDaily, start, end, now,
             $"生产日报 {start:yyyy-MM-dd}",
             new() { ["prod_kpi"] = kpi },
-            new() { ["prod_by_product"] = [] },
-            new() { ["prod_by_product"] = [new TableColumnDef("产品编码", "product", 2), new TableColumnDef("产量", "qty", 1, true)] },
+            new() { ["prod_by_product"] = productRows },
+            new()
+            {
+                ["prod_by_product"] =
+                [
+                    new TableColumnDef("产品编码", "product", 2),
+                    new TableColumnDef("工单数", "orders", 0.8),
+                    new TableColumnDef("产量", "qty", 1, true),
+                    new TableColumnDef("合格", "qualified", 1, true),
+                    new TableColumnDef("不良", "defective", 1, true),
+                    new TableColumnDef("合格率", "yield", 1, true),
+                ]
+            },
             new() { }
         );
     }
@@ -418,11 +445,22 @@ public sealed class ReportDataSourceService
             new("完成率", $"{completionRate:F1}", "%", completionRate >= 90 ? Colors.Green.Medium : Colors.Orange.Medium),
         };
 
+        // 按维护类型汇总（消除占位空表）
+        var typeRows = periodOrders
+            .GroupBy(o => o.MaintenanceType)
+            .OrderByDescending(g => g.Count())
+            .Select(g => new TableRow(new Dictionary<string, string>
+            {
+                ["type"] = g.Key == MaintenanceType.CycleBased ? "循环触发" : "时间触发",
+                ["count"] = g.Count().ToString(),
+            }))
+            .ToList();
+
         return new ReportRenderData(
             ReportType.MaintenanceWeekly, start, end, now,
             $"维护周报 {start:yyyy-MM-dd} 至 {end:yyyy-MM-dd}",
             new() { ["maint_kpi"] = kpi },
-            new() { ["maint_by_type"] = [] },
+            new() { ["maint_by_type"] = typeRows },
             new() { ["maint_by_type"] = [new TableColumnDef("维护类型", "type", 2), new TableColumnDef("数量", "count", 1, true)] },
             new() { }
         );

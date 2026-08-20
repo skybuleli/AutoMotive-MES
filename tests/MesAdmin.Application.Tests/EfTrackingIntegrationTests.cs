@@ -127,6 +127,180 @@ public class EfTrackingIntegrationTests
         Assert.Equal(OrderStatus.Released, verify!.Status);
     }
 
+    // ═══════════════════════════════════════════
+    //  液压解锁：JSON owned collection + tracked 查询回归
+    //  （AsNoTracking + Update 会触发 __synthesizedOrdinal shadow 键异常，
+    //    解锁端点已改为 GetByIdTrackedAsync + SaveChanges，此处验证不再抛异常）
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public async Task HydraulicUnlock_TrackedQuery_ShouldNotThrowOnJsonOwnedCollection()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IHydraulicTestRepository>();
+
+        // ── 1. 创建一条不合格记录（含 JSON owned 集合 SolenoidTests）→ 自动锁设备 ──
+        var result = HydraulicTestResult.Create("EQ-HYD-01", Ulid.NewUlid(), "SN-HYD-LOCK", 1);
+        result.RecordPressureBuild(198);   // ✓ ≤250ms
+        result.RecordHoldPressure(182);    // ✓ 175-185
+        result.RecordPressureRelease(388); // ✗ >300ms → 锁止
+        result.RecordLeakRate(0.71);       // ✗ >0.5 → 锁止
+        result.AddSolenoidTest(new SolenoidValveTest(1, true, 12.5, null, null));
+        result.AddSolenoidTest(new SolenoidValveTest(2, false, 89.2, 4.1, "F002")); // ✗
+        result.Complete();
+
+        Assert.True(result.EquipmentLocked);
+        Assert.Equal(HydraulicTestStatus.Failed, result.Status);
+
+        await repo.AddAsync(result, default);
+        await repo.SaveChangesAsync(default);
+
+        // ── 2. 模拟解锁端点：跟踪查询 → 解锁 → SaveChanges（此前在此抛 EF 409）──
+        var tracked = await repo.GetByIdTrackedAsync(result.Id, default);
+        Assert.NotNull(tracked);
+        Assert.Equal(2, tracked!.SolenoidTests.Count); // JSON owned 集合完整加载
+
+        tracked.UnlockEquipment("QE001");
+        await repo.SaveChangesAsync(default); // 回归点：不抛 __synthesizedOrdinal 异常
+
+        // ── 3. 验证解锁已持久化 ──
+        var verify = await repo.GetByIdAsync(result.Id, default);
+        Assert.NotNull(verify);
+        Assert.False(verify!.EquipmentLocked);
+        Assert.Equal(HydraulicTestStatus.Passed, verify.Status);
+        Assert.Equal("QE001", verify.UnlockedBy);
+        Assert.NotNull(verify.UnlockedAt);
+        Assert.Equal(2, verify.SolenoidTests.Count);
+        Assert.False(verify.SolenoidTests[1].ActuationPass); // 数据未被 Update 损坏
+    }
+
+    [Fact]
+    public async Task HydraulicUnlock_WhenNotLocked_ShouldThrow()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<IHydraulicTestRepository>();
+
+        var result = HydraulicTestResult.Create("EQ-HYD-01", null, "SN-HYD-OK", 1);
+        result.RecordPressureBuild(200);
+        result.RecordHoldPressure(180);
+        result.RecordPressureRelease(250);
+        result.RecordLeakRate(0.3);
+        result.AddSolenoidTest(new SolenoidValveTest(1, true, 11.0, null, null));
+        result.Complete();
+        Assert.Equal(HydraulicTestStatus.Passed, result.Status);
+        Assert.False(result.EquipmentLocked);
+
+        await repo.AddAsync(result, default);
+        await repo.SaveChangesAsync(default);
+
+        var tracked = await repo.GetByIdTrackedAsync(result.Id, default);
+        Assert.NotNull(tracked);
+        Assert.Throws<InvalidOperationException>(() => tracked!.UnlockEquipment("QE001"));
+    }
+
+    // ═══════════════════════════════════════════
+    //  SAP 拒单写回（P0-3 修复）：跟踪查询 + MarkWrittenBack + SaveChanges 必须持久化
+    //  （与液压解锁 GetByIdTrackedAsync 回归同模式；
+    //   注意：GetByIdAsync 为 AsNoTracking，修改后 SaveChanges 会静默丢失——写回必须用跟踪查询）
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public async Task SapRejectionWriteback_TrackedQuery_ShouldPersistWrittenBack()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<ISapRejectionRepository>();
+
+        var record = SapRejectionRecord.Create(
+            "SAP-EXT-0002", "ESP-9.1", "BOM-IT-2", Ulid.NewUlid().ToString(), 5, "BOM 版本不符");
+        await repo.AddAsync(record, default);
+        await repo.SaveChangesAsync(default);
+
+        // 跟踪查询 → MarkWrittenBack → SaveChanges（不调 Update，验证跟踪上下文生效）
+        var tracked = await repo.GetByIdTrackedAsync(record.Id, default);
+        Assert.NotNull(tracked);
+        tracked!.MarkWrittenBack(DateTimeOffset.UtcNow);
+        await repo.SaveChangesAsync(default);
+
+        // 验证持久化
+        var verify = await repo.GetByIdAsync(record.Id, default);
+        Assert.NotNull(verify);
+        Assert.Equal(RejectionWritebackStatus.WrittenBack, verify!.WritebackStatus);
+        Assert.NotNull(verify.WritebackAt);
+        Assert.Null(verify.WritebackError);
+    }
+
+    [Fact]
+    public async Task SapRejectionWriteback_TrackedQuery_ShouldPersistFailed()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<ISapRejectionRepository>();
+
+        var record = SapRejectionRecord.Create(
+            "SAP-EXT-0003", "ESP-9.0", "BOM-IT-3", Ulid.NewUlid().ToString(), 8, "工艺路线版本不符");
+        await repo.AddAsync(record, default);
+        await repo.SaveChangesAsync(default);
+
+        var tracked = await repo.GetByIdTrackedAsync(record.Id, default);
+        Assert.NotNull(tracked);
+        tracked!.MarkFailed("SAP 不可达", DateTimeOffset.UtcNow);
+        await repo.SaveChangesAsync(default);
+
+        var verify = await repo.GetByIdAsync(record.Id, default);
+        Assert.NotNull(verify);
+        Assert.Equal(RejectionWritebackStatus.Failed, verify!.WritebackStatus);
+        Assert.Equal("SAP 不可达", verify!.WritebackError);
+        Assert.NotNull(verify.WritebackAt);
+    }
+
+    // ═══════════════════════════════════════════
+    //  看板当日产量（P1）：以液压测试完成时间为口径统计合格/不良
+    // ═══════════════════════════════════════════
+
+    [Fact]
+    public async Task HydraulicCountByCompletedPeriod_ShouldCountTodayQualifiedAndDefective()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
+        var repo = scope.ServiceProvider.GetRequiredService<IHydraulicTestRepository>();
+
+        // 该计数为全局口径（不限设备/工单），先清空以隔离同集合内其他测试的插入数据。
+        db.Set<HydraulicTestResult>().RemoveRange(db.Set<HydraulicTestResult>());
+        await db.SaveChangesAsync(default);
+
+        var today = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
+        var tomorrow = today.AddDays(1);
+        DateTimeOffset At(int hour) => new(today.Year, today.Month, today.Day, hour, 0, 0, TimeSpan.Zero);
+
+        // 今日：2 合格 + 1 不合格（显式 UTC 偏移，避免 Npgsql Offset 异常）
+        var pass1 = HydraulicTestResult.Create("EQ-HYD-01", Ulid.NewUlid(), "SN-P1", 1);
+        pass1.Complete();  // → Passed
+        pass1.CompletedAt = At(9);
+        await repo.AddAsync(pass1, default);
+
+        var pass2 = HydraulicTestResult.Create("EQ-HYD-01", Ulid.NewUlid(), "SN-P2", 1);
+        pass2.Complete();
+        pass2.CompletedAt = At(10);
+        await repo.AddAsync(pass2, default);
+
+        var fail1 = HydraulicTestResult.Create("EQ-HYD-01", Ulid.NewUlid(), "SN-F1", 1);
+        fail1.RecordPressureRelease(400);  // 泄压超时 → Failed
+        fail1.Complete();
+        fail1.CompletedAt = At(11);
+        await repo.AddAsync(fail1, default);
+
+        // 昨日：1 合格（不应计入今日）
+        var yesterdayPass = HydraulicTestResult.Create("EQ-HYD-01", Ulid.NewUlid(), "SN-YP", 1);
+        yesterdayPass.Complete();
+        yesterdayPass.CompletedAt = new(today.AddDays(-1).Year, today.AddDays(-1).Month, today.AddDays(-1).Day, 23, 0, 0, TimeSpan.Zero);
+        await repo.AddAsync(yesterdayPass, default);
+
+        await repo.SaveChangesAsync(default);
+
+        var (qualified, defective) = await repo.CountByCompletedPeriodAsync(today, tomorrow, default);
+        Assert.Equal(2, qualified);
+        Assert.Equal(1, defective);
+    }
+
     [Fact]
     public async Task InventoryAlertRepository_ShouldScopeLatestAlertByStation()
     {
@@ -265,9 +439,13 @@ public class DatabaseFixture : IAsyncLifetime
         services.AddScoped<IConsumptionVarianceRepository, ConsumptionVarianceRepository>();
         services.AddScoped<ISapInventorySyncRecordRepository, SapInventorySyncRecordRepository>();
 
+        // SAP 集成仓储（T1.3 拒单回写）
+        services.AddScoped<ISapRejectionRepository, SapRejectionRepository>();
+
         // 质量体系仓储（T2.x）
         services.AddScoped<IQualityRecordRepository, QualityRecordRepository>();
         services.AddScoped<IInspectionPlanRepository, InspectionPlanRepository>();
+        services.AddScoped<IHydraulicTestRepository, HydraulicTestRepository>();
         services.AddScoped<ISpcSampleRepository, SpcSampleRepository>();
         services.AddScoped<ISpcRuleAlertRepository, SpcRuleAlertRepository>();
         services.AddScoped<INonConformanceReportRepository, NonConformanceReportRepository>();

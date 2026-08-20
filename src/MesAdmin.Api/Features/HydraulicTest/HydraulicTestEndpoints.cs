@@ -100,7 +100,9 @@ public class UnlockHydraulicEquipmentEndpoint : Endpoint<UnlockRequest>
             ThrowIfAnyErrors();
         }
 
-        var result = await _repo.GetByIdAsync(recordId, ct);
+        // 注意：必须用跟踪查询加载，SolenoidTests 是 JSON owned collection，
+        // AsNoTracking + Update() 会触发 EF Core '__synthesizedOrdinal' shadow 键未跟踪异常。
+        var result = await _repo.GetByIdTrackedAsync(recordId, ct);
         if (result is null)
         {
             HttpContext.Response.StatusCode = 404;
@@ -109,7 +111,6 @@ public class UnlockHydraulicEquipmentEndpoint : Endpoint<UnlockRequest>
         }
 
         result.UnlockEquipment(req.UnlockedBy);
-        _repo.Update(result);
         await _repo.SaveChangesAsync(ct);
 
         await HttpContext.Response.WriteAsJsonAsync(new

@@ -1,0 +1,516 @@
+@page "/quality-reports"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text
+@using MesAdmin.Web.Services
+@using Microsoft.JSInterop
+@inject MesApiClient Api
+@inject IJSRuntime JS
+@inject ILogger<QualityReports> PageLogger
+
+<PageTitle>质量报表 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="T2.9 · QuestPDF Quality Reports" Title="质量报表"
+                  Description="日报 / 周报 / 月报 PDF · 一键查看与下载 · 支持自定义时间范围">
+        <HeaderActions>
+            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                质量工程师 / 检验员
+            </MudChip>
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    @* ── 预置报表（日报 / 周报 / 月报） ── *@
+    <MudGrid Spacing="2">
+        @foreach (var card in _reportCards)
+        {
+            <MudItem xs="12" md="4">
+                <MudPaper Class="glass-kpi-card pa-4">
+                    <MudStack Spacing="2">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudIcon Icon="@card.Icon" Size="Size.Large" Color="Color.Primary" />
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@card.Title</MudText>
+                                <MudText Typo="Typo.caption" Class="kpi-sub">@card.PeriodLabel</MudText>
+                            </MudStack>
+                        </MudStack>
+
+                        <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Download"
+                                       Disabled="@(card.IsLoading || _anyBusy)"
+                                       OnClick="() => GenerateAndDownloadAsync(card)">
+                                @(card.IsLoading ? "生成中..." : "生成并下载")
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Visibility"
+                                       Disabled="@(card.Pdf is null || card.IsLoading)"
+                                       OnClick="() => OpenPdfAsync(card)">
+                                查看
+                            </MudButton>
+                            @if (card.Pdf is not null)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                                    @FormatKb(card.Pdf.Length)
+                                </MudChip>
+                            }
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @* ── 自定义时间范围 ── *@
+    <MudPaper Class="module-card pa-4">
+        <MudStack Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Medium" Color="Color.Primary" />
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">自定义时间范围</MudText>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Outlined">
+                    仅质量工程师
+                </MudChip>
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="section-copy">
+                指定起止日期生成质量报告（≤2 天按日报、≤14 天按周报、更长按月报口径汇总）。
+            </MudText>
+
+            <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudDatePicker T="DateTime?" @bind-Date="_customStart" Label="开始日期"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Style="max-width:190px;" />
+                <MudText Typo="Typo.body2" Class="kpi-sub">至</MudText>
+                <MudDatePicker T="DateTime?" @bind-Date="_customEnd" Label="结束日期"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Style="max-width:190px;" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Download"
+                           Disabled="@(_customBusy || _anyBusy)"
+                           OnClick="GenerateCustomAsync">
+                    @(_customBusy ? "生成中..." : "生成并下载")
+                </MudButton>
+                @if (_customPdf is not null)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Visibility" OnClick="OpenCustomPdfAsync">
+                        查看
+                    </MudButton>
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                        @FormatKb(_customPdf.Length)
+                    </MudChip>
+                }
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+
+    @* ── 模板引擎（T4.1）：预置模板按需生成 ── *@
+    <MudPaper Class="module-card pa-4">
+        <MudStack Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Medium" Color="Color.Primary" />
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">模板引擎</MudText>
+                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                    质量工程师 / 生产经理
+                </MudChip>
+                <MudSpacer />
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@(_templatesLoading || _anyBusy)"
+                               OnClick="LoadTemplatesAsync" Size="Size.Small" />
+            </MudStack>
+            <MudText Typo="Typo.body2" Class="section-copy">
+                5 个预置模板（OEE 日报 / 生产日报 / 质量报告 / 维护周报 / 综合管理月报），选定时间范围后按需生成。
+            </MudText>
+
+            <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudDatePicker T="DateTime?" @bind-Date="_tplStart" Label="开始日期"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Style="max-width:190px;" />
+                <MudText Typo="Typo.body2" Class="kpi-sub">至</MudText>
+                <MudDatePicker T="DateTime?" @bind-Date="_tplEnd" Label="结束日期"
+                               Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Style="max-width:190px;" />
+                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">
+                    模板 @_templates.Count 个
+                </MudChip>
+            </MudStack>
+
+            @if (_templatesLoading && _templates.Count == 0)
+            {
+                <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                    <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                    <MudText Typo="Typo.body2" Class="section-copy">加载报表模板...</MudText>
+                </MudStack>
+            }
+            else if (_templates.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="section-copy">暂无可用报表模板。</MudText>
+            }
+            else
+            {
+                <MudTable T="ReportTemplateItemDto" Items="@_templates" Dense Hover Breakpoint="Breakpoint.Sm"
+                          Elevation="0" Class="module-card">
+                    <ColGroup>
+                        <col style="width:150px" />
+                        <col style="width:90px" />
+                        <col style="width:70px" />
+                        <col style="min-width:220px" />
+                        <col style="width:130px" />
+                        <col style="width:230px" />
+                    </ColGroup>
+                    <HeaderContent>
+                        <MudTh>模板名称</MudTh>
+                        <MudTh>类型</MudTh>
+                        <MudTh>区块</MudTh>
+                        <MudTh>描述</MudTh>
+                        <MudTh>支持</MudTh>
+                        <MudTh>操作</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="模板名称">
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">@context.Name</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="类型">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                @GetTemplateTypeLabel(context.Type)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="区块">@context.SectionCount</MudTd>
+                        <MudTd DataLabel="描述">
+                            <MudText Typo="Typo.caption" Class="kpi-sub">@context.Description</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="支持">
+                            <MudStack Row Spacing="1">
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@(context.SupportsEmail ? Color.Success : Color.Default)"
+                                         Variant="Variant.Outlined">
+                                    邮件
+                                </MudChip>
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@(context.SupportsSchedule ? Color.Success : Color.Default)"
+                                         Variant="Variant.Outlined">
+                                    定时
+                                </MudChip>
+                            </MudStack>
+                        </MudTd>
+                        <MudTd DataLabel="操作">
+                            <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Download"
+                                           Disabled="@(_generating.Contains(context.Id) || _anyBusy)"
+                                           OnClick="() => GenerateTemplateAsync(context)">
+                                    @(_generating.Contains(context.Id) ? "生成中..." : "生成并下载")
+                                </MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Secondary"
+                                           StartIcon="@Icons.Material.Filled.Visibility"
+                                           Disabled="@(!_templatePdfs.ContainsKey(context.Id))"
+                                           OnClick="() => OpenTemplatePdfAsync(context.Id)">
+                                    查看
+                                </MudButton>
+                                @if (_templatePdfs.TryGetValue(context.Id, out var pdf))
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                                        @FormatKb(pdf.Length)
+                                    </MudChip>
+                                }
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@code {
+    private string _message = string.Empty;
+    private bool _isError;
+
+    private DateTime? _customStart = DateTime.Today.AddDays(-7);
+    private DateTime? _customEnd = DateTime.Today;
+    private byte[]? _customPdf;
+    private bool _customBusy;
+
+    // ── 模板引擎（T4.1） ──
+    private List<ReportTemplateItemDto> _templates = [];
+    private bool _templatesLoading;
+    private DateTime? _tplStart = DateTime.Today.AddDays(-7);
+    private DateTime? _tplEnd = DateTime.Today;
+    private readonly Dictionary<string, byte[]> _templatePdfs = [];
+    private readonly HashSet<string> _generating = [];
+
+    private bool _anyBusy => _reportCards.Any(c => c.IsLoading) || _customBusy || _generating.Count > 0;
+
+    private sealed class ReportCard
+    {
+        public required string Key { get; init; }
+        public required string Title { get; init; }
+        public required string Icon { get; init; }
+        public required string PeriodLabel { get; init; }
+        public required Func<string> FileName { get; init; }
+        public byte[]? Pdf { get; set; }
+        public bool IsLoading { get; set; }
+    }
+
+    private List<ReportCard> _reportCards = [];
+
+    // ═══════════════════════════════════════════
+    // 页面初始化
+    // ═══════════════════════════════════════════
+
+    protected override void OnInitialized()
+    {
+        var now = DateTime.Today;
+
+        // 与后端 GetDailyReportEndpoint 一致的周期：昨日 0:00 → 今日 0:00
+        var yesterday = now.AddDays(-1);
+
+        // 与后端 GetWeeklyReportEndpoint 一致：上周（服务器以周日为周界向前推 7+ 天）
+        var lastWeekStart = now.AddDays((int)now.DayOfWeek * -1 - 7);
+
+        // 与后端 GetMonthlyReportEndpoint 一致：上月
+        var lastMonthStart = new DateTime(now.Year, now.Month, 1).AddMonths(-1);
+
+        _reportCards =
+        [
+            new ReportCard
+            {
+                Key = "daily",
+                Title = "质量日报",
+                Icon = Icons.Material.Filled.Today,
+                PeriodLabel = $"昨日（{yesterday:yyyy-MM-dd}）",
+                FileName = () => $"AutoMES_Quality_Daily_{yesterday:yyyyMMdd}.pdf"
+            },
+            new ReportCard
+            {
+                Key = "weekly",
+                Title = "质量周报",
+                Icon = Icons.Material.Filled.DateRange,
+                PeriodLabel = $"上周（{lastWeekStart:yyyy-MM-dd} 起，7 天）",
+                FileName = () => $"AutoMES_Quality_Weekly_{lastWeekStart:yyyyMMdd}.pdf"
+            },
+            new ReportCard
+            {
+                Key = "monthly",
+                Title = "质量月报",
+                Icon = Icons.Material.Filled.CalendarMonth,
+                PeriodLabel = $"上月（{lastMonthStart:yyyy-MM} 整月）",
+                FileName = () => $"AutoMES_Quality_Monthly_{lastMonthStart:yyyyMM}.pdf"
+            }
+        ];
+    }
+
+    // ═══════════════════════════════════════════
+    // 生成 + 下载
+    // ═══════════════════════════════════════════
+
+    private async Task GenerateAndDownloadAsync(ReportCard card)
+    {
+        card.IsLoading = true;
+        _message = string.Empty;
+        try
+        {
+            var (ok, pdf, status) = await Api.GetReportPdfAsync(card.Key);
+            if (!ok || pdf is null || pdf.Length == 0)
+            {
+                _message = $"报表生成失败（HTTP {status}）：需质量工程师或检验员权限";
+                _isError = true;
+                return;
+            }
+
+            card.Pdf = pdf;
+            _message = $"{card.Title}已生成（{FormatKb(pdf.Length)}），开始下载…";
+            _isError = false;
+
+            var base64 = Convert.ToBase64String(pdf);
+            var ok2 = await JS.InvokeAsync<bool>("reportInterop.downloadPdf", base64, card.FileName());
+            if (!ok2)
+            {
+                _message = $"{card.Title}下载失败：PDF 数据解码异常";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "生成质量报表失败");
+            _message = $"生成 {card.Title} 失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            card.IsLoading = false;
+        }
+    }
+
+    private async Task OpenPdfAsync(ReportCard card)
+    {
+        if (card.Pdf is null) return;
+        await JS.InvokeAsync<bool>("reportInterop.openPdf", Convert.ToBase64String(card.Pdf));
+    }
+
+    // ═══════════════════════════════════════════
+    // 自定义范围
+    // ═══════════════════════════════════════════
+
+    private async Task GenerateCustomAsync()
+    {
+        if (_customStart is null || _customEnd is null)
+        {
+            _message = "请选择起止日期";
+            _isError = true;
+            return;
+        }
+        if (_customEnd.Value.Date <= _customStart.Value.Date)
+        {
+            _message = "结束日期必须晚于开始日期";
+            _isError = true;
+            return;
+        }
+
+        _customBusy = true;
+        _message = string.Empty;
+        try
+        {
+            var (ok, pdf, status) = await Api.GetCustomReportPdfAsync(
+                _customStart.Value.Date, _customEnd.Value.Date);
+            if (!ok || pdf is null || pdf.Length == 0)
+            {
+                _message = $"自定义报表生成失败（HTTP {status}）：需质量工程师权限";
+                _isError = true;
+                return;
+            }
+
+            _customPdf = pdf;
+            var fileName = $"AutoMES_Quality_Custom_{_customStart.Value:yyyyMMdd}_{_customEnd.Value:yyyyMMdd}.pdf";
+            _message = $"自定义报表已生成（{FormatKb(pdf.Length)}），开始下载…";
+            _isError = false;
+
+            var ok2 = await JS.InvokeAsync<bool>("reportInterop.downloadPdf", Convert.ToBase64String(pdf), fileName);
+            if (!ok2)
+            {
+                _message = "自定义报表下载失败：PDF 数据解码异常";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "生成自定义质量报表失败");
+            _message = $"自定义报表生成失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _customBusy = false;
+        }
+    }
+
+    private async Task OpenCustomPdfAsync()
+    {
+        if (_customPdf is null) return;
+        await JS.InvokeAsync<bool>("reportInterop.openPdf", Convert.ToBase64String(_customPdf));
+    }
+
+    // ═══════════════════════════════════════════
+    // 模板引擎（T4.1）
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTemplatesAsync();
+    }
+
+    private async Task LoadTemplatesAsync()
+    {
+        _templatesLoading = true;
+        _message = string.Empty;
+        try
+        {
+            _templates = await Api.GetReportTemplatesAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载报表模板失败");
+            _message = $"加载报表模板失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _templatesLoading = false;
+        }
+    }
+
+    private async Task GenerateTemplateAsync(ReportTemplateItemDto template)
+    {
+        if (_tplStart is null || _tplEnd is null)
+        {
+            _message = "请选择起止日期";
+            _isError = true;
+            return;
+        }
+        if (_tplEnd.Value.Date <= _tplStart.Value.Date)
+        {
+            _message = "结束日期必须晚于开始日期";
+            _isError = true;
+            return;
+        }
+
+        _generating.Add(template.Id);
+        _message = string.Empty;
+        try
+        {
+            var (ok, pdf, status) = await Api.GenerateTemplateReportAsync(
+                template.Id, _tplStart.Value.Date, _tplEnd.Value.Date);
+            if (!ok || pdf is null || pdf.Length == 0)
+            {
+                _message = $"模板「{template.Name}」生成失败（HTTP {status}）：需质量工程师或生产经理权限";
+                _isError = true;
+                return;
+            }
+
+            _templatePdfs[template.Id] = pdf;
+            var fileName = $"AutoMES_{template.Id}_{_tplStart.Value:yyyyMMdd}_{_tplEnd.Value:yyyyMMdd}.pdf";
+            _message = $"模板「{template.Name}」已生成（{FormatKb(pdf.Length)}），开始下载…";
+            _isError = false;
+
+            var ok2 = await JS.InvokeAsync<bool>("reportInterop.downloadPdf", Convert.ToBase64String(pdf), fileName);
+            if (!ok2)
+            {
+                _message = $"模板「{template.Name}」下载失败：PDF 数据解码异常";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "按模板生成报表失败");
+            _message = $"模板「{template.Name}」生成失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _generating.Remove(template.Id);
+        }
+    }
+
+    private async Task OpenTemplatePdfAsync(string templateId)
+    {
+        if (!_templatePdfs.TryGetValue(templateId, out var pdf)) return;
+        await JS.InvokeAsync<bool>("reportInterop.openPdf", Convert.ToBase64String(pdf));
+    }
+
+    private static string GetTemplateTypeLabel(string type) => type switch
+    {
+        "OeeDaily" => "OEE 日报",
+        "ProductionDaily" => "生产日报",
+        "Quality" => "质量报告",
+        "MaintenanceWeekly" => "维护周报",
+        "Monthly" => "综合月报",
+        _ => type
+    };
+
+    private static string FormatKb(int bytes) => $"{bytes / 1024.0:F1} KB";
+}

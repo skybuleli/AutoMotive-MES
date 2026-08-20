@@ -8,7 +8,7 @@
 
 <PageTitle>工单看板 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="PRODUCTION · 工单看板" Title="生产工单看板"
                   Description="按状态泳道浏览工单流转 · 点击卡片查看详情">
         <HeaderActions>
@@ -23,7 +23,7 @@
         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>@_loadError</MudAlert>
     }
 
-    <MudGrid Spacing="3">
+    <MudGrid Spacing="2">
         @foreach (var column in _columns)
         {
             <MudItem xs="12" sm="6" md="4" lg="2">

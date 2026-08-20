@@ -1,0 +1,429 @@
+@page "/hydraulic-test"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+@inject ILogger<HydraulicTest> PageLogger
+
+<PageTitle>液压测试台 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="T2.6 · Hydraulic Test Bench" Title="液压测试台"
+                  Description="站4 100% 在线测试 · 12 路电磁阀 × 3 循环 · 建压/保压/泄压/泄漏率 · 不合格自动锁止">
+        <HeaderActions>
+            @if (_latest is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="@(_latest.EquipmentLocked ? Color.Error : _latest.OverallPass ? Color.Success : Color.Warning)"
+                         Variant="Variant.Filled">
+                    @(_latest.EquipmentLocked ? "设备已锁止" : _latest.OverallPass ? "运行正常" : "待处理")
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                    @GetStatusLabel(_latest.Status)
+                </MudChip>
+            }
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
+                           OnClick="LoadDataAsync" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (_errorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>
+            @_errorMessage
+        </MudAlert>
+    }
+
+    @* ── 最新测试结果 ── *@
+    @if (_isLoading && _latest is null)
+    {
+        <MesStateCard Loading="true" Text="加载测试台数据..." />
+    }
+    else if (_latest is null)
+    {
+        <MesStateCard Loading="false" Icon="@Icons.Material.Filled.Speed"
+                      Text="暂无测试记录" Hint="液压测试台尚未产生测试结果。" />
+    }
+    else
+    {
+        <MudPaper Class="glass-kpi-card pa-4">
+            <MudStack Spacing="3">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <span class="status-dot @(_latest.EquipmentLocked ? "alarm" : _latest.OverallPass ? "running" : "idle")"></span>
+                        <MudText Typo="Typo.subtitle1" Class="section-kicker">
+                            <MudIcon Icon="@Icons.Material.Filled.Speed" Size="Size.Small" /> 最新测试 — @_latest.EquipmentCode
+                        </MudText>
+                    </MudStack>
+                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_latest.OverallPass ? Color.Success : Color.Error)"
+                                 Variant="Variant.Filled">
+                            @(_latest.OverallPass ? "总体合格" : "总体不合格")
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                            循环 @_latest.CycleNumber / 3
+                        </MudChip>
+                    </MudStack>
+                </MudStack>
+
+                @* 6 项判定指标 *@
+                <div class="oee-grid">
+                    <MudPaper Class="glass-kpi-card">
+                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption" Class="kpi-label">建压时间</MudText>
+                            <MudText Typo="Typo.h6">@FormatValue(_latest.PressureBuildTimeMs, "ms")</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="@PassColor(_latest.PressureBuildPass)" Variant="Variant.Outlined">
+                                @PassLabel(_latest.PressureBuildPass)
+                            </MudChip>
+                        </MudStack>
+                    </MudPaper>
+                    <MudPaper Class="glass-kpi-card">
+                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption" Class="kpi-label">保压压力</MudText>
+                            <MudText Typo="Typo.h6">@FormatValue(_latest.HoldPressureBar, "bar")</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="@PassColor(_latest.HoldPressurePass)" Variant="Variant.Outlined">
+                                @PassLabel(_latest.HoldPressurePass)
+                            </MudChip>
+                        </MudStack>
+                    </MudPaper>
+                    <MudPaper Class="glass-kpi-card">
+                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption" Class="kpi-label">泄压时间</MudText>
+                            <MudText Typo="Typo.h6">@FormatValue(_latest.PressureReleaseTimeMs, "ms")</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="@PassColor(_latest.PressureReleasePass)" Variant="Variant.Outlined">
+                                @PassLabel(_latest.PressureReleasePass)
+                            </MudChip>
+                        </MudStack>
+                    </MudPaper>
+                    <MudPaper Class="glass-kpi-card">
+                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption" Class="kpi-label">泄漏率</MudText>
+                            <MudText Typo="Typo.h6">@FormatValue(_latest.LeakRateCcHr, "CC/hr")</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="@PassColor(_latest.LeakRatePass)" Variant="Variant.Outlined">
+                                @PassLabel(_latest.LeakRatePass)
+                            </MudChip>
+                        </MudStack>
+                    </MudPaper>
+                    <MudPaper Class="glass-kpi-card">
+                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption" Class="kpi-label">电磁阀</MudText>
+                            <MudText Typo="Typo.h6">@_latest.SolenoidPassCount / @_latest.SolenoidTestCount</MudText>
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(_latest.SolenoidTestCount > 0 && _latest.SolenoidPassCount == _latest.SolenoidTestCount ? Color.Success : Color.Error)"
+                                     Variant="Variant.Outlined">
+                                12 路
+                            </MudChip>
+                        </MudStack>
+                    </MudPaper>
+                    <MudPaper Class="glass-kpi-card">
+                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption" Class="kpi-label">设备状态</MudText>
+                            <MudText Typo="Typo.h6" Color="@(_latest.EquipmentLocked ? Color.Error : Color.Success)">
+                                @(_latest.EquipmentLocked ? "已锁止" : "可用")
+                            </MudText>
+                            @if (_latest.EquipmentLocked)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Warning"
+                                           OnClick="OpenUnlockDialog">
+                                    解锁设备
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="kpi-label">@(_latest.UnlockedBy is null ? "无需解锁" : $"解锁人 {_latest.UnlockedBy}")</MudText>
+                            }
+                        </MudStack>
+                    </MudPaper>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_latest.FailureReason))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>
+                        <b>失败原因：</b>@_latest.FailureReason
+                    </MudAlert>
+                }
+                @if (_latest.EquipmentLocked)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense>
+                        测试不合格导致设备自动锁止，需质量工程师解锁后继续生产。
+                    </MudAlert>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+
+    @* ── 历史记录 ── *@
+    <MudPaper Class="module-card">
+        <MudStack Spacing="2" Class="pa-4">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.subtitle1" Class="section-kicker">
+                    <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" /> 测试历史（最近 @_history.Count 条）
+                </MudText>
+                @if (_isLoading && _history.Count > 0)
+                {
+                    <MudProgressCircular Size="Size.Small" Color="Color.Primary" />
+                }
+            </MudStack>
+
+            @if (_history.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="section-copy">暂无历史测试记录。</MudText>
+            }
+            else
+            {
+                <MudTable Items="@_history" Dense="true" Hover="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>循环</MudTh>
+                        <MudTh>状态</MudTh>
+                        <MudTh>建压</MudTh>
+                        <MudTh>保压</MudTh>
+                        <MudTh>泄压</MudTh>
+                        <MudTh>泄漏率</MudTh>
+                        <MudTh>电磁阀</MudTh>
+                        <MudTh>总体</MudTh>
+                        <MudTh>设备</MudTh>
+                        <MudTh>开始时间</MudTh>
+                        <MudTh>操作</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="循环">
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">#@context.CycleNumber</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="状态">
+                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)" Variant="Variant.Outlined">
+                                @GetStatusLabel(context.Status)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="建压">@MiniPass(context.PressureBuildPass)</MudTd>
+                        <MudTd DataLabel="保压">@MiniPass(context.HoldPressurePass)</MudTd>
+                        <MudTd DataLabel="泄压">@MiniPass(context.PressureReleasePass)</MudTd>
+                        <MudTd DataLabel="泄漏率">@MiniPass(context.LeakRatePass)</MudTd>
+                        <MudTd DataLabel="电磁阀">
+                            <MudText Typo="Typo.body2" Color="@(context.SolenoidTestCount > 0 && context.SolenoidPassCount == context.SolenoidTestCount ? Color.Success : Color.Error)">
+                                @context.SolenoidPassCount/@context.SolenoidTestCount
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="总体">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.OverallPass ? Color.Success : Color.Error)" Variant="Variant.Filled">
+                                @(context.OverallPass ? "合格" : "NG")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="设备">
+                            <MudChip T="string" Size="Size.Small" Color="@(context.EquipmentLocked ? Color.Error : Color.Success)" Variant="Variant.Outlined">
+                                @(context.EquipmentLocked ? "锁止" : "正常")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="时间">@context.StartedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")</MudTd>
+                        <MudTd DataLabel="操作">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                                       OnClick="() => OpenDetailDialog(context)">
+                                详情
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@* 解锁对话框 *@
+<MudDialog @bind-Visible="_showUnlockDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">解锁液压测试设备 — @_latest?.EquipmentCode</MudText>
+            <MudText Typo="Typo.body2" Class="kpi-label">
+                设备因测试不合格已锁止。仅质量工程师可解锁，解锁后恢复生产。
+            </MudText>
+            <MudTextField Label="解锁员工号" Variant="Variant.Outlined" @bind-Value="_unlockedBy" />
+            <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                       OnClick="UnlockAsync" Disabled="_isActionLoading"
+                       FullWidth="true">
+                确认解锁
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+@* 详情对话框 *@
+<MudDialog @bind-Visible="_showDetailDialog">
+    <DialogContent>
+        @if (_selected is not null)
+        {
+            <MudStack Spacing="3">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h6">测试详情 — @_selected.EquipmentCode</MudText>
+                    <MudChip T="string" Size="Size.Small" Color="@(_selected.OverallPass ? Color.Success : Color.Error)" Variant="Variant.Filled">
+                        @(_selected.OverallPass ? "合格" : "不合格")
+                    </MudChip>
+                </MudStack>
+                <MudText Typo="Typo.caption" Class="kpi-label">
+                    循环 @_selected.CycleNumber / 3 · 状态 @GetStatusLabel(_selected.Status) · @_selected.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
+                </MudText>
+                <MudTable Items="@BuildDetailRows(_selected)" Dense="true" Elevation="0" Class="detail-table">
+                    <HeaderContent>
+                        <MudTh>测试项</MudTh>
+                        <MudTh>实测值</MudTh>
+                        <MudTh>目标</MudTh>
+                        <MudTh>判定</MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="row">
+                        <MudTd DataLabel="测试项">@row.Name</MudTd>
+                        <MudTd DataLabel="实测值">@row.Value</MudTd>
+                        <MudTd DataLabel="目标">@row.Target</MudTd>
+                        <MudTd DataLabel="判定">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(row.Pass is null ? Color.Default : row.Pass.Value ? Color.Success : Color.Error)"
+                                     Variant="Variant.Outlined">
+                                @(row.Pass is null ? "—" : row.Pass.Value ? "OK" : "NG")
+                            </MudChip>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+                @if (_selected.EquipmentLocked)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>
+                        设备已锁止@(_selected.UnlockedBy is null ? "" : $" · 已由 {_selected.UnlockedBy} 解锁")
+                    </MudAlert>
+                }
+                @if (!string.IsNullOrWhiteSpace(_selected.FailureReason))
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense>
+                        <b>失败原因：</b>@_selected.FailureReason
+                    </MudAlert>
+                }
+            </MudStack>
+        }
+    </DialogContent>
+</MudDialog>
+
+@code {
+    private HydraulicTestDto? _latest;
+    private List<HydraulicTestDto> _history = [];
+    private HydraulicTestDto? _selected;
+    private bool _isLoading;
+    private bool _isActionLoading;
+    private string? _errorMessage;
+
+    // ── 对话框状态 ──
+    private bool _showUnlockDialog;
+    private bool _showDetailDialog;
+    private string _unlockedBy = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var latestTask = Api.GetHydraulicTestLatestAsync();
+            var historyTask = Api.GetHydraulicTestHistoryAsync(50);
+            await Task.WhenAll(latestTask, historyTask);
+            _latest = latestTask.Result;
+            _history = historyTask.Result ?? [];
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载液压测试数据失败");
+            _errorMessage = $"加载液压测试数据失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenUnlockDialog()
+    {
+        _unlockedBy = "";
+        _showUnlockDialog = true;
+    }
+
+    private void OpenDetailDialog(HydraulicTestDto record)
+    {
+        _selected = record;
+        _showDetailDialog = true;
+    }
+
+    private async Task UnlockAsync()
+    {
+        if (_latest is null || string.IsNullOrWhiteSpace(_unlockedBy)) return;
+        _isActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.UnlockHydraulicEquipmentAsync(_latest.Id, _unlockedBy);
+            if (ok)
+            {
+                _showUnlockDialog = false;
+                await LoadDataAsync();
+            }
+        }
+        finally
+        {
+            _isActionLoading = false;
+        }
+    }
+
+    // ── 辅助方法 ──
+
+    private static string GetStatusLabel(string status) => status switch
+    {
+        "Pending" => "等待测试",
+        "InProgress" => "测试中",
+        "Pressurizing" => "建压中",
+        "HoldingPressure" => "保压中",
+        "ReleasingPressure" => "泄压中",
+        "Passed" => "合格",
+        "Failed" => "不合格",
+        "EquipmentLocked" => "设备锁止",
+        _ => status
+    };
+
+    private static Color GetStatusColor(string status) => status switch
+    {
+        "Passed" => Color.Success,
+        "Failed" or "EquipmentLocked" => Color.Error,
+        _ => Color.Info
+    };
+
+    private static string FormatValue(double? value, string unit)
+        => value is null ? "-" : $"{value.Value.ToString("0.##")} {unit}";
+
+    private static Color PassColor(bool? pass) => pass switch
+    {
+        null => Color.Default,
+        true => Color.Success,
+        false => Color.Error
+    };
+
+    private static string PassLabel(bool? pass) => pass switch
+    {
+        null => "—",
+        true => "OK",
+        false => "NG"
+    };
+
+    private static string MiniPass(bool? pass) => pass switch
+    {
+        null => "—",
+        true => "✓",
+        false => "✗"
+    };
+
+    private record DetailRow(string Name, string Value, string Target, bool? Pass);
+
+    private static List<DetailRow> BuildDetailRows(HydraulicTestDto r) =>
+    [
+        new("建压时间", FormatValue(r.PressureBuildTimeMs, "ms"), "≤ 250 ms", r.PressureBuildPass),
+        new("保压压力", FormatValue(r.HoldPressureBar, "bar"), "175 - 185 bar", r.HoldPressurePass),
+        new("泄压时间", FormatValue(r.PressureReleaseTimeMs, "ms"), "≤ 300 ms", r.PressureReleasePass),
+        new("泄漏率", FormatValue(r.LeakRateCcHr, "CC/hr"), "≤ 0.5 CC/hr", r.LeakRatePass),
+        new("电磁阀", $"{r.SolenoidPassCount} / {r.SolenoidTestCount} 合格", "12 路全部合格",
+            r.SolenoidTestCount > 0 ? r.SolenoidPassCount == r.SolenoidTestCount : null),
+    ];
+}

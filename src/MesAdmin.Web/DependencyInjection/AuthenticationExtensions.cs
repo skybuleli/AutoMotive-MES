@@ -10,6 +10,9 @@ namespace MesAdmin.Web.DependencyInjection;
 /// </summary>
 public static class AuthenticationExtensions
 {
+    /// <summary>登录成功后种的 JWT cookie，供服务端整页导航鉴权兜底（见 OnMessageReceived）。</summary>
+    public const string CookieName = "mes_auth_cookie";
+
     public static IServiceCollection AddMesWebAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         // Web 端复用 AddMesJwtAuthentication，但覆盖 OnChallenge：
@@ -19,6 +22,15 @@ public static class AuthenticationExtensions
         {
             options.Events = new JwtBearerEvents
             {
+                OnMessageReceived = context =>
+                {
+                    // 登录成功后 Web 端会种下 httpOnly JWT cookie（mes_auth_cookie）；
+                    // 页面整页加载（登录后 NavigateTo 的浏览器导航）时没有 Authorization 头，
+                    // 从 cookie 兜底取 token，否则服务端无法通过 [Authorize] 校验而回跳登录页。
+                    if (string.IsNullOrEmpty(context.Token))
+                        context.Token = context.Request.Cookies[CookieName];
+                    return Task.CompletedTask;
+                },
                 OnChallenge = context =>
                 {
                     // 只对浏览器页面导航重定向；API 调用（带 Accept: application/json）仍返回 401

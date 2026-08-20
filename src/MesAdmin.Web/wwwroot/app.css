@@ -202,7 +202,7 @@ a { color: inherit; }
         var(--mes-surface);
     border: 1px solid var(--mes-border-strong);
     border-radius: var(--mes-r-lg);
-    padding: 20px;
+    padding: 14px;
     box-shadow: var(--mes-shadow);
     transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
                 box-shadow 0.28s ease, border-color 0.28s ease;
@@ -210,7 +210,7 @@ a { color: inherit; }
 }
 
 .glass-kpi-card:hover {
-    transform: translateY(-3px);
+    transform: translateY(-2px);
     border-color: var(--mes-lav-line);
     box-shadow: var(--mes-shadow-lg), 0 0 0 1px var(--mes-lav-line);
 }
@@ -288,7 +288,7 @@ a { color: inherit; }
 
 .kpi-value {
     font-family: var(--mes-mono);
-    font-size: 2.15rem;
+    font-size: 1.75rem;
     font-weight: 600;
     line-height: 1.05;
     letter-spacing: -0.02em;
@@ -306,13 +306,36 @@ a { color: inherit; }
 .oee-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
-    gap: 18px;
+    gap: 14px;
 }
 
 .inventory-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 18px;
+    gap: 14px;
+}
+
+/* JIT 看板折叠面板：玻璃卡片风格，头部可点击，内容与主题保持一致 */
+.mes-jit-panels .mud-expansion-panel {
+    background: transparent;
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r);
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.mes-jit-panels .mud-expansion-panel-header {
+    padding: 14px 18px;
+    color: var(--mud-palette-text-primary);
+    background: rgba(var(--mes-surface-rgb, 255, 255, 255), 0.6);
+}
+
+.mes-jit-panels .mud-expansion-panel-header:hover {
+    background: rgba(var(--mes-surface-rgb, 255, 255, 255), 0.9);
+}
+
+.mes-jit-panels .mud-expansion-panel-content {
+    padding: 4px 18px 18px;
 }
 
 /* ═══════════════ 表格 / 分页 / 详情（全站统一）═══════════════ */
@@ -338,7 +361,7 @@ a { color: inherit; }
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.75rem 0.85rem;
+    padding: 0.5rem 0.75rem;
     background: var(--mes-surface-2);
     border: 1px solid var(--mes-border-strong);
     border-radius: var(--mes-r);
@@ -348,9 +371,9 @@ a { color: inherit; }
 .detail-item {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.25rem;
     min-height: 100%;
-    padding: 0.8rem 0.9rem;
+    padding: 0.6rem 0.75rem;
     background: var(--mes-surface-2);
     border: 1px solid var(--mes-border-strong);
     border-radius: var(--mes-r);
@@ -493,15 +516,15 @@ a { color: inherit; }
 .home-kpi-icon {
     display: grid;
     place-items: center;
-    width: 46px;
-    height: 46px;
+    width: 42px;
+    height: 42px;
     border-radius: 12px;
     flex-shrink: 0;
 }
 
 .home-action {
     justify-content: flex-start;
-    padding: 12px 18px;
+    padding: 10px 16px;
     height: 100%;
     background: var(--mes-surface);
     border-color: var(--mes-border-strong);

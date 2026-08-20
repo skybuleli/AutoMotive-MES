@@ -13,7 +13,7 @@
 
 <PageTitle>生产看板 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     @* ── 顶部 KPI 条 ── *@
     <MudGrid Spacing="2">
         <MudItem xs="6" md="3">
@@ -48,11 +48,11 @@
         </MudAlert>
     }
 
-    <MudGrid Spacing="3">
+    <MudGrid Spacing="2">
         @* 左列：设备 OEE 看板 *@
         <MudItem xs="12" md="8">
             <MudPaper Class="glass-kpi-card pa-4">
-                <MudStack Spacing="3">
+                <MudStack Spacing="2">
                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                         <MudStack Spacing="0">
                             <MudText Typo="Typo.subtitle1" Class="section-kicker">
@@ -116,7 +116,7 @@
 
         @* 右列：工单状态 + 预警 + 环境数据 *@
         <MudItem xs="12" md="4">
-            <MudStack Spacing="3">
+            <MudStack Spacing="2">
                 @* 工单状态概览 *@
                 <MudPaper Class="glass-kpi-card pa-4">
                     <MudStack Spacing="2">
@@ -344,7 +344,8 @@
         _envData.Clear();
         foreach (var oee in _snapshot)
         {
-            // 模拟环境/过程值：根据设备类型映射
+            // 环境/过程值：以 OEE 真实分量（可用率/性能率/良品率）映射到设备物理量纲，
+            // 禁止 Random 伪造（历史缺陷：随机值会显示虚假的报警/正常状态）。
             var (tag, unit, maxVal, isHighBad) = oee.EquipmentCode switch
             {
                 "EQ-TQ-01" or "EQ-TQ-02" => ("扭矩", "Nm", 30.0, true),
@@ -356,7 +357,9 @@
                 _ => ("过程值", "", 100.0, true),
             };
 
-            var rawValue = oee.Oee * maxVal * (0.8 + Random.Shared.NextDouble() * 0.4);
+            // 用设备真实分量的加权合成作为过程值：性能率主（贴合产量），可用率与良品率辅
+            var ratio = Math.Clamp(0.5 * oee.Performance + 0.3 * oee.Availability + 0.2 * oee.Quality, 0, 1);
+            var rawValue = ratio * maxVal;
             var pct = Math.Clamp(rawValue / maxVal * 100, 0, 100);
             var color = isHighBad
                 ? (pct > 85 ? Color.Error : pct > 70 ? Color.Warning : Color.Success)

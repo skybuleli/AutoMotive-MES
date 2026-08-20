@@ -19,13 +19,16 @@ public sealed class PlcDriverFactory
     private readonly Dictionary<string, IPlcTransport> _equipmentToTransport;
     private readonly ILogger<PlcDriverFactory> _logger;
     private readonly SimulatedPlcTransport? _simulatedFallback;
+    private readonly bool _allowSimulatedFallback;
 
     public PlcDriverFactory(
         IReadOnlyList<IPlcTransport> transports,
-        ILogger<PlcDriverFactory> logger)
+        ILogger<PlcDriverFactory> logger,
+        bool allowSimulatedFallback = true)
     {
         _transports = transports;
         _logger = logger;
+        _allowSimulatedFallback = allowSimulatedFallback;
 
         _equipmentToTransport = new Dictionary<string, IPlcTransport>(StringComparer.Ordinal);
         foreach (var t in transports)
@@ -46,14 +49,20 @@ public sealed class PlcDriverFactory
 
     /// <summary>
     /// 获取指定设备编码对应的传输层。
-    /// 未找到时降级到 SimulatedPlcTransport（开发环境安全降级）。
+    /// 生产模式（allowSimulatedFallback=false）下，未匹配到专用驱动时抛异常（禁止静默降级到模拟）；
+    /// 开发模式（allowSimulatedFallback=true）下降级到 SimulatedPlcTransport。
     /// </summary>
     public IPlcTransport GetTransport(string equipmentCode)
     {
         if (_equipmentToTransport.TryGetValue(equipmentCode, out var transport))
             return transport;
 
-        // 未匹配到专用驱动 → 降级到模拟传输层
+        // 生产模式：未匹配到专用驱动 → 抛异常，禁止静默降级（RuntimeSafetyGuards 承诺"不降级为模拟"）
+        if (!_allowSimulatedFallback)
+            throw new InvalidOperationException(
+                $"设备 {equipmentCode} 未匹配到真实 PLC 驱动，禁止降级到模拟传输层。请检查 Plc:Drivers:* 配置或设备编码映射。");
+
+        // 开发模式：未匹配到专用驱动 → 降级到模拟传输层
         if (_simulatedFallback is not null)
         {
             _logger.ZLogWarning($"设备 {equipmentCode} 未找到专用驱动，使用模拟传输层降级");

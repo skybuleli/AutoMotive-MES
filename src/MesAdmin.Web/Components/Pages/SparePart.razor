@@ -9,7 +9,7 @@
 
 <PageTitle>备件管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="T2.18 · Spare Parts Management" Title="备件管理"
                   Description="备件库存看板 · 出入库管理 · 采购申请审批">
         <HeaderActions>
@@ -33,7 +33,7 @@
                Tab 1: 备件库存看板
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="库存看板" Icon="@Icons.Material.Filled.Dashboard">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     @* 摘要 KPI 卡片 *@
                     <div class="oee-grid">
                         <MudPaper Class="glass-kpi-card">
@@ -163,7 +163,7 @@
                Tab 2: 备件管理
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="备件管理" Icon="@Icons.Material.Filled.Inventory2">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudTextField @bind-Value="_searchFilter" Label="搜索物料编码/名称"
                                       Variant="Variant.Outlined" Margin="Margin.Dense" Immediate
@@ -267,7 +267,7 @@
                Tab 3: 采购申请审批
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="采购申请" Icon="@Icons.Material.Filled.PostAdd">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                                    OnClick="() => _showCreatePrDialog = true">

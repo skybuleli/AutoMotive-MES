@@ -40,10 +40,12 @@ public class GetDailyReportEndpoint : EndpointWithoutRequest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var yesterday = DateTimeOffset.UtcNow.Date.AddDays(-1);
-        var today = DateTimeOffset.UtcNow.Date;
+        // DateTimeOffset.UtcNow.Date 的 Kind 为 Unspecified，隐式转换会套本地偏移（+08:00）
+        // 导致 Npgsql 写 timestamptz 报错，必须显式构造 UTC 偏移
+        var todayUtc = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
+        var yesterday = todayUtc.AddDays(-1);
         var pdf = await _reportService.GenerateOnDemandAsync(
-            ReportPeriod.Daily, yesterday, today, ct);
+            ReportPeriod.Daily, yesterday, todayUtc, ct);
 
         await HttpContext.SendPdfAsync(pdf,
             $"AutoMES_Quality_Daily_{yesterday:yyyyMMdd}.pdf", ct);
@@ -73,8 +75,9 @@ public class GetWeeklyReportEndpoint : EndpointWithoutRequest
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var now = DateTimeOffset.UtcNow;
-        var lastWeek = now.Date.AddDays((int)now.DayOfWeek * -1 - 7);
+        // 同上：显式 UTC 偏移，避免 Unspecified DateTime 隐式转换带本地偏移
+        var todayUtc = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero);
+        var lastWeek = todayUtc.AddDays((int)todayUtc.DayOfWeek * -1 - 7);
         var weekEnd = lastWeek.AddDays(7);
         var pdf = await _reportService.GenerateOnDemandAsync(
             ReportPeriod.Weekly, lastWeek, weekEnd, ct);

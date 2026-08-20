@@ -51,6 +51,9 @@ public class InspectionPlanRepository(MesDbContext db) : IInspectionPlanReposito
     public Task<InspectionPlan?> GetByIdAsync(Ulid id, CancellationToken ct = default)
         => db.InspectionPlans.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct);
 
+    public Task<InspectionPlan?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default)
+        => db.InspectionPlans.FirstOrDefaultAsync(p => p.Id == id, ct);
+
     public Task<List<InspectionPlan>> GetByProductCodeAsync(string productCode, InspectionStage stage, CancellationToken ct = default)
         => db.InspectionPlans.AsNoTracking()
             .Where(p => (p.ProductCode == productCode || p.ProductCode == null) && p.Stage == stage && p.IsEnabled)

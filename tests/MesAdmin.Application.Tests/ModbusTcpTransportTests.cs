@@ -49,6 +49,29 @@ public class ModbusTcpTransportTests
         await server;
     }
 
+    [Fact]
+    public async Task RealClientMode_ReadRegisterCacheMiss_ShouldThrowNotSupported()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var equipment = new[]
+        {
+            Equipment.Create(Ulid.NewUlid(), "EQ-FLS-01", "ECU 刷写台", 5, "刷写台", "127.0.0.1:1502")
+        };
+        var transport = new ModbusTcpPlcTransport(
+            equipment,
+            NullLogger<ModbusTcpPlcTransport>.Instance,
+            useRealClient: true,
+            pollIntervalMs: 50);
+
+        // 生产模式：直接读寄存器未命中实时快照时必须显式失败，而非静默返回 0
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => transport.ReadRegisterAsync("EQ-FLS-01", "Torque", cts.Token));
+
+        // 生产模式：未实现的写入必须显式失败，而非静默 no-op
+        await Assert.ThrowsAsync<NotSupportedException>(
+            () => transport.WriteRegisterAsync("EQ-FLS-01", "Torque", 22.0, cts.Token));
+    }
+
     private static async Task RunSingleReadServerAsync(TcpListener listener, CancellationToken ct)
     {
         using var client = await listener.AcceptTcpClientAsync(ct);

@@ -5,9 +5,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FastEndpoints" Version="8.2.0" />
-    <PackageReference Include="FastEndpoints.Security" Version="8.2.0" />
-    <PackageReference Include="FastEndpoints.Swagger" Version="8.2.0" />
+    <PackageReference Include="FastEndpoints" Version="8.3.0" />
+    <PackageReference Include="FastEndpoints.Security" Version="8.3.0" />
+    <PackageReference Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageReference Include="FluentEmail.Smtp" Version="3.0.2" />
     <PackageReference Include="MemoryPack.AspNetCoreMvcFormatter" Version="1.21.4" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.2">

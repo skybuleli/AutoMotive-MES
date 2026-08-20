@@ -21,6 +21,10 @@ public interface IQualityRecordRepository
 public interface IInspectionPlanRepository
 {
     Task<InspectionPlan?> GetByIdAsync(Ulid id, CancellationToken ct = default);
+
+    /// <summary>按 Id 查询（跟踪实体，用于修改场景；JSON 拥有集合 + AsNoTracking + Update 会触发 __synthesizedOrdinal shadow 键异常）</summary>
+    Task<InspectionPlan?> GetByIdTrackedAsync(Ulid id, CancellationToken ct = default);
+
     Task<List<InspectionPlan>> GetByProductCodeAsync(string productCode, InspectionStage stage, CancellationToken ct = default);
     Task<List<InspectionPlan>> GetEnabledAsync(CancellationToken ct = default);
     Task AddAsync(InspectionPlan plan, CancellationToken ct = default);

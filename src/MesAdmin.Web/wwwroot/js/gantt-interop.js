@@ -7,7 +7,7 @@ window.ganttInterop = {
     // Initialize the Gantt chart
     init: function (elementId, data) {
         if (this.ganttInstance) {
-            this.ganttInstance.destroy();
+            this.ganttInstance.dispose();
             this.ganttInstance = null;
         }
 

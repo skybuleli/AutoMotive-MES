@@ -8,7 +8,7 @@
 
 <PageTitle>全链路追溯 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="M04 · Traceability" Title="全链路追溯">
         <HeaderActions>
             <MudChip T="string" Color="@(_hashBroken ? Color.Error : Color.Success)" Variant="Variant.Filled" Size="Size.Small">
@@ -24,10 +24,10 @@
         </MudAlert>
     }
 
-    <MudGrid Spacing="3">
+    <MudGrid Spacing="2">
         <MudItem xs="12" lg="4">
-            <MudPaper Class="module-card pa-5">
-                <MudStack Spacing="3">
+            <MudPaper Class="module-card pa-4">
+                <MudStack Spacing="2">
                     <MudText Typo="Typo.h6">查询条件</MudText>
                     <MudSelect T="string" Label="查询方向" Variant="Variant.Outlined" Dense @bind-Value="_direction">
                         <MudSelectItem Value="@("forward")">正向：VIN / 总成 S/N</MudSelectItem>
@@ -48,8 +48,8 @@
         </MudItem>
 
         <MudItem xs="12" lg="8">
-            <MudPaper Class="module-card trace-list-card pa-5">
-                <MudStack Spacing="3">
+            <MudPaper Class="module-card trace-list-card pa-4">
+                <MudStack Spacing="2">
                     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudStack Spacing="0">
                             <MudText Typo="Typo.h6">追溯链</MudText>
@@ -92,7 +92,7 @@
         </MudItem>
     </MudGrid>
 
-    <MudPaper Class="module-card pa-5">
+    <MudPaper Class="module-card pa-4">
         <MudTable T="TraceabilityLinkDto" Dense Hover Breakpoint="Breakpoint.Sm" Items="@_links" Class="mes-table-card">
             <HeaderContent>
                 <MudTh>层级</MudTh>

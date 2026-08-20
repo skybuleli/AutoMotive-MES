@@ -11,7 +11,7 @@
 
 <PageTitle>齐套检查 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="T1.4 · Kit Check" Title="齐套检查"
                   Description="BOM 展开 → 库存查询 → 缺料自动 JIT 拉动 → 齐套通过转 Released">
         <HeaderActions>
@@ -81,15 +81,29 @@
                         @context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")
                     </MudTd>
                     <MudTd DataLabel="操作">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
-                                  Disabled="@IsCheckingThis(context.Id)"
-                                  OnClick="() => RunKitCheckAsync(context)">
-                            @if (IsCheckingThis(context.Id))
-                            {
-                                <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Class="mr-1" />
-                            }
-                            <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /> 齐套检查
-                        </MudButton>
+                        <AuthorizeView Context="authContext" Roles="ProductionManager,ShiftLeader">
+                            <Authorized>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                          Disabled="@IsCheckingThis(context.Id)"
+                                          OnClick="() => RunKitCheckAsync(context)">
+                                    @if (IsCheckingThis(context.Id))
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Color="Color.Inherit" Class="mr-1" />
+                                    }
+                                    <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /> 齐套检查
+                                </MudButton>
+                            </Authorized>
+                            <NotAuthorized>
+                                <MudTooltip>
+                                    <ChildContent>
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default">
+                                            仅生产经理/班组长可检查
+                                        </MudChip>
+                                    </ChildContent>
+                                    <TooltipContent>需要 ProductionManager / ShiftLeader 角色</TooltipContent>
+                                </MudTooltip>
+                            </NotAuthorized>
+                        </AuthorizeView>
                     </MudTd>
                 </RowTemplate>
             </MudTable>
@@ -358,7 +372,9 @@
             if (!resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadAsStringAsync();
-                _resultError = $"齐套检查失败 (HTTP {(int)resp.StatusCode})：{body}";
+                _resultError = resp.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "当前账号无权限执行齐套检查（需要生产经理/班组长角色）。请使用 manager / leader 账号登录后操作。"
+                    : $"齐套检查失败 (HTTP {(int)resp.StatusCode})：{body}";
                 _isChecking = false;
                 return;
             }

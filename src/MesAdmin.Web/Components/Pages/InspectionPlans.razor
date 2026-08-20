@@ -1,0 +1,507 @@
+@page "/inspection-plans"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+@inject ILogger<InspectionPlans> PageLogger
+
+<PageTitle>检验计划 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="T2.1 · T2.4 · Inspection Plans" Title="检验计划管理"
+                  Description="IQC 来料 / IPQC 过程巡检 / OQC 出货检验控制计划 · 特性规格 · SPC 控制限">
+        <HeaderActions>
+            <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                共 @_plans.Count 个计划
+            </MudChip>
+            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                启用 @_plans.Count(p => p.IsEnabled)
+            </MudChip>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
+                           OnClick="LoadPlansAsync" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (_errorMessage is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>
+            @_errorMessage
+        </MudAlert>
+    }
+
+    @* ── 筛选 + 新建 ── *@
+    <MudPaper Class="module-card pa-3">
+        <MudStack Row Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+                <MudButton OnClick='() => OnStageFilterChanged("")'
+                           Variant='@(_stageFilter == "" ? Variant.Filled : Variant.Outlined)'>
+                    全部
+                </MudButton>
+                <MudButton OnClick='() => OnStageFilterChanged("Iq")'
+                           Variant='@(_stageFilter == "Iq" ? Variant.Filled : Variant.Outlined)'>
+                    IQC
+                </MudButton>
+                <MudButton OnClick='() => OnStageFilterChanged("Ipqc")'
+                           Variant='@(_stageFilter == "Ipqc" ? Variant.Filled : Variant.Outlined)'>
+                    IPQC
+                </MudButton>
+                <MudButton OnClick='() => OnStageFilterChanged("Oqc")'
+                           Variant='@(_stageFilter == "Oqc" ? Variant.Filled : Variant.Outlined)'>
+                    OQC
+                </MudButton>
+            </MudButtonGroup>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateDialog">
+                新建检验计划
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @if (_isLoading && _plans.Count == 0)
+    {
+        <MesStateCard Loading="true" Text="加载检验计划..." />
+    }
+    else if (_filteredPlans.Count == 0)
+    {
+        <MesStateCard Loading="false" Icon="@Icons.Material.Filled.FactCheck"
+                      Text="暂无检验计划" Hint="创建检验计划后，IQC/IPQC 检验将自动采用计划中的特性清单（当前使用内置模板回退）。" />
+    }
+    else
+    {
+        <MudPaper Class="module-card">
+            <MudStack Spacing="2" Class="pa-4">
+                <MudTable Items="@_filteredPlans" Dense="true" Hover="true" Elevation="0">
+                    <HeaderContent>
+                        <MudTh>计划名称</MudTh>
+                        <MudTh>版本</MudTh>
+                        <MudTh>阶段</MudTh>
+                        <MudTh>产品</MudTh>
+                        <MudTh>抽样</MudTh>
+                        <MudTh>特性</MudTh>
+                        <MudTh>SPC</MudTh>
+                        <MudTh>状态</MudTh>
+                        <MudTh>生效</MudTh>
+                        <MudTh>操作</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="名称">
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">@context.PlanName</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="版本">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                                @($"v{context.Version}")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="阶段">@GetStageLabel(context.Stage)</MudTd>
+                        <MudTd DataLabel="产品">@(context.ProductCode ?? "通用")</MudTd>
+                        <MudTd DataLabel="抽样">
+                            <MudText Typo="Typo.body2">@context.SamplingFrequency</MudText>
+                            <MudText Typo="Typo.caption" Class="kpi-label">n=@context.SampleSize</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="特性">
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">
+                                @context.Characteristics.Count 项
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="SPC">
+                            @if (context.EnableSpcChart)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">
+                                    X̄-R n=@context.SpcSubgroupSize
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="kpi-label">未启用</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="状态">
+                            <MudChip T="string" Size="Size.Small"
+                                     Color="@(context.IsEnabled ? Color.Success : Color.Default)"
+                                     Variant="@(context.IsEnabled ? Variant.Filled : Variant.Outlined)">
+                                @(context.IsEnabled ? "启用" : "停用")
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="生效">@context.EffectiveDate.ToLocalTime().ToString("yyyy-MM-dd")</MudTd>
+                        <MudTd DataLabel="操作">
+                            <MudStack Row Spacing="1">
+                                <MudIconButton Icon="@(IsExpanded(context.Id) ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                               OnClick="() => ToggleExpanded(context.Id)"
+                                               Size="Size.Small" Color="Color.Primary" />
+                                <MudButton Size="Size.Small" Variant="Variant.Text"
+                                           Color="@(context.IsEnabled ? Color.Default : Color.Success)"
+                                           OnClick="() => TogglePlanAsync(context)">
+                                    @(context.IsEnabled ? "停用" : "启用")
+                                </MudButton>
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                    <ChildRowContent>
+                        @if (IsExpanded(context.Id))
+                        {
+                            <MudTr>
+                                <MudTd ColSpan="10" Class="pa-0" Style="border-top:none;">
+                                    @if (context.Characteristics.Count == 0)
+                                    {
+                                        <MudText Typo="Typo.body2" Class="section-copy pa-3">该计划暂无检验特性。</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudStack Spacing="1" Class="pa-3">
+                                            <MudText Typo="Typo.caption" Class="kpi-label">
+                                                检验特性（@context.Characteristics.Count 项）
+                                            </MudText>
+                                            <MudTable Items="@context.Characteristics" Dense="true" Elevation="0" Class="detail-table">
+                                                <HeaderContent>
+                                                    <MudTh>编码</MudTh>
+                                                    <MudTh>名称</MudTh>
+                                                    <MudTh>类型</MudTh>
+                                                    <MudTh>标准值</MudTh>
+                                                    <MudTh>规格</MudTh>
+                                                    <MudTh>单位</MudTh>
+                                                    <MudTh>关键</MudTh>
+                                                    <MudTh>SPC</MudTh>
+                                                </HeaderContent>
+                                                <RowTemplate Context="pc">
+                                                    <MudTd DataLabel="编码">
+                                                        <MudText Typo="Typo.body2" Style="font-weight:600;">@pc.CharacteristicCode</MudText>
+                                                    </MudTd>
+                                                    <MudTd DataLabel="名称">@pc.CharacteristicName</MudTd>
+                                                    <MudTd DataLabel="类型">
+                                                        <MudChip T="string" Size="Size.Small"
+                                                                 Color='@(pc.Type == "Variable" ? Color.Info : Color.Secondary)'
+                                                                 Variant="Variant.Outlined">
+                                                            @(pc.Type == "Variable" ? "计量" : "计数")
+                                                        </MudChip>
+                                                    </MudTd>
+                                                    <MudTd DataLabel="标准值">@FormatVal(pc.StandardValue, pc.Unit)</MudTd>
+                                                    <MudTd DataLabel="规格">@FormatSpec(pc.LowerSpecLimit, pc.UpperSpecLimit, pc.Unit)</MudTd>
+                                                    <MudTd DataLabel="单位">@pc.Unit</MudTd>
+                                                    <MudTd DataLabel="关键">
+                                                        @if (pc.IsCritical)
+                                                        {
+                                                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">CC/SC</MudChip>
+                                                        }
+                                                        else
+                                                        {
+                                                            <MudText Typo="Typo.caption" Class="kpi-label">—</MudText>
+                                                        }
+                                                    </MudTd>
+                                                    <MudTd DataLabel="SPC">
+                                                        @if (pc.EnableSpc && pc.UpperControlLimit.HasValue)
+                                                        {
+                                                            <MudText Typo="Typo.caption">
+                                                                UCL @pc.UpperControlLimit.Value.ToString("0.##") / LCL @pc.LowerControlLimit?.ToString("0.##")
+                                                            </MudText>
+                                                        }
+                                                        else
+                                                        {
+                                                            <MudText Typo="Typo.caption" Class="kpi-label">@(pc.EnableSpc ? "开" : "—")</MudText>
+                                                        }
+                                                    </MudTd>
+                                                </RowTemplate>
+                                            </MudTable>
+                                        </MudStack>
+                                    }
+                                </MudTd>
+                            </MudTr>
+                        }
+                    </ChildRowContent>
+                </MudTable>
+            </MudStack>
+        </MudPaper>
+    }
+</MudStack>
+
+@* 新建检验计划对话框 *@
+<MudDialog @bind-Visible="_showCreateDialog" FullWidth="true" MaxWidth="MaxWidth.Medium">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建检验计划</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6">
+                    <MudTextField Label="计划名称 *" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_planName" Placeholder="如：ESP-9.0 IQC 控制计划" />
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudTextField Label="版本 *" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_version" />
+                </MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudSelect T="string" Label="阶段" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_stage">
+                        <MudSelectItem Value="@("Iq")">IQC 来料检验</MudSelectItem>
+                        <MudSelectItem Value="@("Ipqc")">IPQC 过程巡检</MudSelectItem>
+                        <MudSelectItem Value="@("Oqc")">OQC 出货检验</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField Label="产品编码（空=通用）" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_productCode" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudTextField Label="抽样频率" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_samplingFrequency" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="int" Label="抽样数量 n" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_sampleSize" Min="1" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="int" Label="合格判定数 Ac" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_acceptNumber" Min="0" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="int" Label="不合格判定数 Re" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_rejectNumber" Min="1" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="double?" Label="AQL 值" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_aqlValue" />
+                </MudItem>
+                <MudItem xs="12" sm="12">
+                    <MudSwitch T="bool" Label="启用 SPC 控制图" @bind-Value="_enableSpcChart" Color="Color.Primary" />
+                </MudItem>
+            </MudGrid>
+
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.subtitle2" Style="font-weight:600;">检验特性（@_characteristics.Count 项）</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="AddCharacteristic">
+                    添加特性
+                </MudButton>
+            </MudStack>
+
+            @if (_characteristics.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="section-copy">请至少添加一项检验特性。</MudText>
+            }
+            else
+            {
+                <MudTable Items="@_characteristics" Dense="true" Elevation="0" Class="detail-table">
+                    <HeaderContent>
+                        <MudTh>编码</MudTh>
+                        <MudTh>名称</MudTh>
+                        <MudTh>类型</MudTh>
+                        <MudTh>标准值</MudTh>
+                        <MudTh>单位</MudTh>
+                        <MudTh>下限</MudTh>
+                        <MudTh>上限</MudTh>
+                        <MudTh>关键</MudTh>
+                        <MudTh>SPC</MudTh>
+                        <MudTh></MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="row">
+                        <MudTd><MudTextField T="string" Variant="Variant.Outlined" Margin="Margin.Dense" Size="Size.Small" Value="@row.CharacteristicCode" ValueChanged="(string v) => UpdateChar(row, c => c.CharacteristicCode = v)" /></MudTd>
+                        <MudTd><MudTextField T="string" Variant="Variant.Outlined" Margin="Margin.Dense" Size="Size.Small" Value="@row.CharacteristicName" ValueChanged="(string v) => UpdateChar(row, c => c.CharacteristicName = v)" /></MudTd>
+                        <MudTd>
+                            <MudSelect T="string" Variant="Variant.Outlined" Margin="Margin.Dense" Size="Size.Small" Value="@row.Type" ValueChanged="(string v) => UpdateChar(row, c => c.Type = v)">
+                                <MudSelectItem Value="@("Variable")">计量</MudSelectItem>
+                                <MudSelectItem Value="@("Attribute")">计数</MudSelectItem>
+                            </MudSelect>
+                        </MudTd>
+                        <MudTd><MudNumericField T="double" Variant="Variant.Outlined" Margin="Margin.Dense" Size="Size.Small" Value="@row.StandardValue" ValueChanged="(double v) => UpdateChar(row, c => c.StandardValue = v)" /></MudTd>
+                        <MudTd><MudTextField T="string" Variant="Variant.Outlined" Margin="Margin.Dense" Size="Size.Small" Value="@row.Unit" ValueChanged="(string v) => UpdateChar(row, c => c.Unit = v)" /></MudTd>
+                        <MudTd><MudNumericField T="double?" Variant="Variant.Outlined" Margin="Margin.Dense" Size="Size.Small" Value="@row.LowerSpecLimit" ValueChanged="(double? v) => UpdateChar(row, c => c.LowerSpecLimit = v)" /></MudTd>
+                        <MudTd><MudNumericField T="double?" Variant="Variant.Outlined" Margin="Margin.Dense" Size="Size.Small" Value="@row.UpperSpecLimit" ValueChanged="(double? v) => UpdateChar(row, c => c.UpperSpecLimit = v)" /></MudTd>
+                        <MudTd><MudCheckBox T="bool" Value="@row.IsCritical" ValueChanged="(bool v) => UpdateChar(row, c => c.IsCritical = v)" /></MudTd>
+                        <MudTd><MudCheckBox T="bool" Value="@row.EnableSpc" ValueChanged="(bool v) => UpdateChar(row, c => c.EnableSpc = v)" /></MudTd>
+                        <MudTd>
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="() => RemoveCharacteristic(row)" />
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       OnClick="CreatePlanAsync" Disabled="_isActionLoading" FullWidth="true">
+                创建计划
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    private List<InspectionPlanDto> _plans = [];
+    private List<InspectionPlanDto> _filteredPlans => string.IsNullOrEmpty(_stageFilter)
+        ? _plans
+        : _plans.Where(p => p.Stage == _stageFilter).ToList();
+
+    private string _stageFilter = "";
+    private bool _isLoading;
+    private bool _isActionLoading;
+    private string? _errorMessage;
+    private HashSet<string> _expandedIds = [];
+
+    // ── 创建对话框状态 ──
+    private bool _showCreateDialog;
+    private string _planName = "";
+    private string _version = "1.0";
+    private string _stage = "Iq";
+    private string _productCode = "";
+    private string _samplingFrequency = "每批抽5";
+    private int _sampleSize = 5;
+    private int _acceptNumber;
+    private int _rejectNumber = 1;
+    private double? _aqlValue = 0.65;
+    private bool _enableSpcChart;
+    private List<PlanCharRow> _characteristics = [];
+
+    private sealed class PlanCharRow
+    {
+        public string CharacteristicCode { get; set; } = "";
+        public string CharacteristicName { get; set; } = "";
+        public string Type { get; set; } = "Variable";
+        public double StandardValue { get; set; }
+        public double? LowerSpecLimit { get; set; }
+        public double? UpperSpecLimit { get; set; }
+        public string Unit { get; set; } = "";
+        public bool IsCritical { get; set; }
+        public bool EnableSpc { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPlansAsync();
+    }
+
+    private async Task LoadPlansAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _plans = await Api.GetInspectionPlansAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载检验计划失败");
+            _errorMessage = $"加载检验计划失败：{ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task OnStageFilterChanged(string stage)
+    {
+        _stageFilter = stage;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsExpanded(string id) => _expandedIds.Contains(id);
+
+    private void ToggleExpanded(string id)
+    {
+        if (!_expandedIds.Add(id))
+            _expandedIds.Remove(id);
+    }
+
+    // ── 创建对话框 ──
+
+    private void OpenCreateDialog()
+    {
+        _planName = "";
+        _version = "1.0";
+        _stage = "Iq";
+        _productCode = "";
+        _samplingFrequency = "每批抽5";
+        _sampleSize = 5;
+        _acceptNumber = 0;
+        _rejectNumber = 1;
+        _aqlValue = 0.65;
+        _enableSpcChart = false;
+        _characteristics = [
+            new PlanCharRow { CharacteristicCode = "DIM-01", CharacteristicName = "外形尺寸", StandardValue = 120, Unit = "mm", LowerSpecLimit = 119.5, UpperSpecLimit = 120.5 },
+        ];
+        _showCreateDialog = true;
+    }
+
+    private void AddCharacteristic()
+        => _characteristics.Add(new PlanCharRow { CharacteristicCode = $"C{_characteristics.Count + 1}" });
+
+    private void RemoveCharacteristic(PlanCharRow row)
+        => _characteristics.Remove(row);
+
+    private void UpdateChar(PlanCharRow row, Action<PlanCharRow> update) => update(row);
+
+    private async Task CreatePlanAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_planName) || string.IsNullOrWhiteSpace(_version) ||
+            _characteristics.Count == 0)
+            return;
+        _isActionLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.CreateInspectionPlanAsync(new CreateInspectionPlanBody(
+                _planName, _version, _stage,
+                string.IsNullOrWhiteSpace(_productCode) ? null : _productCode,
+                null, _samplingFrequency, _sampleSize, _aqlValue, "II",
+                _acceptNumber, _rejectNumber, _enableSpcChart,
+                _enableSpcChart ? 5 : 5,
+                new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero), null,
+                _characteristics.Select(c => new CreatePlanCharacteristicBody(
+                    c.CharacteristicCode, c.CharacteristicName, c.Type, c.StandardValue,
+                    c.UpperSpecLimit, c.LowerSpecLimit, c.Unit, c.IsCritical, c.EnableSpc)).ToList()));
+            if (ok)
+            {
+                _showCreateDialog = false;
+                await LoadPlansAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "创建检验计划失败");
+            _errorMessage = $"创建检验计划失败：{ex.Message}";
+        }
+        finally
+        {
+            _isActionLoading = false;
+        }
+    }
+
+    // ── 启用/停用 ──
+
+    private async Task TogglePlanAsync(InspectionPlanDto plan)
+    {
+        _isActionLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.ToggleInspectionPlanAsync(plan.Id);
+            if (ok && data is not null)
+            {
+                var idx = _plans.FindIndex(p => p.Id == plan.Id);
+                if (idx >= 0) _plans[idx] = data;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "切换检验计划状态失败");
+            _errorMessage = $"切换状态失败：{ex.Message}";
+        }
+        finally
+        {
+            _isActionLoading = false;
+        }
+    }
+
+    // ── 辅助 ──
+
+    private static string GetStageLabel(string stage) => stage switch
+    {
+        "Iq" => "IQC 来料",
+        "Ipqc" => "IPQC 巡检",
+        "Oqc" => "OQC 出货",
+        "FirstArticle" => "首件",
+        "OnlineTest" => "在线测试",
+        _ => stage
+    };
+
+    private static string FormatVal(double value, string unit)
+        => string.IsNullOrWhiteSpace(unit) ? value.ToString("0.##") : $"{value.ToString("0.##")} {unit}";
+
+    private static string FormatSpec(double? lsl, double? usl, string unit)
+    {
+        var u = string.IsNullOrWhiteSpace(unit) ? "" : $" {unit}";
+        return (lsl, usl) switch
+        {
+            (not null, not null) => $"{lsl.Value:0.##}{u} ~ {usl.Value:0.##}{u}",
+            (not null, null) => $"≥ {lsl.Value:0.##}{u}",
+            (null, not null) => $"≤ {usl.Value:0.##}{u}",
+            _ => "-"
+        };
+    }
+}

@@ -1,4 +1,4 @@
-@* 全站唯一导航源：按业务域分组，覆盖全部 17 个路由。 *@
+@* 全站唯一导航源：按业务域分组，覆盖全部 19 个路由。 *@
 <MudNavMenu Class="px-3">
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
         仪表盘
@@ -29,11 +29,20 @@
     </MudNavGroup>
 
     <MudNavGroup Title="质量管理" Icon="@Icons.Material.Filled.Analytics">
+        <MudNavLink Href="first-article" Icon="@Icons.Material.Filled.FactCheck">
+            首件检验
+        </MudNavLink>
+        <MudNavLink Href="inspection-plans" Icon="@Icons.Material.Filled.ListAlt">
+            检验计划
+        </MudNavLink>
         <MudNavLink Href="spc" Icon="@Icons.Material.Filled.QueryStats">
             SPC 质量管理
         </MudNavLink>
         <MudNavLink Href="sqe" Icon="@Icons.Material.Filled.Business">
             SQE 供应商质量
+        </MudNavLink>
+        <MudNavLink Href="quality-reports" Icon="@Icons.Material.Filled.Description">
+            质量报表
         </MudNavLink>
     </MudNavGroup>
 
@@ -44,11 +53,19 @@
         <MudNavLink Href="inventory" Icon="@Icons.Material.Filled.LocalGroceryStore">
             线边库存
         </MudNavLink>
-        <MudNavLink Href="jit-kanban" Icon="@Icons.Material.Filled.LocalShipping">
-            JIT 看板
-        </MudNavLink>
+        @* JIT 端点仅开放给生产/仓储角色，按角色显示避免进入后 403 *@
+        <AuthorizeView Roles="ProductionManager,ShiftLeader,WarehouseClerk">
+            <Authorized>
+                <MudNavLink Href="jit-kanban" Icon="@Icons.Material.Filled.LocalShipping">
+                    JIT 看板
+                </MudNavLink>
+            </Authorized>
+        </AuthorizeView>
         <MudNavLink Href="traceability" Icon="@Icons.Material.Filled.Link">
             全链路追溯
+        </MudNavLink>
+        <MudNavLink Href="sync-monitor" Icon="@Icons.Material.Filled.Sync">
+            同步监控
         </MudNavLink>
         <MudNavLink Href="spare-parts" Icon="@Icons.Material.Filled.Handyman">
             备件管理
@@ -58,6 +75,12 @@
     <MudNavGroup Title="设备与报警" Icon="@Icons.Material.Filled.PrecisionManufacturing">
         <MudNavLink Href="oee" Icon="@Icons.Material.Filled.Timeline">
             设备 OEE
+        </MudNavLink>
+        <MudNavLink Href="maintenance" Icon="@Icons.Material.Filled.Build">
+            预防性维护
+        </MudNavLink>
+        <MudNavLink Href="hydraulic-test" Icon="@Icons.Material.Filled.Speed">
+            液压测试台
         </MudNavLink>
         <MudNavLink Href="andon" Icon="@Icons.Material.Filled.Campaign">
             Andon 报警

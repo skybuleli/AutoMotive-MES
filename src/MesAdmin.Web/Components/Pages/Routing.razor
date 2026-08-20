@@ -9,7 +9,7 @@
 
 <PageTitle>工艺管理 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="T3.5 · M07 Routing Management" Title="工艺管理"
                   Description="工艺路线管理 · ECO 审批流 · 工序参数模板">
         <HeaderActions>
@@ -33,7 +33,7 @@
                Tab 1: 工艺路线列表 + ECO 审批
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="工艺路线" Icon="@Icons.Material.Filled.Route">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudTextField @bind-Value="_productFilter" Label="产品编码"
                                       Variant="Variant.Outlined" Margin="Margin.Dense" Immediate
@@ -201,7 +201,7 @@
                Tab 2: 新建工艺路线
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="新建工艺路线" Icon="@Icons.Material.Filled.AddCircle">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     @if (_defaultRouting is null && _isLoadingDefault)
                     {
                         <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
@@ -211,8 +211,8 @@
                     }
                     else
                     {
-                        <MudPaper Class="module-card pa-5">
-                            <MudStack Spacing="3">
+                        <MudPaper Class="module-card pa-4">
+                            <MudStack Spacing="2">
                                 <MudText Typo="Typo.h6">基于 ESP 默认模板创建新版本</MudText>
                                 <MudText Typo="Typo.body2" Class="section-copy">
                                     系统将自动填充 31 工序 × 7 站的标准工艺路线。您只需填写版本信息和 ECO 变更说明。
@@ -220,8 +220,8 @@
                             </MudStack>
                         </MudPaper>
 
-                        <MudPaper Class="module-card pa-5">
-                            <MudGrid Spacing="3">
+                        <MudPaper Class="module-card pa-4">
+                            <MudGrid Spacing="2">
                                 <MudItem xs="12" sm="6">
                                     <MudTextField @bind-Value="_newRouting.ProductCode"
                                                   Label="产品编码" Variant="Variant.Outlined" Margin="Margin.Dense" />

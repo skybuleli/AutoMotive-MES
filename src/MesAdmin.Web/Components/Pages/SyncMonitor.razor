@@ -1,0 +1,516 @@
+@page "/sync-monitor"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+@inject ILogger<SyncMonitor> PageLogger
+
+<PageTitle>同步监控 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="T4.4 · T4.5 · SAP & Offline Sync" Title="同步监控"
+                  Description="SAP 拒单回写 / 库存 / 工单状态同步 · 车间终端离线操作通道 · 冲突人工裁决">
+        <HeaderActions>
+            <MudButton Size="Size.Small" Variant="@(_autoRefresh ? Variant.Filled : Variant.Outlined)"
+                       Color="@(_autoRefresh ? Color.Primary : Color.Default)"
+                       StartIcon="@(_autoRefresh ? Icons.Material.Filled.Timer : Icons.Material.Filled.TimerOff)"
+                       OnClick="ToggleAutoRefresh" Disabled="@_isLoading">
+                @(_autoRefresh ? "自动刷新 开" : "自动刷新 关")
+            </MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => RefreshAllAsync()" Size="Size.Small"
+                           AriaLabel="刷新同步状态" />
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    @* ── SAP 同步状态 ── *@
+    <MudPaper Class="glass-kpi-card pa-4">
+        <MudStack Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudIcon Icon="@Icons.Material.Filled.CloudSync" Size="Size.Medium" Color="Color.Primary" />
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">SAP 同步状态</MudText>
+                <MudChip T="string" Color="@(_sapStatus?.TotalPending > 0 ? Color.Warning : Color.Success)"
+                         Size="Size.Small" Variant="Variant.Filled">
+                    待同步 @(_sapStatus?.TotalPending ?? 0)
+                </MudChip>
+            </MudStack>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="6" sm="3">
+                    <MesKpiCard Label="拒单回写待同步" Value="@((_sapStatus?.PendingRejectionCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.ReceiptLong"
+                                ValueAccent="@(_sapStatus?.PendingRejectionCount > 0 ? MesAccent.Warning : MesAccent.Success)"
+                                Sub="Webhook 校验失败待回写 SAP" />
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MesKpiCard Label="库存待同步" Value="@((_sapStatus?.PendingInventorySyncCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.Inventory"
+                                ValueAccent="@(_sapStatus?.PendingInventorySyncCount > 0 ? MesAccent.Warning : MesAccent.Success)"
+                                Sub="发料移动类型过账" />
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MesKpiCard Label="工单状态待同步" Value="@((_sapStatus?.PendingOrderSyncCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.Assignment"
+                                ValueAccent="@(_sapStatus?.PendingOrderSyncCount > 0 ? MesAccent.Warning : MesAccent.Success)"
+                                Sub="Release/Complete/Close 回传" />
+                </MudItem>
+                <MudItem xs="6" sm="3">
+                    <MesKpiCard Label="合计待同步" Value="@((_sapStatus?.TotalPending ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.AllInbox"
+                                ValueAccent="MesAccent.Info"
+                                Sub="后台服务轮询处理" />
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle2" Class="section-kicker" Style="margin-top:4px;">
+                <MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /> 待同步明细
+            </MudText>
+            @if (_sapPending.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="section-copy">暂无待同步的 SAP 记录。</MudText>
+            }
+            else
+            {
+                <MudTable T="SapPendingItemDto" Items="@_sapPending" Dense Hover Breakpoint="Breakpoint.Sm"
+                          Elevation="0" Class="module-card">
+                    <ColGroup>
+                        <col style="width:90px" />
+                        <col style="width:180px" />
+                        <col style="min-width:180px" />
+                        <col style="min-width:180px" />
+                        <col style="width:110px" />
+                        <col style="width:120px" />
+                    </ColGroup>
+                    <HeaderContent>
+                        <MudTh>类型</MudTh>
+                        <MudTh>单据 / 工单</MudTh>
+                        <MudTh>明细</MudTh>
+                        <MudTh>原因 / 错误</MudTh>
+                        <MudTh>时间</MudTh>
+                        <MudTh>操作</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="类型">
+                            <MudChip T="string" Size="Size.Small" Color="@GetSapTypeColor(context.Type)"
+                                     Variant="Variant.Outlined">
+                                @context.TypeLabel
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="单据">
+                            <MudText Typo="Typo.caption" Style="font-family:monospace;">@(context.Reference ?? "-")</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="明细">
+                            <MudText Typo="Typo.caption" Class="kpi-sub">@context.Detail</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="原因/错误">
+                            <MudText Typo="Typo.caption" Class="kpi-sub">
+                                @(context.Error ?? context.Reason ?? "-")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                        <MudTd DataLabel="操作">
+                            @if (context.Type == "rejection")
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                           Disabled="@(_sapRetrying.Contains(context.Id))"
+                                           OnClick="() => RetryWritebackAsync(context)">
+                                    @(_sapRetrying.Contains(context.Id) ? "重试中..." : "重试回写")
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="kpi-sub">后台自动同步</MudText>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudStack>
+    </MudPaper>
+
+    @* ── 离线同步通道 ── *@
+    <MudPaper Class="glass-kpi-card pa-4">
+        <MudStack Spacing="2">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Medium" Color="Color.Primary" />
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600;">离线同步通道</MudText>
+                <MudChip T="string" Color="@(_syncStatus?.ChannelBacklog > 0 ? Color.Warning : Color.Success)"
+                         Size="Size.Small" Variant="Variant.Filled">
+                    通道积压 @(_syncStatus?.ChannelBacklog ?? 0)
+                </MudChip>
+            </MudStack>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="6" sm="2">
+                    <MesKpiCard Label="待同步" Value="@((_syncStatus?.Stats.PendingCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.Schedule" ValueAccent="MesAccent.Warning" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MesKpiCard Label="已同步" Value="@((_syncStatus?.Stats.SyncedCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.CheckCircle" ValueAccent="MesAccent.Success" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MesKpiCard Label="冲突" Value="@((_syncStatus?.Stats.ConflictCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.Warning" ValueAccent="MesAccent.Error" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MesKpiCard Label="失败" Value="@((_syncStatus?.Stats.FailedCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.Error" ValueAccent="MesAccent.Error" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MesKpiCard Label="终端数" Value="@((_syncStatus?.Stats.TerminalCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.DesktopWindows" ValueAccent="MesAccent.Info" />
+                </MudItem>
+                <MudItem xs="6" sm="2">
+                    <MesKpiCard Label="记录总数" Value="@((_syncStatus?.Stats.TotalCount ?? 0).ToString())"
+                                Icon="@Icons.Material.Filled.Inbox" ValueAccent="MesAccent.Primary" />
+                </MudItem>
+            </MudGrid>
+
+            <MudStack Row Spacing="1" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                <MudText Typo="Typo.caption" Class="kpi-label">通道健康</MudText>
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                    已处理 @(_syncStatus?.ChannelProcessed ?? 0)
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">
+                    通道冲突 @(_syncStatus?.ChannelConflicts ?? 0)
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                    最近更新 @_lastUpdated
+                </MudChip>
+            </MudStack>
+
+            <MudText Typo="Typo.subtitle2" Class="section-kicker" Style="margin-top:4px;">
+                <MudIcon Icon="@Icons.Material.Filled.PendingActions" Size="Size.Small" /> 待同步 / 冲突记录
+            </MudText>
+            @if (_syncPending.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="section-copy">暂无待同步或冲突的离线记录。</MudText>
+            }
+            else
+            {
+                <MudTable T="SyncPendingItemDto" Items="@_syncPending" Dense Hover Breakpoint="Breakpoint.Sm"
+                          Elevation="0" Class="module-card">
+                    <ColGroup>
+                        <col style="width:110px" />
+                        <col style="width:140px" />
+                        <col style="width:120px" />
+                        <col style="min-width:160px" />
+                        <col style="width:90px" />
+                        <col style="width:100px" />
+                        <col style="width:120px" />
+                    </ColGroup>
+                    <HeaderContent>
+                        <MudTh>终端</MudTh>
+                        <MudTh>操作类型</MudTh>
+                        <MudTh>实体</MudTh>
+                        <MudTh>载荷摘要</MudTh>
+                        <MudTh>状态</MudTh>
+                        <MudTh>错误</MudTh>
+                        <MudTh>操作</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="终端">
+                            <MudText Typo="Typo.caption" Style="font-family:monospace;">@context.TerminalId</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="操作类型">@context.OperationType</MudTd>
+                        <MudTd DataLabel="实体">
+                            <MudText Typo="Typo.caption" Class="kpi-sub">@context.EntityType</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="载荷摘要">
+                            <MudTooltip Text="@context.Payload">
+                                <MudText Typo="Typo.caption" Class="kpi-sub mono"
+                                         Style="max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                    @Shorten(context.Payload, 40)
+                                </MudText>
+                            </MudTooltip>
+                        </MudTd>
+                        <MudTd DataLabel="状态">
+                            <MudChip T="string" Size="Size.Small" Color="@GetSyncStatusColor(context.Status)"
+                                     Variant="Variant.Outlined">
+                                @GetSyncStatusLabel(context.Status)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="错误">
+                            <MudText Typo="Typo.caption" Class="kpi-sub">@(context.ErrorMessage ?? "-")</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="操作">
+                            @if (context.Status == "Conflict")
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning"
+                                           OnClick="() => OpenResolveDialog(context)">
+                                    解决冲突
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Class="kpi-sub">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudText>
+                            }
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
+        </MudStack>
+    </MudPaper>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   对话框: 冲突解决
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showResolveDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">解决同步冲突</MudText>
+            @if (_resolvingItem is not null)
+            {
+                <MudText Typo="Typo.body2">终端 @_resolvingItem.TerminalId · @_resolvingItem.OperationType · @_resolvingItem.EntityType</MudText>
+                <MudText Typo="Typo.caption" Class="kpi-sub">@_resolvingItem.Payload</MudText>
+                @if (!string.IsNullOrWhiteSpace(_resolvingItem.ErrorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>@_resolvingItem.ErrorMessage</MudAlert>
+                }
+                <MudRadioGroup T="string" @bind-Value="_resolveChoice" Class="d-flex flex-column">
+                    <MudRadio T="string" Value="@("use_local")" Color="Color.Primary">
+                        <MudText Typo="Typo.body2">采用本地上传 <MudText Typo="Typo.caption" Class="kpi-sub" Style="display:inline;">（以终端记录为准，重新入队同步）</MudText></MudText>
+                    </MudRadio>
+                    <MudRadio T="string" Value="@("use_server")" Color="Color.Success">
+                        <MudText Typo="Typo.body2">以服务器为准 <MudText Typo="Typo.caption" Class="kpi-sub" Style="display:inline;">（丢弃本地上传，标记已同步）</MudText></MudText>
+                    </MudRadio>
+                    <MudRadio T="string" Value="@("manual")" Color="Color.Warning">
+                        <MudText Typo="Typo.body2">手动处理 <MudText Typo="Typo.caption" Class="kpi-sub" Style="display:inline;">（保持待同步，等待人工介入）</MudText></MudText>
+                    </MudRadio>
+                </MudRadioGroup>
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showResolveDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isLoading"
+                   OnClick="ResolveConflictAsync">
+            确认解决
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _isLoading, _isError;
+    private string _message = string.Empty;
+    private string _lastUpdated = "-";
+
+    // ── SAP 同步 ──
+    private SapSyncStatusDto? _sapStatus;
+    private List<SapPendingItemDto> _sapPending = [];
+    private readonly HashSet<string> _sapRetrying = [];
+
+    // ── 离线同步 ──
+    private SyncStatusDto? _syncStatus;
+    private List<SyncPendingItemDto> _syncPending = [];
+    private bool _autoRefresh;
+    private Timer? _timer;
+
+    // ── 冲突解决对话框 ──
+    private bool _showResolveDialog;
+    private SyncPendingItemDto? _resolvingItem;
+    private string _resolveChoice = "use_local";
+
+    // ═══════════════════════════════════════════
+    // 页面生命周期
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAllAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender && _timer is null)
+        {
+            _timer = new Timer(_ =>
+            {
+                try { _ = InvokeAsync(RefreshAllAsync); }
+                catch (Exception ex) { PageLogger.LogDebug(ex, "同步监控定时刷新失败（组件可能已释放）"); }
+            }, null, Timeout.Infinite, Timeout.Infinite);
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _timer = null;
+    }
+
+    private void ToggleAutoRefresh()
+    {
+        _autoRefresh = !_autoRefresh;
+        if (_timer is null) return;
+        _timer.Change(
+            _autoRefresh ? TimeSpan.FromSeconds(30) : Timeout.InfiniteTimeSpan,
+            _autoRefresh ? TimeSpan.FromSeconds(30) : Timeout.InfiniteTimeSpan);
+    }
+
+    // ═══════════════════════════════════════════
+    // 数据加载
+    // ═══════════════════════════════════════════
+
+    private async Task RefreshAllAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var syncStatusTask = Api.GetSyncStatusAsync();
+            var syncPendingTask = Api.GetSyncPendingAsync();
+            var sapStatusTask = Api.GetSapSyncStatusAsync();
+            var sapPendingTask = Api.GetSapPendingAsync();
+
+            await Task.WhenAll(syncStatusTask, syncPendingTask, sapStatusTask, sapPendingTask);
+
+            _syncStatus = await syncStatusTask;
+            _syncPending = await syncPendingTask ?? [];
+            _sapStatus = await sapStatusTask;
+            _sapPending = await sapPendingTask ?? [];
+            _lastUpdated = DateTime.Now.ToString("HH:mm:ss");
+            _message = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载同步状态失败");
+            _message = $"加载同步状态失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // SAP 拒单回写重试
+    // ═══════════════════════════════════════════
+
+    private async Task RetryWritebackAsync(SapPendingItemDto item)
+    {
+        _sapRetrying.Add(item.Id);
+        _message = string.Empty;
+        try
+        {
+            var (ok, result, status) = await Api.RetrySapWritebackAsync(item.Id);
+            if (ok && result is not null)
+            {
+                await RefreshAllAsync();
+                _message = result.Success
+                    ? $"拒单回写成功：{result.Message}" + (string.IsNullOrWhiteSpace(result.DocumentNumber) ? "" : $"（凭证 {result.DocumentNumber}）")
+                    : $"拒单回写失败：{result.Message}";
+                _isError = !result.Success;
+            }
+            else
+            {
+                _message = $"回写请求失败（HTTP {status}）";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "重试 SAP 拒单回写失败");
+            _message = $"回写失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _sapRetrying.Remove(item.Id);
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 冲突解决
+    // ═══════════════════════════════════════════
+
+    private void OpenResolveDialog(SyncPendingItemDto item)
+    {
+        _resolvingItem = item;
+        _resolveChoice = "use_local";
+        _showResolveDialog = true;
+    }
+
+    private async Task ResolveConflictAsync()
+    {
+        if (_resolvingItem is null) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, _, status) = await Api.ResolveSyncConflictAsync(_resolvingItem.Id, _resolveChoice);
+            _showResolveDialog = false;
+            if (ok)
+            {
+                await RefreshAllAsync();
+                _message = $"冲突已解决（{GetResolutionLabel(_resolveChoice)}）";
+                _isError = false;
+            }
+            else
+            {
+                _message = $"冲突解决失败（HTTP {status}）：需生产经理或质量工程师权限";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "解决同步冲突失败");
+            _message = $"冲突解决失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 辅助方法
+    // ═══════════════════════════════════════════
+
+    private static string Shorten(string value, int max)
+        => value.Length <= max ? value : value[..max] + "…";
+
+    private static string GetResolutionLabel(string resolution) => resolution switch
+    {
+        "use_local" => "采用本地上传",
+        "use_server" => "以服务器为准",
+        "manual" => "手动处理",
+        _ => resolution
+    };
+
+    private static string GetSyncStatusLabel(string status) => status switch
+    {
+        "Pending" => "待同步",
+        "Syncing" => "同步中",
+        "Synced" => "已同步",
+        "Conflict" => "冲突",
+        "Failed" => "失败",
+        _ => status
+    };
+
+    private static Color GetSyncStatusColor(string status) => status switch
+    {
+        "Pending" => Color.Warning,
+        "Syncing" => Color.Info,
+        "Synced" => Color.Success,
+        "Conflict" => Color.Error,
+        "Failed" => Color.Error,
+        _ => Color.Default
+    };
+
+    private static Color GetSapTypeColor(string type) => type switch
+    {
+        "rejection" => Color.Error,
+        "inventory" => Color.Info,
+        "order" => Color.Primary,
+        _ => Color.Default
+    };
+}

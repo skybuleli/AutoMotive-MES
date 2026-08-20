@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+using Microsoft.JSInterop;
 
 namespace MesAdmin.Web.Services;
 
@@ -11,9 +12,11 @@ namespace MesAdmin.Web.Services;
 public class AuthService(
     IHttpClientFactory httpFactory,
     ProtectedLocalStorage localStorage,
-    AuthenticationStateProvider authStateProvider)
+    AuthenticationStateProvider authStateProvider,
+    IJSRuntime js)
 {
     private const string TokenKey = "mes_auth_token";
+    private const string CookieName = "mes_auth_cookie";
 
     public async Task<bool> LoginAsync(string username, string password)
     {
@@ -29,6 +32,11 @@ public class AuthService(
 
         await localStorage.SetAsync(TokenKey, result.Token);
         ((MesAuthenticationStateProvider)authStateProvider).MarkAuthenticated(result.Token);
+
+        // 种下服务端可读 cookie：登录后 NavigateTo 触发整页加载时，服务端 [Authorize]
+        // 校验依赖它（浏览器侧 JWT 在 ProtectedLocalStorage，服务端读不到，需在 OnMessageReceived 兜底取 cookie）。
+        // JWT 本就存于 localStorage，cookie 非 httpOnly 不额外扩大 XSS 面。
+        await js.InvokeVoidAsync("mesAuth.setCookie", CookieName, result.Token);
         return true;
     }
 
@@ -36,6 +44,7 @@ public class AuthService(
     {
         await localStorage.DeleteAsync(TokenKey);
         ((MesAuthenticationStateProvider)authStateProvider).MarkLoggedOut();
+        await js.InvokeVoidAsync("mesAuth.clearCookie", CookieName);
     }
 
     public async Task<string?> GetTokenAsync()

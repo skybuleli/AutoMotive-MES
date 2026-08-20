@@ -1,0 +1,764 @@
+@page "/maintenance"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@inject MesApiClient Api
+@inject NavigationManager Navigation
+@inject ILogger<Maintenance> PageLogger
+
+<PageTitle>预防性维护 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="T2.17 · Preventive Maintenance" Title="预防性维护"
+                  Description="维护计划规则 · 自动触发维护工单 · 执行/完成/取消闭环 · TPM 落地">
+        <HeaderActions>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadAllAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudPaper Class="module-card pa-4">
+        <MudTabs @bind-ActivePanelIndex="_activeTab" Border="false" Elevation="0"
+                 CenterContent="false" Position="Position.Top" ApplyEffectsToContainer="true">
+
+            @* ═══════════════════════════════════════════
+               Tab 1: 维护计划
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="维护计划" Icon="@Icons.Material.Filled.BuildCircle">
+                <MudStack Spacing="2" Class="pa-4">
+                    @* 摘要 KPI 卡片 *@
+                    <div class="oee-grid">
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.BuildCircle" Size="Size.Large" Color="Color.Info" />
+                                <MudText Typo="Typo.h3" Color="Color.Info">@_plans.Count</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">维护计划总数</MudText>
+                            </MudStack>
+                        </MudPaper>
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                                <MudText Typo="Typo.h3" Color="Color.Success">@_activePlanCount</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">启用中计划</MudText>
+                            </MudStack>
+                        </MudPaper>
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.PendingActions" Size="Size.Large" Color="Color.Warning" />
+                                <MudText Typo="Typo.h3" Color="Color.Warning">@_openOrderCount</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">待执行工单</MudText>
+                            </MudStack>
+                        </MudPaper>
+                        <MudPaper Class="glass-kpi-card">
+                            <MudStack Spacing="2" AlignItems="AlignItems.Center">
+                                <MudIcon Icon="@Icons.Material.Filled.Construction" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.h3" Color="Color.Primary">@_inProgressOrderCount</MudText>
+                                <MudText Typo="Typo.body2" Class="kpi-label">执行中工单</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    </div>
+
+                    @* 工具栏 *@
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add" OnClick="() => _showCreatePlanDialog = true">
+                            新建维护计划
+                        </MudButton>
+                        <MudText Typo="Typo.caption" Class="section-copy">
+                            计划按「循环次数 / 时间间隔」规则自动触发维护工单（拧紧机 10 万次标定、液压台每月密封件更换等）。
+                        </MudText>
+                    </MudStack>
+
+                    @if (_isLoading && _plans.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">加载维护计划...</MudText>
+                        </MudStack>
+                    }
+                    else if (_plans.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-6">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.BuildCircle" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无维护计划</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">点击「新建维护计划」为设备配置维护规则。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_plans" Dense Hover Breakpoint="Breakpoint.Sm" Elevation="0" Class="module-card">
+                            <ColGroup>
+                                <col style="width:120px" />
+                                <col style="min-width:100px" />
+                                <col style="width:90px" />
+                                <col style="width:90px" />
+                                <col style="min-width:140px" />
+                                <col style="width:80px" />
+                                <col style="width:140px" />
+                            </ColGroup>
+                            <HeaderContent>
+                                <MudTh>设备编码</MudTh>
+                                <MudTh>设备名称</MudTh>
+                                <MudTh>维护类型</MudTh>
+                                <MudTh>触发阈值</MudTh>
+                                <MudTh>任务描述</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>上次触发</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="设备编码">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.EquipmentCode</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="设备名称">
+                                    <MudText Typo="Typo.body2">@context.EquipmentName</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-sub">@context.WorkContent</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="维护类型">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetTypeChipColor(context.MaintenanceType)"
+                                             Variant="Variant.Outlined">
+                                        @GetMaintenanceTypeLabel(context.MaintenanceType)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="阈值">@FormatThreshold(context)</MudTd>
+                                <MudTd DataLabel="任务描述">@context.TaskDescription</MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(context.IsActive ? Color.Success : Color.Default)"
+                                             Variant="Variant.Outlined">
+                                        @(context.IsActive ? "启用" : "停用")
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="上次触发">
+                                    @(context.LastTriggeredAt?.ToLocalTime().ToString("MM-dd HH:mm") ?? "-")
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+            @* ═══════════════════════════════════════════
+               Tab 2: 维护工单
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="维护工单" Icon="@Icons.Material.Filled.Assignment">
+                <MudStack Spacing="2" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudTextField @bind-Value="_equipmentFilter" Label="设备编码筛选"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate
+                                      OnKeyDown="OnSearchKeyDown" Style="min-width:180px;" />
+                        <MudSelect T="string" Label="工单状态" Variant="Variant.Outlined" Dense
+                                   @bind-Value="_statusFilter" Style="min-width:120px;">
+                            <MudSelectItem Value="@("all")">全部</MudSelectItem>
+                            <MudSelectItem Value="@("Open")">待执行</MudSelectItem>
+                            <MudSelectItem Value="@("InProgress")">执行中</MudSelectItem>
+                            <MudSelectItem Value="@("Completed")">已完成</MudSelectItem>
+                            <MudSelectItem Value="@("Cancelled")">已取消</MudSelectItem>
+                        </MudSelect>
+                        <MudIconButton Icon="@Icons.Material.Filled.Search" Disabled="@_isLoading"
+                                       OnClick="LoadOrdersAsync" Size="Size.Small" />
+                    </MudStack>
+
+                    @if (_isLoading && _orders.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.body2" Class="section-copy">加载维护工单...</MudText>
+                        </MudStack>
+                    }
+                    else if (_orders.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-6">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无 @(_statusFilter == "all" ? "" : GetOrderStatusLabel(_statusFilter) + " ")维护工单</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">
+                                    工单由维护计划达到触发阈值后自动创建。
+                                </MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_orders" Dense Hover Breakpoint="Breakpoint.Sm" Elevation="0" Class="module-card">
+                            <ColGroup>
+                                <col style="width:130px" />
+                                <col style="width:110px" />
+                                <col style="width:80px" />
+                                <col style="width:80px" />
+                                <col style="min-width:120px" />
+                                <col style="width:80px" />
+                                <col style="width:90px" />
+                                <col style="width:110px" />
+                                <col style="width:170px" />
+                            </ColGroup>
+                            <HeaderContent>
+                                <MudTh>工单号</MudTh>
+                                <MudTh>设备</MudTh>
+                                <MudTh>维护类型</MudTh>
+                                <MudTh>触发方式</MudTh>
+                                <MudTh>任务标题</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>执行人</MudTh>
+                                <MudTh>创建时间</MudTh>
+                                <MudTh>操作</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="工单号">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.OrderNumber</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="设备">
+                                    <MudText Typo="Typo.body2">@context.EquipmentCode</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-sub">@context.EquipmentName</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="维护类型">@GetMaintenanceTypeLabel(context.MaintenanceType)</MudTd>
+                                <MudTd DataLabel="触发方式">
+                                    <MudText Typo="Typo.caption">@GetTriggerLabel(context.TriggerType)</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-sub">@context.TriggerValue.ToString("F0")</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="任务标题">
+                                    <MudText Typo="Typo.body2">@context.Title</MudText>
+                                    <MudText Typo="Typo.caption" Class="kpi-sub" Style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                        @context.Description
+                                    </MudText>
+                                </MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@GetOrderStatusColor(context.Status)"
+                                             Variant="Variant.Outlined">
+                                        @GetOrderStatusLabel(context.Status)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="执行人">@(context.AssignedTo ?? "-")</MudTd>
+                                <MudTd DataLabel="创建时间">@context.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm")</MudTd>
+                                <MudTd DataLabel="操作">
+                                    <MudStack Row Spacing="1">
+                                        @if (context.Status == "Open")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                       OnClick="() => OpenStartDialog(context)">
+                                                开始
+                                            </MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                                       OnClick="() => OpenCancelDialog(context)">
+                                                取消
+                                            </MudButton>
+                                        }
+                                        else if (context.Status == "InProgress")
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                                       OnClick="() => OpenCompleteDialog(context)">
+                                                完成
+                                            </MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                                       OnClick="() => OpenCancelDialog(context)">
+                                                取消
+                                            </MudButton>
+                                        }
+                                        else if (context.Status == "Completed")
+                                        {
+                                            <MudText Typo="Typo.caption" Class="kpi-sub">
+                                                @(context.CompletedBy ?? "-") · @(context.CompletedAt?.ToLocalTime().ToString("MM-dd HH:mm") ?? "-")
+                                            </MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.caption" Class="kpi-sub">@context.CompletionRemarks</MudText>
+                                        }
+                                    </MudStack>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+            </MudTabPanel>
+
+        </MudTabs>
+    </MudPaper>
+</MudStack>
+
+@* ═══════════════════════════════════════════
+   对话框: 新建维护计划
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCreatePlanDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">新建维护计划</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_newPlan.EquipmentCode" Label="设备编码" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_newPlan.EquipmentName" Label="设备名称" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudSelect T="string" Label="维护类型" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               @bind-Value="_newPlan.MaintenanceType">
+                        <MudSelectItem Value="@("CycleBased")">循环次数触发</MudSelectItem>
+                        <MudSelectItem Value="@("TimeBased")">时间间隔触发</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudNumericField T="double" @bind-Value="_newPlan.ThresholdValue"
+                                     Label="@(_newPlan.MaintenanceType == "TimeBased" ? "触发天数" : "触发循环次数")"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_newPlan.TaskDescription" Label="任务描述（如：拧紧机定期标定）"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_newPlan.WorkContent" Label="工作内容" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" Lines="2" />
+                </MudItem>
+            </MudGrid>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreatePlanDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(!IsCreatePlanFormValid)"
+                   OnClick="CreatePlanAsync">
+            创建
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 开始执行工单
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showStartDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">开始执行维护工单</MudText>
+            @if (_selectedOrder is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedOrder.OrderNumber · @_selectedOrder.EquipmentCode</MudText>
+                <MudText Typo="Typo.caption" Class="kpi-label">@_selectedOrder.Title</MudText>
+                <MudTextField @bind-Value="_startAssignedTo" Label="执行人（员工号）" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showStartDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Disabled="@(string.IsNullOrWhiteSpace(_startAssignedTo))"
+                   OnClick="StartOrderAsync">
+            开始执行
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 完成工单
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCompleteDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">完成维护工单</MudText>
+            @if (_selectedOrder is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedOrder.OrderNumber · @_selectedOrder.EquipmentCode</MudText>
+                <MudTextField @bind-Value="_completeBy" Label="完成人（员工号）" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_completeRemarks" Label="完成备注" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCompleteDialog = false">返回</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                   Disabled="@(string.IsNullOrWhiteSpace(_completeBy) || string.IsNullOrWhiteSpace(_completeRemarks))"
+                   OnClick="CompleteOrderAsync">
+            确认完成
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 取消工单
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showCancelDialog">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">取消维护工单</MudText>
+            @if (_selectedOrder is not null)
+            {
+                <MudText Typo="Typo.body2">@_selectedOrder.OrderNumber · @_selectedOrder.EquipmentCode</MudText>
+                <MudTextField @bind-Value="_cancelReason" Label="取消原因" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCancelDialog = false">返回</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error"
+                   Disabled="@(string.IsNullOrWhiteSpace(_cancelReason))"
+                   OnClick="CancelOrderAsync">
+            确认取消
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private int _activeTab;
+    private bool _isLoading, _isError;
+    private string? _message;
+
+    // ── 维护计划 ──
+    private List<MaintenancePlanDto> _plans = [];
+    private int _activePlanCount;
+
+    // ── 维护工单 ──
+    private List<MaintenanceOrderDto> _orders = [];
+    private int _openOrderCount, _inProgressOrderCount;
+    private string _equipmentFilter = string.Empty;
+    private string _statusFilter = "all";
+
+    // ── 对话框状态 ──
+    private bool _showCreatePlanDialog, _showStartDialog, _showCompleteDialog, _showCancelDialog;
+    private readonly CreatePlanForm _newPlan = new();
+    private MaintenanceOrderDto? _selectedOrder;
+    private string _startAssignedTo = string.Empty;
+    private string _completeBy = string.Empty;
+    private string _completeRemarks = string.Empty;
+    private string _cancelReason = string.Empty;
+
+    private bool IsCreatePlanFormValid =>
+        !string.IsNullOrWhiteSpace(_newPlan.EquipmentCode)
+        && !string.IsNullOrWhiteSpace(_newPlan.TaskDescription)
+        && _newPlan.ThresholdValue > 0;
+
+    // ═══════════════════════════════════════════
+    // 页面初始化
+    // ═══════════════════════════════════════════
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _isLoading = true;
+        _message = null;
+        try
+        {
+            await LoadPlansAsync();
+            await LoadOrdersAsync();
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载预防性维护数据失败");
+            _message = $"加载数据失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    /// <summary>加载维护计划（失败不影响工单加载，避免角色权限差异导致整页失败）。</summary>
+    private async Task LoadPlansAsync()
+    {
+        try
+        {
+            _plans = await Api.GetMaintenancePlansAsync() ?? [];
+            _activePlanCount = _plans.Count(p => p.IsActive);
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载维护计划失败");
+            _plans = [];
+            _activePlanCount = 0;
+        }
+    }
+
+    /// <summary>加载维护工单（按当前筛选条件）。</summary>
+    private async Task LoadOrdersAsync()
+    {
+        try
+        {
+            var status = _statusFilter == "all" ? null : _statusFilter;
+            var equipment = string.IsNullOrWhiteSpace(_equipmentFilter) ? null : _equipmentFilter.Trim();
+            _orders = await Api.GetMaintenanceOrdersAsync(equipment, status) ?? [];
+            ComputeOrderStats();
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载维护工单失败");
+            _orders = [];
+            _openOrderCount = _inProgressOrderCount = 0;
+        }
+    }
+
+    private void ComputeOrderStats()
+    {
+        _openOrderCount = _orders.Count(o => o.Status == "Open");
+        _inProgressOrderCount = _orders.Count(o => o.Status == "InProgress");
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await LoadOrdersAsync();
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 维护计划操作
+    // ═══════════════════════════════════════════
+
+    private async Task CreatePlanAsync()
+    {
+        if (!IsCreatePlanFormValid) return;
+        _isLoading = true;
+        try
+        {
+            var body = new CreateMaintenancePlanBody(
+                _newPlan.EquipmentCode.Trim(),
+                string.IsNullOrWhiteSpace(_newPlan.EquipmentName) ? _newPlan.EquipmentCode.Trim() : _newPlan.EquipmentName.Trim(),
+                _newPlan.MaintenanceType,
+                _newPlan.ThresholdValue,
+                _newPlan.TaskDescription.Trim(),
+                _newPlan.WorkContent.Trim());
+
+            var (ok, data, _) = await Api.CreateMaintenancePlanAsync(body);
+            if (ok && data is not null)
+            {
+                _showCreatePlanDialog = false;
+                _newPlan.Clear();
+                _plans.Add(data);
+                _activePlanCount = _plans.Count(p => p.IsActive);
+                _message = $"维护计划 {data.EquipmentCode} · {data.TaskDescription} 创建成功";
+                _isError = false;
+            }
+            else
+            {
+                _message = "创建维护计划失败（请检查字段与权限）";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "创建维护计划失败");
+            _message = $"创建维护计划失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    // 维护工单操作
+    // ═══════════════════════════════════════════
+
+    private void OpenStartDialog(MaintenanceOrderDto order)
+    {
+        _selectedOrder = order;
+        _startAssignedTo = string.Empty;
+        _showStartDialog = true;
+    }
+
+    private async Task StartOrderAsync()
+    {
+        if (_selectedOrder is null || string.IsNullOrWhiteSpace(_startAssignedTo)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, status) = await Api.StartMaintenanceOrderAsync(_selectedOrder.Id, _startAssignedTo.Trim());
+            if (ok && data is not null)
+            {
+                _showStartDialog = false;
+                ReplaceOrder(data);
+                _message = $"工单 {data.OrderNumber} 已开始执行，执行人 {data.AssignedTo}";
+                _isError = false;
+            }
+            else
+            {
+                _message = $"开始执行失败（HTTP {status}）：请检查权限（需设备工程师/班组长）或工单状态";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "开始维护工单失败");
+            _message = $"开始执行失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCompleteDialog(MaintenanceOrderDto order)
+    {
+        _selectedOrder = order;
+        _completeBy = string.Empty;
+        _completeRemarks = string.Empty;
+        _showCompleteDialog = true;
+    }
+
+    private async Task CompleteOrderAsync()
+    {
+        if (_selectedOrder is null || string.IsNullOrWhiteSpace(_completeBy) || string.IsNullOrWhiteSpace(_completeRemarks)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, status) = await Api.CompleteMaintenanceOrderAsync(_selectedOrder.Id, _completeBy.Trim(), _completeRemarks.Trim());
+            if (ok && data is not null)
+            {
+                _showCompleteDialog = false;
+                ReplaceOrder(data);
+                _message = $"工单 {data.OrderNumber} 已完成";
+                _isError = false;
+            }
+            else
+            {
+                _message = $"完成失败（HTTP {status}）：请检查权限（需设备工程师/班组长）或工单状态";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "完成维护工单失败");
+            _message = $"完成失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCancelDialog(MaintenanceOrderDto order)
+    {
+        _selectedOrder = order;
+        _cancelReason = string.Empty;
+        _showCancelDialog = true;
+    }
+
+    private async Task CancelOrderAsync()
+    {
+        if (_selectedOrder is null || string.IsNullOrWhiteSpace(_cancelReason)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, status) = await Api.CancelMaintenanceOrderAsync(_selectedOrder.Id, _cancelReason.Trim());
+            if (ok && data is not null)
+            {
+                _showCancelDialog = false;
+                ReplaceOrder(data);
+                _message = $"工单 {data.OrderNumber} 已取消";
+                _isError = false;
+            }
+            else
+            {
+                _message = $"取消失败（HTTP {status}）：请检查权限或工单状态";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "取消维护工单失败");
+            _message = $"取消失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ReplaceOrder(MaintenanceOrderDto updated)
+    {
+        var idx = _orders.FindIndex(o => o.Id == updated.Id);
+        if (idx >= 0) _orders[idx] = updated;
+        ComputeOrderStats();
+    }
+
+    // ═══════════════════════════════════════════
+    // 样式/标签辅助方法
+    // ═══════════════════════════════════════════
+
+    private static string GetMaintenanceTypeLabel(string type) => type switch
+    {
+        "CycleBased" => "循环次数",
+        "TimeBased" => "时间间隔",
+        _ => type
+    };
+
+    private static Color GetTypeChipColor(string type) => type switch
+    {
+        "CycleBased" => Color.Info,
+        "TimeBased" => Color.Primary,
+        _ => Color.Default
+    };
+
+    private static string GetTriggerLabel(string trigger) => trigger switch
+    {
+        "CycleTrigger" => "循环触发",
+        "TimeTrigger" => "时间触发",
+        _ => trigger
+    };
+
+    private static string GetOrderStatusLabel(string status) => status switch
+    {
+        "Open" => "待执行",
+        "InProgress" => "执行中",
+        "Completed" => "已完成",
+        "Cancelled" => "已取消",
+        _ => status
+    };
+
+    private static Color GetOrderStatusColor(string status) => status switch
+    {
+        "Open" => Color.Warning,
+        "InProgress" => Color.Primary,
+        "Completed" => Color.Success,
+        "Cancelled" => Color.Default,
+        _ => Color.Default
+    };
+
+    private static string FormatThreshold(MaintenancePlanDto plan) => plan.MaintenanceType switch
+    {
+        "TimeBased" => $"{plan.ThresholdValue:F0} 天",
+        _ => $"{plan.ThresholdValue:F0} 次循环"
+    };
+
+    // ═══════════════════════════════════════════
+    // 表单模型
+    // ═══════════════════════════════════════════
+
+    private class CreatePlanForm
+    {
+        public string EquipmentCode { get; set; } = string.Empty;
+        public string EquipmentName { get; set; } = string.Empty;
+        public string MaintenanceType { get; set; } = "CycleBased";
+        public double ThresholdValue { get; set; } = 100000;
+        public string TaskDescription { get; set; } = string.Empty;
+        public string WorkContent { get; set; } = string.Empty;
+
+        public void Clear()
+        {
+            EquipmentCode = string.Empty;
+            EquipmentName = string.Empty;
+            MaintenanceType = "CycleBased";
+            ThresholdValue = 100000;
+            TaskDescription = string.Empty;
+            WorkContent = string.Empty;
+        }
+    }
+}

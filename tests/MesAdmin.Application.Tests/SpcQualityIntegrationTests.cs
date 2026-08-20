@@ -60,7 +60,7 @@ public class SpcQualityIntegrationTests
                 plan.Id, plan.PlanName,
                 "ECU-ESP9-001", "ECU 控制单元",
                 "BATCH-IT-001", "SUP-001", "博世苏州", "QC-001",
-                5, 0, 1, "AQL=0.65"), default);
+                5, 0, 1, "AQL=0.65", []), default);
 
         Assert.Equal(InspectionStage.Iq, record.Stage);
         Assert.Equal("ECU-ESP9-001", record.ProductCode);
@@ -119,7 +119,7 @@ public class SpcQualityIntegrationTests
                 plan.Id, plan.PlanName,
                 "HCU-ESP9-001", "HCU 液压控制单元",
                 "BATCH-IT-002", "SUP-002", "Continental 上海", "QC-002",
-                5, 0, 1, "AQL=0.65"), default);
+                5, 0, 1, "AQL=0.65", []), default);
 
         // ── 3. 添加检验特性（CreateIqcRecordHandler 不自动填充）──
         var recordTracked = await recordRepo.GetByIdTrackedAsync(record.Id, default);
@@ -152,6 +152,107 @@ public class SpcQualityIntegrationTests
         Assert.Equal("QC-002", ncr.DiscoveredBy);
         Assert.Contains("M6 扭矩", ncr.Description);
         Assert.Contains("24.5", ncr.Description);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  模板回退流程回归：创建即带特性清单（内置模板/计划复制），
+    //  录入实测值按创建时的特性判定（此前需在创建后手工补特性才能走通）
+    // ═══════════════════════════════════════════════════════════
+
+    [Fact]
+    public async Task Iqc_CreateWithTemplateCharacteristics_ShouldPersistAndComplete()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var recordRepo = sp.GetRequiredService<IQualityRecordRepository>();
+        var ncrRepo = sp.GetRequiredService<INonConformanceReportRepository>();
+
+        // ── 1. 创建 IQC 记录，创建时即带特性清单（等价于内置标准 IQC 模板回退路径）──
+        var characteristics = new List<MeasuredCharacteristic>
+        {
+            MeasuredCharacteristic.Create("DIM-01", "外形尺寸长", 120.0, "mm", 120.5, 119.5),
+            MeasuredCharacteristic.Create("DIM-02", "外形尺寸宽", 80.0, "mm", 80.5, 79.5),
+            MeasuredCharacteristic.Create("TOR-01", "紧固扭矩", 22.0, "Nm", 23.0, 21.0),
+            // 无规格界限的定性项（外观/标识），录入后仍可正常判定
+            MeasuredCharacteristic.Create("VIS-01", "外观检查", 1.0, "-", null, null),
+        };
+
+        var createHandler = new CreateIqcRecordHandler(recordRepo);
+        var record = await createHandler.ExecuteAsync(
+            new CreateIqcRecordCommand(
+                Ulid.NewUlid(), "内置标准 IQC 模板",
+                "MAT-TPL-001", "模板物料",
+                "BATCH-TPL-001", "SUP-TPL", "供应商模板", "QC-TPL-001",
+                5, 0, 1, "AQL=0.65", characteristics), default);
+
+        // 创建时特性应已持久化（回归点：此前需要创建后手工 AddRange）
+        Assert.Equal(4, record.Characteristics.Count);
+        Assert.Equal(InspectionVerdict.Pending, record.Verdict);
+
+        // ── 2. 重新查询（新跟踪上下文）确认特性持久化到 DB ──
+        var reloaded = await recordRepo.GetByIdTrackedAsync(record.Id, default);
+        Assert.NotNull(reloaded);
+        Assert.Equal(4, reloaded!.Characteristics.Count);
+        Assert.Equal("VIS-01", reloaded.Characteristics[3].CharacteristicCode);
+        Assert.Null(reloaded.Characteristics[3].UpperSpecLimit);
+
+        // ── 3. 录入实测值（均在规格内；定性项录入 1）──
+        var measureHandler = new RecordIqcMeasurementHandler(recordRepo);
+        await measureHandler.ExecuteAsync(new RecordIqcMeasurementCommand(record.Id, "DIM-01", 120.1), default);
+        await measureHandler.ExecuteAsync(new RecordIqcMeasurementCommand(record.Id, "DIM-02", 80.0), default);
+        await measureHandler.ExecuteAsync(new RecordIqcMeasurementCommand(record.Id, "TOR-01", 22.0), default);
+        await measureHandler.ExecuteAsync(new RecordIqcMeasurementCommand(record.Id, "VIS-01", 1.0), default);
+
+        // ── 4. 完成 → 判定 Passed，无 NCR ──
+        var completeHandler = new CompleteQualityRecordHandler(recordRepo, ncrRepo);
+        var completed = await completeHandler.ExecuteAsync(new CompleteQualityRecordCommand(record.Id), default);
+
+        Assert.Equal(InspectionVerdict.Passed, completed.Verdict);
+        Assert.Equal(0, completed.DefectCount);
+        Assert.False(completed.Characteristics.First(c => c.CharacteristicCode == "VIS-01").IsFailed);
+
+        var ncrs = await ncrRepo.GetByProductCodeAsync("MAT-TPL-001", default);
+        Assert.Empty(ncrs);
+    }
+
+    [Fact]
+    public async Task Iqc_TemplateCharacteristicOutOfSpec_ShouldFailAndCreateNcr()
+    {
+        using var scope = _fixture.Services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var recordRepo = sp.GetRequiredService<IQualityRecordRepository>();
+        var ncrRepo = sp.GetRequiredService<INonConformanceReportRepository>();
+
+        // 模板特性在创建时即注入（等价于 CreateIqcEndpoint 的空计划回退路径）
+        var characteristics = new List<MeasuredCharacteristic>
+        {
+            MeasuredCharacteristic.Create("DIM-01", "外形尺寸长", 120.0, "mm", 120.5, 119.5),
+            MeasuredCharacteristic.Create("TOR-01", "紧固扭矩", 22.0, "Nm", 23.0, 21.0),
+        };
+        var createHandler = new CreateIqcRecordHandler(recordRepo);
+        var record = await createHandler.ExecuteAsync(
+            new CreateIqcRecordCommand(
+                Ulid.NewUlid(), "内置标准 IQC 模板",
+                "MAT-TPL-002", "模板物料 2",
+                "BATCH-TPL-002", "SUP-TPL", "供应商模板", "QC-TPL-002",
+                5, 0, 1, "AQL=0.65", characteristics), default);
+
+        // 录入超差实测值 → 完成应判 Failed 并自动创建 NCR
+        var measureHandler = new RecordIqcMeasurementHandler(recordRepo);
+        await measureHandler.ExecuteAsync(new RecordIqcMeasurementCommand(record.Id, "DIM-01", 121.0), default); // 超 USL=120.5
+        await measureHandler.ExecuteAsync(new RecordIqcMeasurementCommand(record.Id, "TOR-01", 22.0), default);
+
+        var completeHandler = new CompleteQualityRecordHandler(recordRepo, ncrRepo);
+        var completed = await completeHandler.ExecuteAsync(new CompleteQualityRecordCommand(record.Id), default);
+
+        Assert.Equal(InspectionVerdict.Failed, completed.Verdict);
+        Assert.Equal(1, completed.DefectCount);
+        Assert.True(completed.Characteristics.First(c => c.CharacteristicCode == "DIM-01").IsFailed);
+
+        var ncrs = await ncrRepo.GetByProductCodeAsync("MAT-TPL-002", default);
+        Assert.NotEmpty(ncrs);
+        Assert.Equal(NcrSeverity.Major, ncrs[0].Severity); // IQC 超差 → Major
+        Assert.Contains("外形尺寸长", ncrs[0].Description);
     }
 
     [Fact]
@@ -236,7 +337,7 @@ public class SpcQualityIntegrationTests
         var record = await createHandler.ExecuteAsync(
             new CreateIqcRecordCommand(plan.Id, plan.PlanName,
                 "ESP-ASM-9.0", "ESP 制动总成", "BATCH-NCR-001",
-                "SUP-003", "供应商 3", "QC-003", 5, 0, 1, null), default);
+                "SUP-003", "供应商 3", "QC-003", 5, 0, 1, null, []), default);
 
         // CreateIqcRecordHandler 不自动填充特性，需要手动添加
         var recordTracked = await recordRepo.GetByIdTrackedAsync(record.Id, default);

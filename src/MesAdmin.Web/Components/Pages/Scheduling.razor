@@ -9,7 +9,7 @@
 
 <PageTitle>生产排程 - AutoMES</PageTitle>
 
-<MudStack Spacing="3">
+<MudStack Spacing="2">
     <MesPageHeader Kicker="M09 · Production Scheduling" Title="生产排程管理"
                   Description="甘特图排程 · 产能管理 · 紧急插单 · 有限产能引擎">
         <HeaderActions>
@@ -33,7 +33,7 @@
                Tab 1: 甘特图排程
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="甘特图" Icon="@Icons.Material.Filled.Assignment">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudTextField @bind-Value="_dateFrom" Label="开始日期" Variant="Variant.Outlined" Dense
                                       Style="min-width:140px;" />
@@ -67,7 +67,7 @@
                Tab 2: 排程列表
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="排程列表" Icon="@Icons.Material.Filled.ListAlt">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                         <MudTextField @bind-Value="_scheduleFilterEquipment" Label="设备编码" Variant="Variant.Outlined" Dense
                                       Style="min-width:140px;" />
@@ -159,6 +159,10 @@
                                                        OnClick="() => StartScheduleAsync(context)">
                                                 开始
                                             </MudButton>
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Info"
+                                                       OnClick="() => OpenRescheduleDialog(context)">
+                                                重排
+                                            </MudButton>
                                         }
                                         @if (context.Status == "InProgress")
                                         {
@@ -186,7 +190,7 @@
                Tab 3: 产能利用率
                ═══════════════════════════════════════════ *@
             <MudTabPanel Text="产能利用率" Icon="@Icons.Material.Filled.Speed">
-                <MudStack Spacing="3" Class="pa-4">
+                <MudStack Spacing="2" Class="pa-4">
                     <MudTextField @bind-Value="_capacityDate" Label="查询日期" Variant="Variant.Outlined" Dense
                                   Style="min-width:140px;" />
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
@@ -235,6 +239,99 @@
                 </MudStack>
             </MudTabPanel>
 
+            @* ═══════════════════════════════════════════
+               Tab 4: 工作日历（产能日历）
+               ═══════════════════════════════════════════ *@
+            <MudTabPanel Text="工作日历" Icon="@Icons.Material.Filled.CalendarMonth">
+                <MudStack Spacing="2" Class="pa-4">
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateCalendarDialog">
+                            新建日历
+                        </MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="_isLoading"
+                                       OnClick="LoadCalendarsAsync" Size="Size.Small" />
+                    </MudStack>
+
+                    @if (_isLoading && _calendars.Count == 0)
+                    {
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="pa-4">
+                            <MudProgressCircular Size="Size.Large" Color="Color.Primary" />
+                        </MudStack>
+                    }
+                    else if (_calendars.Count == 0)
+                    {
+                        <MudPaper Class="glass-kpi-card pa-8">
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Large" Color="Color.Primary" />
+                                <MudText Typo="Typo.body1">暂无产能日历配置</MudText>
+                                <MudText Typo="Typo.body2" Class="section-copy">创建产能日历以配置设备换型时间参数。</MudText>
+                            </MudStack>
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudTable Items="@_calendars" Dense="true" Hover="true" Elevation="0" Class="module-card">
+                            <HeaderContent>
+                                <MudTh>设备编码</MudTh>
+                                <MudTh>设备名称</MudTh>
+                                <MudTh>工站</MudTh>
+                                <MudTh>标准换型(min)</MudTh>
+                                <MudTh>跨品种换型(min)</MudTh>
+                                <MudTh>状态</MudTh>
+                                <MudTh>创建时间</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="设备">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600;">@context.EquipmentCode</MudText>
+                                </MudTd>
+                                <MudTd DataLabel="名称">@context.EquipmentName</MudTd>
+                                <MudTd DataLabel="工站">站@(context.Station)</MudTd>
+                                <MudTd DataLabel="标准换型">@context.StandardChangeoverMinutes.ToString("F0")</MudTd>
+                                <MudTd DataLabel="跨品种换型">@context.CrossProductChangeoverMinutes.ToString("F0")</MudTd>
+                                <MudTd DataLabel="状态">
+                                    <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)"
+                                             Variant="Variant.Outlined">
+                                        @(context.IsActive ? "启用" : "停用")
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="创建">@context.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    }
+                </MudStack>
+
+                @* 新建日历对话框 *@
+                <MudDialog @bind-Visible="_showCreateCalendarDialog">
+                    <DialogContent>
+                        <MudStack Spacing="3">
+                            <MudText Typo="Typo.h6">新建产能日历</MudText>
+                            <MudGrid Spacing="2">
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField Label="设备编码 *" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_calendarEquipmentCode" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField Label="设备名称" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_calendarEquipmentName" />
+                                </MudItem>
+                                <MudItem xs="12" sm="4">
+                                    <MudNumericField T="int" Label="工站" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_calendarStation" Min="1" />
+                                </MudItem>
+                                <MudItem xs="12" sm="4">
+                                    <MudNumericField T="double" Label="标准换型时间 (min)" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_calendarStandardChangeover" Min="0" />
+                                </MudItem>
+                                <MudItem xs="12" sm="4">
+                                    <MudNumericField T="double" Label="跨品种换型时间 (min)" Variant="Variant.Outlined" Margin="Margin.Dense" @bind-Value="_calendarCrossChangeover" Min="0" />
+                                </MudItem>
+                            </MudGrid>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       OnClick="CreateCalendarAsync" Disabled="_isLoading" FullWidth="true">
+                                创建
+                            </MudButton>
+                        </MudStack>
+                    </DialogContent>
+                </MudDialog>
+            </MudTabPanel>
+
         </MudTabs>
     </MudPaper>
 </MudStack>
@@ -264,6 +361,28 @@
                    Disabled="@(string.IsNullOrWhiteSpace(_rushOrderId) || string.IsNullOrWhiteSpace(_rushEquipmentCode) || _rushStandardMinutes <= 0)"
                    OnClick="InsertRushOrderAsync">
             确认插单
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ═══════════════════════════════════════════
+   对话框: 重新排程
+   ═══════════════════════════════════════════ *@
+<MudDialog @bind-Visible="_showRescheduleDialog" FullWidth="true" MaxWidth="MaxWidth.Small">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.h6">重新排程 — @(_rescheduleTarget?.OrderNumber)</MudText>
+            <MudText Typo="Typo.body2" Class="section-copy">调整计划开始时间 / 设备 / 换型时间，仅已排程工单可重排。</MudText>
+            <MudTextField @bind-Value="_rescheduleEquipmentCode" Label="设备编码" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="double" @bind-Value="_rescheduleChangeoverMinutes" Label="换型时间 (分钟)" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showRescheduleDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Info"
+                   Disabled="@(string.IsNullOrWhiteSpace(_rescheduleEquipmentCode))"
+                   OnClick="RescheduleAsync">
+            确认重排
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -303,6 +422,21 @@
     private double _rushStandardMinutes = 60;
     private double _rushChangeoverMinutes = 15;
     private string _rushReason = string.Empty;
+
+    // ── 重新排程 ──
+    private bool _showRescheduleDialog;
+    private ScheduleDto? _rescheduleTarget;
+    private string _rescheduleEquipmentCode = string.Empty;
+    private double _rescheduleChangeoverMinutes = 15;
+
+    // ── 工作日历 ──
+    private List<CapacityCalendarDto> _calendars = [];
+    private bool _showCreateCalendarDialog;
+    private string _calendarEquipmentCode = string.Empty;
+    private string _calendarEquipmentName = string.Empty;
+    private int _calendarStation = 1;
+    private double _calendarStandardChangeover = 15;
+    private double _calendarCrossChangeover = 45;
 
     protected override async Task OnInitializedAsync()
     {
@@ -458,6 +592,111 @@
         {
             PageLogger.LogError(ex, "排程操作失败");
             _message = $"操作失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  重新排程
+    // ═══════════════════════════════════════════
+
+    private void OpenRescheduleDialog(ScheduleDto schedule)
+    {
+        _rescheduleTarget = schedule;
+        _rescheduleEquipmentCode = schedule.EquipmentCode;
+        _rescheduleChangeoverMinutes = schedule.ChangeoverMinutes;
+        _showRescheduleDialog = true;
+    }
+
+    private async Task RescheduleAsync()
+    {
+        if (_rescheduleTarget is null || string.IsNullOrWhiteSpace(_rescheduleEquipmentCode)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, data, _) = await Api.RescheduleScheduleAsync(
+                _rescheduleTarget.Id,
+                _rescheduleTarget.PlannedStartAt,
+                _rescheduleEquipmentCode,
+                _rescheduleChangeoverMinutes);
+            if (ok && data is not null)
+            {
+                _showRescheduleDialog = false;
+                var idx = _schedules.FindIndex(s => s.Id == _rescheduleTarget.Id);
+                if (idx >= 0) _schedules[idx] = data;
+                _message = $"排程 {_rescheduleTarget.OrderNumber} 已重新排程";
+                _isError = false;
+                await LoadScheduleListAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "重排失败");
+            _message = $"重排失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  工作日历
+    // ═══════════════════════════════════════════
+
+    private async Task LoadCalendarsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _calendars = await Api.GetCalendarsAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载产能日历失败");
+            _message = $"加载产能日历失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCreateCalendarDialog()
+    {
+        _calendarEquipmentCode = "";
+        _calendarEquipmentName = "";
+        _calendarStation = 1;
+        _calendarStandardChangeover = 15;
+        _calendarCrossChangeover = 45;
+        _showCreateCalendarDialog = true;
+    }
+
+    private async Task CreateCalendarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_calendarEquipmentCode)) return;
+        _isLoading = true;
+        try
+        {
+            var (ok, _, _) = await Api.CreateCalendarAsync(new CreateCalendarBody(
+                _calendarEquipmentCode, _calendarEquipmentName, _calendarStation,
+                _calendarStandardChangeover, _calendarCrossChangeover));
+            if (ok)
+            {
+                _showCreateCalendarDialog = false;
+                await LoadCalendarsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "创建产能日历失败");
+            _message = $"创建产能日历失败：{ex.Message}";
             _isError = true;
         }
         finally

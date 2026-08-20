@@ -8,6 +8,7 @@ namespace MesAdmin.Application.Interfaces;
 public interface ISapRejectionRepository
 {
     Task<SapRejectionRecord?> GetByIdAsync(Ulid id, CancellationToken cancellationToken = default);
+    Task<SapRejectionRecord?> GetByIdTrackedAsync(Ulid id, CancellationToken cancellationToken = default);
     Task<List<SapRejectionRecord>> GetPendingWritebackAsync(CancellationToken cancellationToken = default);
     Task<List<SapRejectionRecord>> GetByExternalOrderNumberAsync(string externalOrderNumber, CancellationToken cancellationToken = default);
     Task AddAsync(SapRejectionRecord record, CancellationToken cancellationToken = default);

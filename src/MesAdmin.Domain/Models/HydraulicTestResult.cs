@@ -183,7 +183,9 @@ public partial class HydraulicTestResult
     /// </summary>
     public void Complete()
     {
-        var allSolenoidPass = SolenoidTests.Count > 0 && SolenoidTests.All(t => t.ActuationPass);
+        // 电磁阀数据缺失（数据链路未采集）时视同未测量，不判失败；
+        // 有数据时必须全部合格（与建压/保压/泄压/泄漏率一致：未测量 ?? true 语义）。
+        var allSolenoidPass = SolenoidTests.All(t => t.ActuationPass);
         var allCyclesPass = (PressureBuildPass ?? true)
                           && (HoldPressurePass ?? true)
                           && (PressureReleasePass ?? true)

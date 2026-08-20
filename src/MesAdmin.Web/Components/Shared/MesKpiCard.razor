@@ -3,7 +3,7 @@
     <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Spacing="2">
         <MudStack Spacing="1" Class="flex-grow-1">
             <MudText Typo="Typo.caption" Class="kpi-label">@Label</MudText>
-            <MudText Typo="Typo.h3" Class="@ValueClass" Style="@ValueStyle">@Value</MudText>
+            <MudText Typo="Typo.h4" Class="@ValueClass" Style="@ValueStyle">@Value</MudText>
             @if (!string.IsNullOrEmpty(Sub))
             {
                 <MudText Typo="Typo.caption" Class="kpi-sub">@Sub</MudText>
@@ -22,7 +22,7 @@
     </MudStack>
     @if (ChildContent is not null)
     {
-        <MudStack Spacing="2" Class="mt-4">
+        <MudStack Spacing="2" Class="mt-2">
             @ChildContent
         </MudStack>
     }

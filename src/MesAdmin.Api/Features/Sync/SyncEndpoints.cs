@@ -60,6 +60,7 @@ public sealed record SyncConflictItem(
     string EntityType,
     string? EntityId,
     string Payload,
+    string Status,
     string? ErrorMessage,
     DateTimeOffset CreatedAt);
 
@@ -192,7 +193,7 @@ public sealed class PendingSyncEndpoint : EndpointWithoutRequest<List<SyncConfli
         var items = records.Select(r => new SyncConflictItem(
             r.Id.ToString(), r.TerminalId, r.OperationType,
             r.EntityType, r.EntityId, r.Payload,
-            r.ErrorMessage, r.CreatedAt)).ToList();
+            r.Status, r.ErrorMessage, r.CreatedAt)).ToList();
 
         await Send.OkAsync(items, ct);
     }
@@ -249,7 +250,7 @@ public sealed class ResolveConflictEndpoint : Endpoint<ResolveConflictBody, Sync
         await Send.OkAsync(new SyncConflictItem(
             record.Id.ToString(), record.TerminalId, record.OperationType,
             record.EntityType, record.EntityId, record.Payload,
-            record.ErrorMessage, record.CreatedAt), ct);
+            record.Status, record.ErrorMessage, record.CreatedAt), ct);
     }
 }
 

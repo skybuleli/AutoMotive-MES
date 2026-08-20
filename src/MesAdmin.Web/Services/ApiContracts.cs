@@ -389,6 +389,170 @@ public record ApprovePurchaseRequestBody(string ApprovedBy);
 public record CheckStockBody(string SparePartId);
 
 // ═══════════════════════════════════════════
+// T2.17 预防性维护相关 DTO
+// ═══════════════════════════════════════════
+
+/// <summary>维护计划响应 DTO（镜像 MaintenancePlanResponse）</summary>
+public record MaintenancePlanDto(
+    string Id,
+    string EquipmentCode,
+    string EquipmentName,
+    string MaintenanceType,
+    double ThresholdValue,
+    string TaskDescription,
+    string WorkContent,
+    bool IsActive,
+    DateTimeOffset? LastTriggeredAt,
+    long? LastTriggeredCycleCount,
+    DateTimeOffset CreatedAt);
+
+/// <summary>维护工单响应 DTO（镜像 MaintenanceOrderResponse）</summary>
+public record MaintenanceOrderDto(
+    string Id,
+    string OrderNumber,
+    string MaintenancePlanId,
+    string EquipmentCode,
+    string EquipmentName,
+    string MaintenanceType,
+    string TriggerType,
+    double TriggerValue,
+    string Title,
+    string Description,
+    string Status,
+    string? AssignedTo,
+    string? CompletedBy,
+    string? CompletionRemarks,
+    DateTimeOffset? CompletedAt,
+    DateTimeOffset CreatedAt);
+
+/// <summary>创建维护计划请求体</summary>
+public record CreateMaintenancePlanBody(
+    string EquipmentCode,
+    string EquipmentName,
+    string MaintenanceType,
+    double ThresholdValue,
+    string TaskDescription,
+    string WorkContent);
+
+/// <summary>开始维护工单请求体</summary>
+public record StartMaintenanceOrderBody(string AssignedTo);
+
+/// <summary>完成维护工单请求体</summary>
+public record CompleteMaintenanceOrderBody(string CompletedBy, string Remarks);
+
+/// <summary>取消维护工单请求体</summary>
+public record CancelMaintenanceOrderBody(string Reason);
+
+// ═══════════════════════════════════════════
+// T1.5 首件检验相关 DTO
+// ═══════════════════════════════════════════
+
+/// <summary>首件检验响应 DTO（镜像 InspectionResponse）</summary>
+public record InspectionDto(
+    string Id,
+    string OrderId,
+    string OrderNumber,
+    string ProductCode,
+    string InspectionType,
+    string Status,
+    string OperatorId,
+    string? InspectorId,
+    List<InspectionItemDto> Items,
+    string? Conclusion,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? CompletedAt);
+
+/// <summary>首件检验检验项 DTO</summary>
+public record InspectionItemDto(
+    string CharacteristicCode,
+    string CharacteristicName,
+    double StandardValue,
+    double? UpperLimit,
+    double? LowerLimit,
+    string Unit,
+    double? ActualValue,
+    bool IsPass);
+
+/// <summary>创建首件检验请求体</summary>
+public record CreateInspectionBody(string InspectionType, string OperatorId);
+
+// ═══════════════════════════════════════════
+// T4.1 报表模板引擎 DTO
+// ═══════════════════════════════════════════
+
+/// <summary>报表模板列表项 DTO（镜像 TemplateListItem）</summary>
+public record ReportTemplateItemDto(
+    string Id,
+    string Name,
+    string Description,
+    string Type,
+    int SectionCount,
+    bool SupportsEmail,
+    bool SupportsSchedule);
+
+// ═══════════════════════════════════════════
+// T4.4-T4.5 SAP / 离线同步监控 DTO
+// ═══════════════════════════════════════════
+
+/// <summary>离线同步统计（镜像 OfflineSyncStats）</summary>
+public record SyncStatsDto(
+    int PendingCount,
+    int SyncedCount,
+    int ConflictCount,
+    int FailedCount,
+    int TotalCount,
+    int TerminalCount);
+
+/// <summary>同步状态响应（镜像 SyncStatusResponse）</summary>
+public record SyncStatusDto(
+    SyncStatsDto Stats,
+    long ChannelBacklog,
+    long ChannelProcessed,
+    long ChannelConflicts);
+
+/// <summary>待同步/冲突记录项（镜像 SyncConflictItem）</summary>
+public record SyncPendingItemDto(
+    string Id,
+    string TerminalId,
+    string OperationType,
+    string EntityType,
+    string? EntityId,
+    string Payload,
+    string Status,
+    string? ErrorMessage,
+    DateTimeOffset CreatedAt);
+
+/// <summary>SAP 同步状态（镜像 SapSyncStatusResponse）</summary>
+public record SapSyncStatusDto(
+    int PendingRejectionCount,
+    int PendingInventorySyncCount,
+    int PendingOrderSyncCount,
+    int TotalPending);
+
+/// <summary>SAP 待同步明细项</summary>
+public record SapPendingItemDto(
+    string Id,
+    string Type,
+    string TypeLabel,
+    string? Reference,
+    string Detail,
+    string? Reason,
+    string? Error,
+    DateTimeOffset CreatedAt);
+
+/// <summary>SAP 拒单回写结果（镜像 WritebackResultResponse）</summary>
+public record SapWritebackResultDto(
+    bool Success,
+    string Message,
+    string? DocumentNumber);
+
+/// <summary>记录检验项实测值请求体</summary>
+public record RecordInspectionValueBody(double ActualValue);
+
+/// <summary>完成首件检验请求体</summary>
+public record CompleteInspectionBody(string InspectorId);
+
+// ═══════════════════════════════════════════
 // T3.1-T3.5 M07 工艺管理 DTO
 // ═══════════════════════════════════════════
 
@@ -707,3 +871,193 @@ public record InsertRushOrderBody(
     double StandardMinutes,
     double ChangeoverMinutes,
     string? RushReason);
+
+/// <summary>重新排程请求体</summary>
+public record RescheduleBody(
+    DateTimeOffset NewStartAt,
+    string? NewEquipmentCode,
+    double? NewChangeoverMinutes);
+
+/// <summary>产能日历响应 DTO（镜像 CapacityCalendarResponse）</summary>
+public record CapacityCalendarDto(
+    string Id,
+    string EquipmentCode,
+    string EquipmentName,
+    int Station,
+    double StandardChangeoverMinutes,
+    double CrossProductChangeoverMinutes,
+    bool IsActive,
+    DateTimeOffset CreatedAt);
+
+/// <summary>创建产能日历请求体</summary>
+public record CreateCalendarBody(
+    string EquipmentCode,
+    string EquipmentName,
+    int Station,
+    double StandardChangeoverMinutes,
+    double CrossProductChangeoverMinutes);
+
+// ═══════════════════════════════════════════
+// 液压测试台相关 DTO（镜像 HydraulicTestResponse）
+// ═══════════════════════════════════════════
+
+/// <summary>液压测试结果响应 DTO</summary>
+public record HydraulicTestDto(
+    string Id,
+    string EquipmentCode,
+    string Status,
+    int CycleNumber,
+    double? PressureBuildTimeMs,
+    bool? PressureBuildPass,
+    double? HoldPressureBar,
+    bool? HoldPressurePass,
+    double? PressureReleaseTimeMs,
+    bool? PressureReleasePass,
+    double? LeakRateCcHr,
+    bool? LeakRatePass,
+    int SolenoidTestCount,
+    int SolenoidPassCount,
+    bool OverallPass,
+    string? FailureReason,
+    bool EquipmentLocked,
+    string? UnlockedBy,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? CompletedAt);
+
+/// <summary>液压设备解锁请求体</summary>
+public record UnlockHydraulicBody(string UnlockedBy);
+
+// ═══════════════════════════════════════════
+// T2.2 IQC / T2.4 IPQC 检验执行 DTO
+// ═══════════════════════════════════════════
+
+/// <summary>创建 IQC 来料检验请求体</summary>
+public record CreateIqcBody(
+    string InspectionPlanId,
+    string InspectionPlanName,
+    string MaterialCode,
+    string MaterialName,
+    string BatchNumber,
+    string SupplierCode,
+    string SupplierName,
+    string InspectorId,
+    int SampleSize,
+    int AcceptNumber,
+    int RejectNumber,
+    string? AqlScheme);
+
+/// <summary>记录 IQC 实测值请求体</summary>
+public record RecordIqcMeasurementBody(string CharacteristicCode, double ActualValue);
+
+/// <summary>创建 IPQC 过程巡检请求体</summary>
+public record CreateIpqcBody(
+    string OrderId,
+    string OrderNumber,
+    string ProductCode,
+    string ProductName,
+    string InspectionPlanId,
+    string InspectionPlanName,
+    string InspectorId,
+    int AcceptNumber,
+    int RejectNumber,
+    List<MeasuredCharacteristicBody> Characteristics);
+
+/// <summary>IPQC 检验特性请求体</summary>
+public record MeasuredCharacteristicBody(
+    string CharacteristicCode,
+    string CharacteristicName,
+    double StandardValue,
+    double? UpperSpecLimit,
+    double? LowerSpecLimit,
+    string Unit);
+
+// ═══════════════════════════════════════════
+// 8D 编辑 / SPC 告警确认 DTO
+// ═══════════════════════════════════════════
+
+/// <summary>更新 8D 报告请求体（D1-D7）</summary>
+public record UpdateEightDBody(
+    string? TeamLeader,
+    string? TeamMembers,
+    string? ProblemDescription,
+    string? ContainmentAction,
+    string? RootCauseAnalysis,
+    string? RootCause,
+    string? CorrectiveAction,
+    string? CorrectiveActionOwner,
+    DateTimeOffset? CorrectiveActionDueDate,
+    string? VerificationMethod,
+    string? VerificationResult,
+    string? PreventiveAction,
+    int CompletedStep);
+
+/// <summary>确认 SPC 告警请求体</summary>
+public record AcknowledgeSpcAlertBody(string AcknowledgedBy, string? ActionTaken);
+
+// ═══════════════════════════════════════════
+// 检验计划管理 DTO（镜像 InspectionPlanResponse）
+// ═══════════════════════════════════════════
+
+/// <summary>检验计划响应 DTO</summary>
+public record InspectionPlanDto(
+    string Id,
+    string PlanName,
+    string Version,
+    string? ProductCode,
+    string Stage,
+    string SamplingFrequency,
+    int SampleSize,
+    bool EnableSpcChart,
+    int SpcSubgroupSize,
+    bool IsEnabled,
+    List<PlanCharacteristicDto> Characteristics,
+    DateTimeOffset EffectiveDate,
+    DateTimeOffset? ExpirationDate);
+
+/// <summary>计划检验特性 DTO</summary>
+public record PlanCharacteristicDto(
+    string CharacteristicCode,
+    string CharacteristicName,
+    string Type,
+    double StandardValue,
+    double? UpperSpecLimit,
+    double? LowerSpecLimit,
+    string Unit,
+    bool IsCritical,
+    bool EnableSpc,
+    double? UpperControlLimit,
+    double? LowerControlLimit,
+    double? CenterLine,
+    double? UpperRangeLimit,
+    double? CenterRange);
+
+/// <summary>创建检验计划请求体</summary>
+public record CreateInspectionPlanBody(
+    string PlanName,
+    string Version,
+    string Stage,
+    string? ProductCode,
+    int? Station,
+    string SamplingFrequency,
+    int SampleSize,
+    double? AqlValue,
+    string? InspectionLevel,
+    int AcceptNumber,
+    int RejectNumber,
+    bool EnableSpcChart,
+    int SpcSubgroupSize,
+    DateTimeOffset EffectiveDate,
+    DateTimeOffset? ExpirationDate,
+    List<CreatePlanCharacteristicBody> Characteristics);
+
+/// <summary>创建计划特性请求体</summary>
+public record CreatePlanCharacteristicBody(
+    string CharacteristicCode,
+    string CharacteristicName,
+    string Type,
+    double StandardValue,
+    double? UpperSpecLimit,
+    double? LowerSpecLimit,
+    string Unit,
+    bool IsCritical,
+    bool EnableSpc);

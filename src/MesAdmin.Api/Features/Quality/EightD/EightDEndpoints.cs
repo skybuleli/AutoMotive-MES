@@ -182,10 +182,24 @@ public class ListEightDEndpoint : MesEndpointWithoutRequest<List<EightDReportRes
         var repo = Resolve<IEightDReportRepository>();
         List<EightDReport> reports;
 
-        if (!string.IsNullOrWhiteSpace(statusStr) && Enum.TryParse<EightDStatus>(statusStr, out var status))
+        // "Open" / 空值 → 所有未关闭报告（Open/InProgress/Verified），避免中间状态（如已填完 D1-D7 的 Verified）从列表中消失。
+        if (string.IsNullOrWhiteSpace(statusStr) || string.Equals(statusStr, "Open", StringComparison.OrdinalIgnoreCase))
+        {
+            var open = await repo.GetByStatusAsync(EightDStatus.Open, ct);
+            var inProgress = await repo.GetByStatusAsync(EightDStatus.InProgress, ct);
+            var verified = await repo.GetByStatusAsync(EightDStatus.Verified, ct);
+            reports = open.Concat(inProgress).Concat(verified)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToList();
+        }
+        else if (Enum.TryParse<EightDStatus>(statusStr, out var status))
+        {
             reports = await repo.GetByStatusAsync(status, ct);
+        }
         else
-            reports = await repo.GetByStatusAsync(EightDStatus.Open, ct);
+        {
+            reports = [];
+        }
 
         Response = reports.Select(QualityMapper.ToEightDResponse).ToList();
         await SendDualAsync(ct);
