@@ -4,9 +4,11 @@
 @implements IDisposable
 @using System.Net.Http.Json
 @using MesAdmin.Web.Services
+@using Microsoft.JSInterop
 @inject IHttpClientFactory HttpFactory
 @inject AuthService Auth
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @inject ILogger<OrderCompletion> PageLogger
 
 <PageTitle>完工审核 - AutoMES</PageTitle>
@@ -286,10 +288,8 @@
                                     <MudText Typo="Typo.caption" Class="label-muted" Style="font-family:var(--mes-mono); font-size:10px;">
                                         [ 工单 @_reviewOrder.OrderNumber ]
                                     </MudText>
-                                    @* ── 二维码模拟 ── *@
-                                    <div class="label-qr">
-                                        QR<br/>@GetLabelCode(_reviewOrder)
-                                    </div>
+                                    @* ── 真实二维码（JS 渲染，label-interop.js）── *@
+                                    <div id="label-qr-review" class="label-qr" style="padding:2px;"></div>
                                     <MudText Typo="Typo.caption" Class="label-muted" Style="font-size:9px;">
                                         质量审核: @_reviewerId · @DateTimeOffset.Now.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                                     </MudText>
@@ -439,9 +439,7 @@
                         <MudText Typo="Typo.caption" Class="label-muted">
                             ESP® 制动系统总成
                         </MudText>
-                        <div class="label-qr">
-                            QR<br/>@GetLabelCode(_labelOrder)
-                        </div>
+                        <div id="label-qr-view" class="label-qr" style="padding:2px;"></div>
                         <MudText Typo="Typo.caption" Class="label-muted" Style="font-size:9px;">
                             工单 @_labelOrder.OrderNumber · @(_labelOrder.CompletedAt?.ToLocalTime().ToString("yyyy-MM-dd") ?? "")
                         </MudText>
@@ -625,6 +623,9 @@
             _message = $"工单 {_reviewOrder.OrderNumber} 审核放行通过，追溯标签已生成";
             _isError = false;
 
+            // 渲染真实二维码（对话框 DOM 已挂载后调用）
+            await RenderReviewQrAsync();
+
             // 刷新列表
             await LoadAllAsync();
         }
@@ -645,10 +646,13 @@
     // 标签查看 / 关闭工单
     // ═══════════════════════════════════════════
 
-    private void ShowGoodsReceipt(OrderSummary order)
+    private async Task ShowGoodsReceipt(OrderSummary order)
     {
         _labelOrder = order;
         _labelDialogVisible = true;
+        // 对话框渲染完成后渲染真实二维码
+        await InvokeAsync(StateHasChanged);
+        await RenderViewQrAsync();
     }
 
     private async Task CloseOrderAsync(OrderSummary order)
@@ -685,17 +689,51 @@
     }
 
     // ═══════════════════════════════════════════
-    // 标签打印
+    // 标签打印 + 二维码渲染
     // ═══════════════════════════════════════════
 
-    private void PrintLabel()
+    /// <summary>打印追溯标签：克隆指定标签区域到隐藏 iframe 调用 window.print()。</summary>
+    private async Task PrintLabel()
     {
-        // 使用浏览器打印功能打印追溯标签
-        _ = InvokeAsync(() =>
+        try
         {
-            // 通过 JSInterop 触发 window.print()
-            // Blazor Server 使用 JS 运行时
-        });
+            var selector = _labelDialogVisible
+                ? ".label-dialog-content .label-preview"
+                : ".review-dialog-content .label-preview";
+            await JS.InvokeVoidAsync("labelInterop.printElement", selector);
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "打印追溯标签失败");
+        }
+    }
+
+    /// <summary>渲染审核对话框中的真实二维码</summary>
+    private async Task RenderReviewQrAsync()
+    {
+        if (_reviewOrder is null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("labelInterop.renderQr", "label-qr-review", GetLabelCode(_reviewOrder));
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogWarning(ex, "渲染审核二维码失败");
+        }
+    }
+
+    /// <summary>渲染标签对话框中的真实二维码</summary>
+    private async Task RenderViewQrAsync()
+    {
+        if (_labelOrder is null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("labelInterop.renderQr", "label-qr-view", GetLabelCode(_labelOrder));
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogWarning(ex, "渲染标签二维码失败");
+        }
     }
 
     // ═══════════════════════════════════════════
