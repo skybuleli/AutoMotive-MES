@@ -649,6 +649,54 @@ public class MesApiClient
     public Task<(bool Ok, CapacityCalendarDto? Data, int Status)> CreateCalendarAsync(CreateCalendarBody body, CancellationToken ct = default)
         => PostAsync<CapacityCalendarDto>("api/v1/scheduling/calendars", body, ct);
 
+    // ═══════════════════════════════════════════
+    // 系统管理：用户 + 审计日志
+    // ═══════════════════════════════════════════
+
+    /// <summary>查询用户列表（分页+关键字）</summary>
+    public Task<List<UserDto>?> GetUsersAsync(string? keyword = null, int pageIndex = 0, int pageSize = 100, CancellationToken ct = default)
+        => GetAsync<List<UserDto>>($"api/v1/users?keyword={Uri.EscapeDataString(keyword ?? string.Empty)}&pageIndex={pageIndex}&pageSize={pageSize}", ct);
+
+    /// <summary>新建用户</summary>
+    public Task<(bool Ok, UserDto? Data, int Status)> CreateUserAsync(
+        string username, string displayName, string password, string[] roles, CancellationToken ct = default)
+        => PostAsync<UserDto>("api/v1/users", new { Username = username, DisplayName = displayName, Password = password, Roles = roles }, ct);
+
+    /// <summary>编辑用户（显示名/角色/启停用）</summary>
+    public Task<(bool Ok, UserDto? Data, int Status)> UpdateUserAsync(
+        string id, string displayName, string[] roles, bool isActive, CancellationToken ct = default)
+        => PutAsync<UserDto>($"api/v1/users/{id}", new { DisplayName = displayName, Roles = roles, IsActive = isActive }, ct);
+
+    /// <summary>重置用户密码</summary>
+    public Task<(bool Ok, object? Data, int Status)> ResetUserPasswordAsync(string id, string newPassword, CancellationToken ct = default)
+        => PutAsync<object?>($"api/v1/users/{id}/reset-password", new { NewPassword = newPassword }, ct);
+
+    /// <summary>自助修改密码（当前登录账号）</summary>
+    public async Task<(bool Ok, int Status)> ChangeMyPasswordAsync(string oldPassword, string newPassword, CancellationToken ct = default)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Post, "api/auth/change-password")
+        {
+            Content = JsonContent.Create(new { OldPassword = oldPassword, NewPassword = newPassword }),
+        };
+        await AttachTokenAsync(req);
+        var resp = await _http.SendAsync(req, ct);
+        return (resp.IsSuccessStatusCode, (int)resp.StatusCode);
+    }
+
+    /// <summary>分页查询审计日志（时间倒序，支持筛选）</summary>
+    public Task<AuditLogPageDto?> GetAuditLogsAsync(
+        string? username = null, string? module = null,
+        DateTimeOffset? timeFrom = null, DateTimeOffset? timeTo = null,
+        int pageIndex = 0, int pageSize = 50, CancellationToken ct = default)
+    {
+        var url = $"api/v1/audit-logs?pageIndex={pageIndex}&pageSize={pageSize}" +
+                  $"&username={Uri.EscapeDataString(username ?? string.Empty)}" +
+                  $"&module={Uri.EscapeDataString(module ?? string.Empty)}";
+        if (timeFrom.HasValue) url += $"&timeFrom={Uri.EscapeDataString(timeFrom.Value.ToString("O"))}";
+        if (timeTo.HasValue) url += $"&timeTo={Uri.EscapeDataString(timeTo.Value.ToString("O"))}";
+        return GetAsync<AuditLogPageDto>(url, ct);
+    }
+
     private async Task AttachTokenAsync(HttpRequestMessage req)
     {
         try

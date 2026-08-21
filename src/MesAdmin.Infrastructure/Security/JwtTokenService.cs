@@ -95,6 +95,7 @@ public static class JwtAuthenticationExtensions
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
 
         services.AddScoped<ITokenService, JwtTokenService>();
+        services.AddSingleton<Pbkdf2PasswordHasher>();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {

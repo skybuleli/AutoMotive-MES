@@ -469,6 +469,9 @@ public class DatabaseFixture : IAsyncLifetime
         // T1.11 BOM 内存缓存
         services.AddSingleton<IBomCache, BomCache>();
 
+        // 系统管理：用户密码哈希（用户种子）
+        services.AddSingleton<MesAdmin.Infrastructure.Security.Pbkdf2PasswordHasher>();
+
         // SAP 集成仓储（T3.14）
         services.AddScoped<ISapOrderSyncRecordRepository, SapOrderSyncRecordRepository>();
 

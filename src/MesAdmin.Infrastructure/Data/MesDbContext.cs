@@ -76,6 +76,13 @@ public class MesDbContext : DbContext
     public DbSet<ProductionSchedule> ProductionSchedules => Set<ProductionSchedule>();
     public DbSet<CapacityCalendar> CapacityCalendars => Set<CapacityCalendar>();
 
+    // ═══════════════════════════════════════════════════════════
+    //  系统管理：用户账号 + 操作审计日志（IATF 追溯）
+    // ═══════════════════════════════════════════════════════════
+
+    public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // 所有 Ulid 属性自动映射为 PG uuid 列，避免在每个实体中重复配置。

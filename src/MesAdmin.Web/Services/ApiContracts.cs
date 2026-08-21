@@ -1061,3 +1061,36 @@ public record CreatePlanCharacteristicBody(
     string Unit,
     bool IsCritical,
     bool EnableSpc);
+
+// ═══════════════════════════════════════════
+// 系统管理：用户 + 审计日志
+// ═══════════════════════════════════════════
+
+/// <summary>用户账号 DTO</summary>
+public record UserDto(
+    string Id,
+    string Username,
+    string DisplayName,
+    string[] Roles,
+    bool IsActive,
+    DateTimeOffset? LastLoginAt,
+    bool IsLockedOut,
+    DateTimeOffset CreatedAt);
+
+/// <summary>审计日志条目</summary>
+public record AuditLogItemDto(
+    string Id,
+    DateTimeOffset Timestamp,
+    string Username,
+    string Action,
+    string Module,
+    string Summary,
+    int StatusCode,
+    string RemoteIp);
+
+/// <summary>审计日志分页结果</summary>
+public record AuditLogPageDto(
+    int Total,
+    int PageIndex,
+    int PageSize,
+    List<AuditLogItemDto> Items);

@@ -1,5 +1,7 @@
 using MesAdmin.Application.Interfaces;
+using MesAdmin.Application.Security;
 using MesAdmin.Domain.Models;
+using MesAdmin.Infrastructure.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ZLogger;
@@ -19,6 +21,20 @@ public static class MesDataSeeder
 
     /// <summary>ESP-9.1 BOM 版本号</summary>
     public const string Esp91BomVersion = "V1.0";
+
+    /// <summary>种子账号统一初始密码（首次登录后应自助修改）</summary>
+    public const string DefaultPassword = "Mes@2026";
+
+    /// <summary>演示账号：与原 LoginEndpoint 硬编码字典一致</summary>
+    private static readonly (string Username, string DisplayName, string[] Roles)[] DemoUsers =
+    [
+        ("manager", "张经理", [MesRoles.ProductionManager]),
+        ("leader", "李班长", [MesRoles.ShiftLeader]),
+        ("qe", "王质量", [MesRoles.QualityEngineer]),
+        ("ee", "赵设备", [MesRoles.EquipmentEngineer]),
+        ("warehouse", "孙仓库", [MesRoles.WarehouseClerk]),
+        ("sqe", "周SQE", [MesRoles.SupplierQualityEngineer]),
+    ];
 
     public static async Task SeedAsync(IServiceProvider sp, ILogger logger)
     {
@@ -63,6 +79,24 @@ public static class MesDataSeeder
         else
         {
             logger.ZLogInformation($"种子数据：库存阈值已存在，跳过");
+        }
+
+        // ── 2.5 种子用户账号（替代 LoginEndpoint 硬编码演示字典）──
+        // 幂等：按用户名逐个补种，已有账号不动（不覆盖管理员改过的密码）
+        if (!db.UserAccounts.Any())
+        {
+            var hasher = scope.ServiceProvider.GetRequiredService<Pbkdf2PasswordHasher>();
+            logger.ZLogInformation($"种子数据：创建初始用户账号（{DemoUsers.Length} 个，初始密码 {DefaultPassword}）");
+            foreach (var (username, displayName, roles) in DemoUsers)
+            {
+                db.UserAccounts.Add(UserAccount.Create(
+                    Ulid.NewUlid(), username, displayName, hasher.Hash(DefaultPassword), roles));
+            }
+            await db.SaveChangesAsync();
+        }
+        else
+        {
+            logger.ZLogInformation($"种子数据：用户账号已存在，跳过");
         }
 
         // ── 3. 种子初始物料库存（使齐套检查真实生效）───────────

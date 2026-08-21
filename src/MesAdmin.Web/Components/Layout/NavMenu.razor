@@ -32,12 +32,21 @@
         <MudNavLink Href="first-article" Icon="@Icons.Material.Filled.FactCheck">
             首件检验
         </MudNavLink>
-        <MudNavLink Href="inspection-plans" Icon="@Icons.Material.Filled.ListAlt">
-            检验计划
-        </MudNavLink>
-        <MudNavLink Href="spc" Icon="@Icons.Material.Filled.QueryStats">
-            SPC 质量管理
-        </MudNavLink>
+        @* 检验计划/SPC 端点仅开放给质量/检验/工艺角色，按角色显示避免进入后 403 *@
+        <AuthorizeView Roles="QualityEngineer,Inspector">
+            <Authorized>
+                <MudNavLink Href="inspection-plans" Icon="@Icons.Material.Filled.ListAlt">
+                    检验计划
+                </MudNavLink>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Roles="QualityEngineer,Technician">
+            <Authorized>
+                <MudNavLink Href="spc" Icon="@Icons.Material.Filled.QueryStats">
+                    SPC 质量管理
+                </MudNavLink>
+            </Authorized>
+        </AuthorizeView>
         <MudNavLink Href="sqe" Icon="@Icons.Material.Filled.Business">
             SQE 供应商质量
         </MudNavLink>
@@ -79,9 +88,14 @@
         <MudNavLink Href="maintenance" Icon="@Icons.Material.Filled.Build">
             预防性维护
         </MudNavLink>
-        <MudNavLink Href="hydraulic-test" Icon="@Icons.Material.Filled.Speed">
-            液压测试台
-        </MudNavLink>
+        @* 液压测试端点仅开放给质量/检验/工艺角色，按角色显示避免进入后 403 *@
+        <AuthorizeView Roles="QualityEngineer,Inspector,Technician">
+            <Authorized>
+                <MudNavLink Href="hydraulic-test" Icon="@Icons.Material.Filled.Speed">
+                    液压测试台
+                </MudNavLink>
+            </Authorized>
+        </AuthorizeView>
         <MudNavLink Href="andon" Icon="@Icons.Material.Filled.Campaign">
             Andon 报警
         </MudNavLink>
@@ -92,4 +106,15 @@
             工艺管理
         </MudNavLink>
     </MudNavGroup>
+
+    <AuthorizeView Roles="ProductionManager">
+        <MudNavGroup Title="系统管理" Icon="@Icons.Material.Filled.AdminPanelSettings">
+            <MudNavLink Href="users" Icon="@Icons.Material.Filled.People">
+                用户管理
+            </MudNavLink>
+            <MudNavLink Href="audit-logs" Icon="@Icons.Material.Filled.ReceiptLong">
+                审计日志
+            </MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
 </MudNavMenu>

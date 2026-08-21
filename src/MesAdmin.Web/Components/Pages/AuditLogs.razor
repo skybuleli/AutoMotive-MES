@@ -1,0 +1,154 @@
+@page "/audit-logs"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "ProductionManager")]
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+
+<PageTitle>审计日志 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="SYS · Audit Trail" Title="操作审计日志">
+        <HeaderActions>
+            <MudText Typo="Typo.caption" Class="section-copy">IATF 16949 追溯 · 只读</MudText>
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Dense>@_error</MudAlert>
+    }
+
+    <MudPaper Class="pa-4">
+        <MudStack Row Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-3">
+            <MudTextField T="string" @bind-Value="_usernameFilter" Label="用户名"
+                          Style="max-width:180px;" />
+            <MudSelect T="string" Label="模块" Clearable="true" @bind-Value="_moduleFilter"
+                       Style="max-width:160px;">
+                <MudSelectItem Value="@("auth")">auth</MudSelectItem>
+                <MudSelectItem Value="@("users")">users</MudSelectItem>
+                <MudSelectItem Value="@("production-orders")">production-orders</MudSelectItem>
+                <MudSelectItem Value="@("quality")">quality</MudSelectItem>
+                <MudSelectItem Value="@("maintenance")">maintenance</MudSelectItem>
+                <MudSelectItem Value="@("andon")">andon</MudSelectItem>
+                <MudSelectItem Value="@("materials")">materials</MudSelectItem>
+                <MudSelectItem Value="@("scheduling")">scheduling</MudSelectItem>
+            </MudSelect>
+            <MudDatePicker T="DateTimeOffset?" Label="起始日期" @bind-Value="_timeFrom"
+                           Style="max-width:170px;" />
+            <MudDatePicker T="DateTimeOffset?" Label="截止日期" @bind-Value="_timeTo"
+                           Style="max-width:170px;" />
+            <MudButton Variant="Variant.Outlined" OnClick="ReloadFirstPage">查询</MudButton>
+        </MudStack>
+
+        @if (_loading)
+        {
+            <MesStateCard Loading="true" Text="加载审计记录..." />
+        }
+        else if (_page?.Items is [] or null)
+        {
+            <MesStateCard Text="暂无符合条件的审计记录" Hint="写操作与登录事件会自动记录在此" />
+        }
+        else
+        {
+            <MudTable Items="@_page.Items" Hover="true" Dense="true" FixedHeader="true" Height="520px">
+                <HeaderContent>
+                    <MudTh>时间</MudTh>
+                    <MudTh>用户</MudTh>
+                    <MudTh>动作</MudTh>
+                    <MudTh>模块</MudTh>
+                    <MudTh>结果</MudTh>
+                    <MudTh>来源 IP</MudTh>
+                </HeaderContent>
+                <RowTemplate Context="item">
+                    <MudTd DataLabel="时间" Class="section-copy">
+                        @item.Timestamp.ToLocalTime().ToString("MM-dd HH:mm:ss")
+                    </MudTd>
+                    <MudTd DataLabel="用户">
+                        <span style="font-family:var(--mes-mono);">@item.Username</span>
+                    </MudTd>
+                    <MudTd DataLabel="动作">
+                        <span style="font-family:var(--mes-mono); font-size:0.78rem;">@item.Action</span>
+                        @if (!string.IsNullOrEmpty(item.Summary))
+                        {
+                            <MudTooltip Text="@item.Summary" Style="display:inline-flex;">
+                                <ActivatorContent>
+                                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" Style="opacity:0.5;" />
+                                </ActivatorContent>
+                            </MudTooltip>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="模块">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@item.Module</MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="结果">
+                        <MudText Typo="Typo.body2" Color="@(item.StatusCode is >= 200 and < 300 ? Color.Success : Color.Error)">
+                            @item.StatusCode
+                        </MudText>
+                    </MudTd>
+                    <MudTd DataLabel="来源 IP" Class="section-copy">@item.RemoteIp</MudTd>
+                </RowTemplate>
+            </MudTable>
+
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mt-3">
+                <MudText Typo="Typo.caption" Class="section-copy">
+                    共 @_page.Total 条 · 第 @(_page.PageIndex + 1) 页 / 每页 @_page.PageSize 条
+                </MudText>
+                <MudPagination Count="@TotalPages" Selected="@_pageIndex" Size="Size.Small"
+                               SelectedChanged="@OnPageChangedAsync" />
+            </MudStack>
+        }
+    </MudPaper>
+</MudStack>
+
+@code {
+    private const int PageSize = 50;
+
+    private bool _loading = true;
+    private string? _error;
+    private AuditLogPageDto? _page;
+    private int _pageIndex;
+
+    private string _usernameFilter = string.Empty;
+    private string? _moduleFilter;
+    private DateTimeOffset? _timeFrom;
+    private DateTimeOffset? _timeTo;
+
+    private int TotalPages => _page is null ? 0 : Math.Max(1, (int)Math.Ceiling(_page.Total / (double)_page.PageSize));
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private void ReloadFirstPage()
+        => _ = InvokeAsync(async () =>
+        {
+            _pageIndex = 0;
+            await LoadAsync();
+        });
+
+    private Task OnPageChangedAsync(int page)
+        => InvokeAsync(async () =>
+        {
+            _pageIndex = page - 1;
+            await LoadAsync();
+        });
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var timeTo = _timeTo?.AddDays(1); // 截止日期含当天
+            _page = await Api.GetAuditLogsAsync(
+                _usernameFilter, _moduleFilter, _timeFrom, timeTo, _pageIndex, PageSize);
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"加载失败：{ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+}

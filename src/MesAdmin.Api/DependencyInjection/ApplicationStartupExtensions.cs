@@ -57,6 +57,8 @@ public static class ApplicationStartupExtensions
             config.Endpoints.Configurator = ep =>
             {
                 ep.PostProcessor<GlobalExceptionPostProcessor>(Order.After);
+                // 审计在异常处理器之后：记录最终响应状态码
+                ep.PostProcessor<AuditPostProcessor>(Order.After);
             };
         });
 

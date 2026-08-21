@@ -2,8 +2,10 @@
 @using MesAdmin.Web.Themes
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
+@inject MesApiClient Api
 @inject AuthService Auth
 @inject ThemeService Theme
+@inject ISnackbar Snack
 
 <MudThemeProvider Theme="MesTheme.CurrentTheme" IsDarkMode="@Theme.IsDark" />
 <MudPopoverProvider />
@@ -26,6 +28,8 @@
         </MudStack>
 
         <MudSpacer />
+
+        <LiveClock />
 
         <AuthorizeView>
             <Authorized>
@@ -60,6 +64,13 @@
                     <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" Class="mr-1" />
                     退出
                 </MudButton>
+                <MudMenu Icon="@Icons.Material.Filled.AccountCircle"
+                         Color="Color.Inherit"
+                         AriaLabel="用户菜单"
+                         AnchorOrigin="Origin.BottomRight"
+                         TransformOrigin="Origin.TopRight">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Lock" OnClick="OpenChangePasswordDialog">修改密码</MudMenuItem>
+                </MudMenu>
             </Authorized>
             <NotAuthorized>
                 <MudTooltip Text="@ThemeToggleLabel">
@@ -96,16 +107,87 @@
         <NavMenu />
     </MudDrawer>
 
-    <MudMainContent Class="mes-main" id="main-content">
-        <a class="mes-skip-link" href="#main-content">跳到主要内容</a>
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-4 mes-content">
+    <MudMainContent Class="mes-main">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-3 mes-content">
             @Body
         </MudContainer>
     </MudMainContent>
 </MudLayout>
 
+<MudDialog @bind-Visible="_showChangePasswordDialog" MaxWidth="MaxWidth.Tiny">
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText Typo="Typo.subtitle2">按策略要求：≥8 位且同时含字母与数字</MudText>
+            @if (!string.IsNullOrEmpty(_changePasswordError))
+            {
+                <MudAlert Severity="Severity.Error" Dense>@_changePasswordError</MudAlert>
+            }
+            <MudTextField T="string" Label="旧密码" @bind-Value="_oldPassword"
+                          InputType="InputType.Password" Required="true" />
+            <MudTextField T="string" Label="新密码" @bind-Value="_newPassword"
+                          InputType="InputType.Password" Required="true" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => _showChangePasswordDialog = false)">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Loading="_changingPassword"
+                   OnClick="ConfirmChangePasswordAsync">
+            确认
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private bool _drawerOpen = true;
+
+    private bool _showChangePasswordDialog;
+    private string _oldPassword = string.Empty;
+    private string _newPassword = string.Empty;
+    private string? _changePasswordError;
+    private bool _changingPassword;
+
+    private void OpenChangePasswordDialog()
+    {
+        _oldPassword = string.Empty;
+        _newPassword = string.Empty;
+        _changePasswordError = null;
+        _showChangePasswordDialog = true;
+    }
+
+    private async Task ConfirmChangePasswordAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_oldPassword) || string.IsNullOrWhiteSpace(_newPassword))
+        {
+            _changePasswordError = "旧密码和新密码均为必填";
+            return;
+        }
+
+        if (_newPassword.Length < 8 || !_newPassword.Any(char.IsLetter) || !_newPassword.Any(char.IsDigit))
+        {
+            _changePasswordError = "新密码至少 8 位且同时包含字母与数字";
+            return;
+        }
+
+        _changingPassword = true;
+        try
+        {
+            var (ok, status) = await Api.ChangeMyPasswordAsync(_oldPassword, _newPassword);
+            if (!ok)
+            {
+                _changePasswordError = status == 400
+                    ? "旧密码不正确或新密码不符合策略"
+                    : $"修改失败（HTTP {status}）";
+                return;
+            }
+
+            _showChangePasswordDialog = false;
+            Snack.Add("密码已修改", Severity.Success);
+        }
+        finally
+        {
+            _changingPassword = false;
+        }
+    }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
@@ -147,34 +229,6 @@
     private string GetPageTitle()
     {
         var path = Navigation.ToBaseRelativePath(Navigation.Uri);
-        return path switch
-        {
-            "" => "总览与告警",
-            "dashboard" => "生产看板",
-            "production" => "生产工单管理",
-            "production/kanban" => "工单看板",
-            "kit-check" => "齐套检查",
-            "start-production" => "开工管理",
-            "quality-review" => "完工质量审核",
-            "material" => "物料与批次",
-            "traceability" => "追溯链路",
-            "inventory" => "线边库存",
-            "first-article" => "首件检验",
-            "inspection-plans" => "检验计划",
-            "spc" => "SPC 质量控制",
-            "sqe" => "供应商质量管理",
-            "quality-reports" => "质量报表",
-            "oee" => "设备效率",
-            "jit-kanban" => "JIT 拉动看板",
-            "sync-monitor" => "同步监控",
-            "andon" => "现场报警",
-            "maintenance" => "预防性维护",
-            "hydraulic-test" => "液压测试台",
-            "spare-parts" => "备件管理",
-            "routing" => "工艺路线管理",
-            "scheduling" => "生产排程",
-            "login" => "登录",
-            _ => "制造执行系统"
-        };
+        return AppRoutes.GetSectionLabel(path);
     }
 }
