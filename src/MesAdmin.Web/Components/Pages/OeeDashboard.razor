@@ -4,6 +4,7 @@
 @using MesAdmin.Web.Services
 @using MesAdmin.Domain.Models
 @inject OeeHubClient Hub
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <PageTitle>设备 OEE - AutoMES</PageTitle>
@@ -90,13 +91,45 @@
                 </MudPaper>
             }
         </div>
+
+        <MudPaper Class="oee-trend-card">
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Spacing="2">
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.caption" Class="section-copy">TREND · 实时趋势</MudText>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600;">OEE 四率走势</MudText>
+                </MudStack>
+                <MudSelect T="string" Variant="Variant.Outlined" Dense="true"
+                           Style="max-width:220px;"
+                           Value="@_selectedEquipment" ValueChanged="@OnEquipmentSelected">
+                    @foreach (var eq in EquipmentCodes)
+                    {
+                        <MudSelectItem Value="@eq">@eq</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+            <div id="oee-trend-chart" class="oee-trend-chart"></div>
+        </MudPaper>
     }
 </MudStack>
 
 @code {
+    // 趋势窗口：60 点 × 5s 推送 ≈ 5 分钟滚动历史
+    private const int TrendCapacity = 60;
+    private const string ChartId = "oee-trend-chart";
+
     private bool _isConnected;
     private string _statusMessage = string.Empty;
     private IReadOnlyList<OeeRecord> _snapshot = [];
+
+    // 每设备滚动历史；仅在渲染同步上下文（InvokeAsync）内读写，无需加锁
+    private readonly Dictionary<string, List<OeeRecord>> _history = new(StringComparer.Ordinal);
+    private string? _selectedEquipment;
+    private bool _chartDirty;
+
+    /// <summary>设备选择器选项：历史键 ∪ 当前快照，按编码排序。</summary>
+    private IEnumerable<string> EquipmentCodes
+        => _history.Keys.Union(_snapshot.Select(o => o.EquipmentCode), StringComparer.Ordinal)
+            .OrderBy(c => c, StringComparer.Ordinal);
 
     protected override void OnInitialized()
         => Hub.Changed += OnHubChanged;
@@ -108,8 +141,19 @@
             await Hub.StartAsync();
             _isConnected = true;
             _statusMessage = "SignalR 已连接，实时接收 OEE 数据";
-            _snapshot = Hub.Snapshot();
+            ApplySnapshot(Hub.Snapshot());
             StateHasChanged();
+            return;
+        }
+
+        // 图表容器随数据分支条件渲染，必须在 DOM 提交后推送，_chartDirty 防重复
+        if (_chartDirty && _selectedEquipment is not null && _history.TryGetValue(_selectedEquipment, out var series))
+        {
+            _chartDirty = false;
+            var payload = BuildSeriesPayload(series);
+            await (series.Count > 1
+                ? JS.InvokeVoidAsync("oeeTrend.update", ChartId, payload)
+                : JS.InvokeVoidAsync("oeeTrend.init", ChartId, payload));
         }
     }
 
@@ -117,9 +161,47 @@
     private void OnHubChanged()
         => _ = InvokeAsync(() =>
         {
-            _snapshot = Hub.Snapshot();
+            ApplySnapshot(Hub.Snapshot());
             StateHasChanged();
         });
+
+    private void ApplySnapshot(IReadOnlyList<OeeRecord> snapshot)
+    {
+        _snapshot = snapshot;
+
+        foreach (var oee in snapshot)
+        {
+            if (!_history.TryGetValue(oee.EquipmentCode, out var points))
+                _history[oee.EquipmentCode] = points = [];
+
+            // 时间戳乱序防护：仅接受单调递增的采样
+            if (points.Count > 0 && oee.Timestamp <= points[^1].Timestamp) continue;
+
+            points.Add(oee);
+            if (points.Count > TrendCapacity) points.RemoveAt(0);
+        }
+
+        _selectedEquipment ??= EquipmentCodes.FirstOrDefault();
+        _chartDirty = true;
+    }
+
+    private void OnEquipmentSelected(string? code)
+    {
+        if (code is null || code == _selectedEquipment) return;
+        _selectedEquipment = code;
+        _chartDirty = true;
+        StateHasChanged();
+    }
+
+    private static object BuildSeriesPayload(List<OeeRecord> points)
+        => new
+        {
+            times = points.Select(r => r.Timestamp.ToLocalTime().ToString("HH:mm:ss")).ToArray(),
+            oee = points.Select(r => Math.Round(r.Oee * 100, 1)).ToArray(),
+            availability = points.Select(r => Math.Round(r.Availability * 100, 1)).ToArray(),
+            performance = points.Select(r => Math.Round(r.Performance * 100, 1)).ToArray(),
+            quality = points.Select(r => Math.Round(r.Quality * 100, 1)).ToArray(),
+        };
 
     private static MesDotStatus GetDotStatus(OeeRecord oee)
         => oee.Oee switch
@@ -146,11 +228,18 @@
             _ => "oee-grade-b",
         };
 
-    // 仅退订本组件事件；OeeHubClient 是应用级单例，其连接生命周期不由页面组件管理
+    // 仅退订本组件事件并释放图表；OeeHubClient 是应用级单例，其连接生命周期不由页面组件管理
     // （组件释放时不应释放共享单例连接，否则再次进入页面会 ObjectDisposedException）。
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         Hub.Changed -= OnHubChanged;
-        return ValueTask.CompletedTask;
+        try
+        {
+            await JS.InvokeVoidAsync("oeeTrend.dispose", ChartId);
+        }
+        catch (JSDisconnectedException)
+        {
+            // 电路已断开，浏览器端图表随页面销毁，无需清理
+        }
     }
 }

@@ -142,6 +142,7 @@ a { color: inherit; }
     min-height: 100vh;
     position: relative;
     background:
+        radial-gradient(1100px 460px at 50% -14%, rgba(var(--mes-lav-rgb), 0.13), transparent 62%),
         radial-gradient(900px 500px at 12% -8%, rgba(var(--mes-lav-rgb), 0.10), transparent 60%),
         radial-gradient(760px 460px at 100% 0%, rgba(var(--mes-sky-rgb), 0.08), transparent 55%),
         radial-gradient(700px 600px at 88% 108%, rgba(var(--mes-mint-rgb), 0.05), transparent 55%),
@@ -202,7 +203,7 @@ a { color: inherit; }
         var(--mes-surface);
     border: 1px solid var(--mes-border-strong);
     border-radius: var(--mes-r-lg);
-    padding: 14px;
+    padding: 12px 14px;
     box-shadow: var(--mes-shadow);
     transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
                 box-shadow 0.28s ease, border-color 0.28s ease;
@@ -242,6 +243,11 @@ a { color: inherit; }
     border: 1px solid var(--mes-border-strong);
     border-radius: var(--mes-r-lg);
     box-shadow: var(--mes-shadow);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.module-card:hover {
+    border-color: var(--mes-lav-line);
 }
 
 /* 登录卡：玻璃拟态认证卡 */
@@ -276,6 +282,140 @@ a { color: inherit; }
     background: linear-gradient(90deg, transparent, var(--mes-lav-line) 30%, var(--mes-lav-line) 70%, transparent);
 }
 
+/* ═══════════════ 紧凑页头（MesPageHeader v2）═══════════════ */
+
+/* 页头卡：压缩内边距，两行结构（面包屑行 + 标题行） */
+.mes-page-head {
+    padding: 10px 14px 12px;
+}
+
+.mes-page-head-crumb {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 8px;
+    margin-bottom: 6px;
+    border-bottom: 1px dashed var(--mes-border);
+}
+
+.mes-page-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mes-page-head-title {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mes-page-title {
+    margin: 0;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+}
+
+.mes-page-desc {
+    color: var(--mes-text-3);
+    font-size: 0.76rem;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 56ch;
+}
+
+/* ═══════════════ 面包屑（MesBreadcrumb）═══════════════ */
+
+.mes-crumb {
+    min-width: 0;
+}
+
+.mes-crumb-list {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+}
+
+.mes-crumb-item {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.mes-crumb-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 7px;
+    border-radius: 7px;
+    color: var(--mes-text-3);
+    text-decoration: none;
+    font-size: 0.74rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mes-crumb-link:hover {
+    color: var(--mes-lav);
+    background: var(--mes-lav-soft);
+}
+
+.mes-crumb-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 7px;
+    color: var(--mes-text-2);
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.mes-crumb-current {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 7px;
+    color: var(--mes-text);
+    background: rgba(var(--mes-lav-rgb), 0.12);
+    border: 1px solid var(--mes-lav-line);
+    font-size: 0.74rem;
+    font-weight: 650;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+
+.mes-crumb-icon {
+    opacity: 0.75;
+    flex-shrink: 0;
+}
+
+.mes-crumb-current .mes-crumb-icon {
+    color: var(--mes-lav);
+    opacity: 1;
+}
+
+.mes-crumb-sep {
+    color: var(--mes-text-3);
+    opacity: 0.5;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
 /* ═══════════════ KPI 数值排版（仪表质感）═══════════════ */
 
 .kpi-label {
@@ -288,7 +428,7 @@ a { color: inherit; }
 
 .kpi-value {
     font-family: var(--mes-mono);
-    font-size: 1.75rem;
+    font-size: 1.55rem;
     font-weight: 600;
     line-height: 1.05;
     letter-spacing: -0.02em;
@@ -307,6 +447,24 @@ a { color: inherit; }
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
     gap: 14px;
+}
+
+/* OEE 趋势卡片：玻璃态容器 + 固定高度画布（ECharts 需要显式尺寸） */
+.oee-trend-card {
+    padding: 18px 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background:
+        linear-gradient(135deg, rgba(var(--mes-lav-rgb), 0.08), rgba(var(--mes-sky-rgb), 0.02)),
+        var(--mes-surface);
+    border: 1px solid var(--mes-border-strong);
+    border-radius: var(--mes-r-lg);
+}
+
+.oee-trend-chart {
+    width: 100%;
+    height: 320px;
 }
 
 .inventory-grid {
@@ -408,6 +566,21 @@ a { color: inherit; }
 .accent-left-warning { border-left-color: var(--mes-warn); }
 .accent-left-error   { border-left-color: var(--mes-err); }
 .accent-left-info    { border-left-color: var(--mes-sky); }
+
+/* ═══════════════ 信息面板（语义底色 + 描边，替代页面内联 bg/border）═══════════════ */
+
+.mes-panel {
+    border: 1px solid;
+    border-radius: var(--mes-r);
+    background: transparent;
+}
+.mes-panel-sm { border-radius: var(--mes-r-sm); }
+.mes-panel-lg { border-radius: var(--mes-r-lg); }
+
+.mes-panel-ok   { border-color: rgba(var(--mes-ok-rgb), 0.3);  background: rgba(var(--mes-ok-rgb), 0.08); }
+.mes-panel-warn { border-color: rgba(var(--mes-warn-rgb), 0.3); background: rgba(var(--mes-warn-rgb), 0.1); }
+.mes-panel-err  { border-color: rgba(var(--mes-err-rgb), 0.3);  background: rgba(var(--mes-err-rgb), 0.1); }
+.mes-panel-info { border-color: rgba(var(--mes-sky-rgb), 0.3);  background: rgba(var(--mes-sky-rgb), 0.1); }
 
 /* ═══════════════ 状态指示 ═══════════════ */
 
@@ -511,6 +684,23 @@ a { color: inherit; }
 }
 
 .layout-subtitle { color: var(--mes-text-3); }
+
+/* 顶栏实时时钟 */
+.mes-clock {
+    margin-right: 6px;
+    padding-right: 14px;
+    border-right: 1px solid var(--mes-border);
+}
+
+.mes-clock-time {
+    font-family: var(--mes-mono);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+@media (max-width: 600px) {
+    .mes-clock { display: none !important; }
+}
 
 /* 首页 KPI 图标徽章 / 快速操作按钮 */
 .home-kpi-icon {
@@ -833,3 +1023,184 @@ a { color: inherit; }
     background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(var(--mes-lav-rgb), 0.4); background-clip: padding-box; }
+
+/* ═══════════════ 排版精修（v2 · 工业仪表字阶）═══════════════
+   与 MesTheme.Typography 配合：统一节奏（字距/行高）、等宽数字、
+   表头信息密度、正文行宽、焦点环与响应式字号。 */
+
+/* 字阶令牌（供后续页面复用） */
+:root {
+    --mes-fs-xs: 0.72rem;
+    --mes-fs-sm: 0.78rem;
+    --mes-fs-base: 0.875rem;
+    --mes-fs-md: 1rem;
+    --mes-fs-lg: 1.125rem;
+    --mes-fs-xl: 1.375rem;
+    --mes-fs-2xl: 1.75rem;
+    --mes-lh-tight: 1.2;
+    --mes-lh-snug: 1.4;
+    --mes-lh-base: 1.55;
+    --mes-track-tight: -0.015em;
+    --mes-track-label: 0.08em;
+}
+
+/* 正文基线：更舒适的阅读行高 + 显式字距归零（消除浏览器默认） */
+html, body {
+    line-height: 1.55;
+    letter-spacing: 0;
+}
+
+/* 标题微调：收紧行高、平衡折行 */
+.mes-page-title { line-height: 1.35; text-wrap: balance; }
+.mud-typography-h1, .mud-typography-h2, .mud-typography-h3,
+.mud-typography-h4, .mud-typography-h5, .mud-typography-h6 {
+    text-wrap: balance;
+}
+
+/* 小标 / 说明文字：统一小字阶行高与字距 */
+.section-kicker { line-height: 1.5; }
+.section-copy, .empty-copy { line-height: 1.6; max-width: 72ch; }
+.kpi-label { letter-spacing: 0.14em; }
+.kpi-sub { letter-spacing: 0.02em; }
+
+/* 等宽数字强化：禁止连字/上下文替代（防止序列号被 liga 误连），
+   并启用表内 tabular 数字 —— 覆盖 KPI/批次/工单号/标签/时钟等数据位 */
+.kpi-value,
+.batch-number,
+.kanban-order-no,
+.label-chip,
+.mes-clock-time,
+.order-number {
+    font-feature-settings: "tnum" 1, "liga" 0, "calt" 0;
+}
+
+/* 通用数字工具类：任意位置使用 tabular-nums + 无连字 */
+.mes-num {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "liga" 0, "calt" 0;
+}
+
+/* 表头：窄体大写字距 + 禁止折行，提升扫描效率 */
+.mes-table-card .mud-table-head .mud-table-cell {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* 表体：紧缩行高 + 基线对齐 */
+.mes-table-card .mud-table-body .mud-table-cell {
+    font-size: 0.875rem;
+    line-height: 1.45;
+}
+
+/* 导航分组标题：小号大写 + CJK 字距，与导航层级区分 */
+.mud-nav-group > .mud-nav-link {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--mes-text-3) !important;
+}
+
+/* 键盘焦点环：无障碍可见焦点，薰衣草描边 */
+:focus-visible {
+    outline: 2px solid var(--mes-lav);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+/* 内容最大宽度：ExtraLarge 由 1920 收窄至 1680，兼顾信息密度与可读性 */
+.mes-content.mud-container-maxwidth-xl { max-width: 1680px; }
+
+/* 响应式字号：小屏收窄大字阶与 KPI 数值 */
+@media (max-width: 600px) {
+    .mud-typography-h1 { font-size: 1.75rem; }
+    .mud-typography-h2 { font-size: 1.5rem; }
+    .mud-typography-h3 { font-size: 1.25rem; }
+    .mud-typography-h4 { font-size: 1.125rem; }
+    .mud-typography-h5 { font-size: 1rem; }
+    .kpi-value { font-size: 1.375rem; }
+}
+
+/* ═══════════════ 控件精修 v2（按钮 / 芯片 / 输入 / 交互）═══════════════
+   与 Palette 对比色修正配合：填充彩色按钮在深色主题采用深色文字，
+   全局过渡动画统一，悬停/按下微交互，降低高亮色块的刺眼感。 */
+
+/* 按钮：统一过渡 */
+.mud-button {
+    transition: transform 0.12s ease, box-shadow 0.2s ease,
+                background-color 0.15s ease, color 0.15s ease,
+                border-color 0.15s ease;
+}
+
+/* 填充按钮：基态柔和投影 + 悬停微浮起 + 按下回落 */
+.mud-button-filled {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+.mud-button-filled:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+}
+.mud-button-filled:not(:disabled):active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+/* 描边按钮：悬停淡紫底（随 --mes-lav-rgb 双主题自适应） */
+.mud-button-outlined:hover {
+    background-color: rgba(var(--mes-lav-rgb), 0.07);
+}
+
+/* 文本按钮：悬停淡紫底 */
+.mud-button-text:hover {
+    background-color: rgba(var(--mes-lav-rgb), 0.08);
+}
+
+/* 图标按钮：悬停淡色底 */
+.mud-icon-button:hover {
+    background-color: rgba(var(--mes-lav-rgb), 0.10);
+}
+
+/* 禁用按钮：整体柔化 */
+.mud-button-root:disabled {
+    opacity: 0.55;
+    box-shadow: none;
+}
+
+/* 芯片：过渡 + 彩色填充芯片细描边，降低亮色块的压迫感 */
+.mud-chip {
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.mud-chip-filled.mud-chip-color-success,
+.mud-chip-filled.mud-chip-color-warning,
+.mud-chip-filled.mud-chip-color-error,
+.mud-chip-filled.mud-chip-color-info,
+.mud-chip-filled.mud-chip-color-secondary,
+.mud-chip-filled.mud-chip-color-tertiary {
+    border: 1px solid rgba(0, 0, 0, 0.10);
+}
+.mud-chip-filled.mud-chip-color-primary {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* 输入框：悬停/聚焦边框过渡 */
+.mud-input-outlined > .mud-input-outlined-border {
+    transition: border-color 0.15s ease;
+}
+
+/* 按钮行高一致，避免混合尺寸时参差 */
+.mud-button-size-small { min-height: 30px; }
+.mud-button-size-medium { min-height: 36px; }
+
+/* ═══════════════ 无障碍：降低动态效果偏好 ═══════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
