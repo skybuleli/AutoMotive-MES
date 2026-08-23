@@ -1094,3 +1094,62 @@ public record AuditLogPageDto(
     int PageIndex,
     int PageSize,
     List<AuditLogItemDto> Items);
+
+// ═══════════════════════════════════════════
+// 计量器具台账与校准（S01 · IATF 16949）
+// ═══════════════════════════════════════════
+
+/// <summary>量具台账 DTO（镜像 GaugeResponse）</summary>
+public record GaugeDto(
+    string Id,
+    string GaugeNumber,
+    string Name,
+    string Type,
+    string RangeSpec,
+    string ResolutionSpec,
+    string AccuracyClass,
+    int CalibrationCycleDays,
+    DateTimeOffset? LastCalibratedAt,
+    DateTimeOffset? NextDueAt,
+    int DaysToDue,
+    string Status,
+    string? StorageLocation,
+    string? Remarks,
+    DateTimeOffset CreatedAt);
+
+/// <summary>校准记录 DTO（镜像 CalibrationRecordResponse）</summary>
+public record CalibrationRecordDto(
+    string Id,
+    string GaugeId,
+    DateTimeOffset CalibratedAt,
+    string Result,
+    string CertificateNo,
+    string OperatorId,
+    DateTimeOffset NextDueAfter,
+    string? Remarks,
+    DateTimeOffset CreatedAt);
+
+/// <summary>新建量具请求体</summary>
+public record CreateGaugeBody(
+    string GaugeNumber,
+    string Name,
+    string Type,
+    string RangeSpec,
+    string ResolutionSpec,
+    string AccuracyClass,
+    int CalibrationCycleDays,
+    DateTimeOffset LastCalibratedAt,
+    string? StorageLocation = null,
+    string? Remarks = null);
+
+/// <summary>登记校准请求体</summary>
+public record RecordCalibrationBody(
+    DateTimeOffset CalibratedAt,
+    string Result,
+    string CertificateNo,
+    string OperatorId,
+    DateTimeOffset? NextDueAfter = null,
+    string? Remarks = null);
+
+/// <summary>报废量具请求体</summary>
+public record ScrapGaugeBody(string Reason);

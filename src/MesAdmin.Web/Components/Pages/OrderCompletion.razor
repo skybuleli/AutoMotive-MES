@@ -189,7 +189,7 @@
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="工单号">
-                                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-success);">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mes-ok);">
                                     @context.OrderNumber
                                 </MudText>
                             </MudTd>
@@ -255,7 +255,7 @@
             @if (_reviewResult is not null)
             {
                 @* ── 审核结果 + 追溯标签 ── *@
-                <MudPaper Class="pa-6" Style="background:rgba(var(--mes-ok-rgb),0.06); border:1px solid rgba(var(--mes-ok-rgb),0.25); border-radius:var(--mes-r-lg); text-align:center;">
+                <MudPaper Class="mes-panel mes-panel-ok mes-panel-lg pa-6" Style="text-align:center;">
                     <MudStack AlignItems="AlignItems.Center" Spacing="3">
                         <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Large" Color="Color.Success" />
                         <MudStack Spacing="0">

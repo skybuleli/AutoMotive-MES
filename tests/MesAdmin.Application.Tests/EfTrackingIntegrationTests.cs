@@ -412,14 +412,12 @@ public class DatabaseFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         // ── 1. 启动 Testcontainers PostgreSQL ──
-        _container = new PostgreSqlBuilder()
-            .WithImage("postgres:17-alpine")
+        _container = new PostgreSqlBuilder("postgres:17-alpine")
             .WithDatabase("automes_test")
             .WithUsername("mes")
             .WithPassword("mes_dev_password")
             .WithCleanUp(true)
             .Build();
-
         await _container.StartAsync();
 
         // ── 2. 构建 DI 容器 ──
@@ -462,6 +460,10 @@ public class DatabaseFixture : IAsyncLifetime
         services.AddScoped<ISparePartRepository, SparePartRepository>();
         services.AddScoped<ISparePartUsageRepository, SparePartUsageRepository>();
         services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
+
+        // 计量器具台账仓储（S01）
+        services.AddScoped<IGaugeRepository, GaugeRepository>();
+        services.AddScoped<ICalibrationRecordRepository, GaugeRepository>();
 
         // 工艺路线仓储（T3.1/T3.2 M07）
         services.AddScoped<IRoutingRepository, RoutingRepository>();

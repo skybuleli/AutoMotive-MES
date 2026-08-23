@@ -3,7 +3,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "ProductionManager")]
 @using MesAdmin.Web.Services
 @inject MesApiClient Api
-
+@inject ILogger<AuditLogs> PageLogger
 <PageTitle>审计日志 - AutoMES</PageTitle>
 
 <MudStack Spacing="2">
@@ -70,10 +70,8 @@
                         <span style="font-family:var(--mes-mono); font-size:0.78rem;">@item.Action</span>
                         @if (!string.IsNullOrEmpty(item.Summary))
                         {
-                            <MudTooltip Text="@item.Summary" Style="display:inline-flex;">
-                                <ActivatorContent>
-                                    <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" Style="opacity:0.5;" />
-                                </ActivatorContent>
+                            <MudTooltip Text="@item.Summary">
+                                <MudIcon Icon="@Icons.Material.Filled.Info" Size="Size.Small" Class="ml-1" Style="opacity:0.5;" />
                             </MudTooltip>
                         }
                     </MudTd>
@@ -143,6 +141,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogWarning(ex, "加载审计日志失败");
             _error = $"加载失败：{ex.Message}";
         }
         finally

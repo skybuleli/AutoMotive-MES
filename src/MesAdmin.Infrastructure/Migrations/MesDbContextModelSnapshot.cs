@@ -218,6 +218,48 @@ namespace MesAdmin.Infrastructure.Migrations
                     b.ToTable("boms", (string)null);
                 });
 
+            modelBuilder.Entity("MesAdmin.Domain.Models.CalibrationRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CalibratedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("CertificateNo")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<Guid>("GaugeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("NextDueAfter")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("OperatorId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Result")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GaugeId")
+                        .HasDatabaseName("idx_cal_records_gauge");
+
+                    b.ToTable("calibration_records", (string)null);
+                });
+
             modelBuilder.Entity("MesAdmin.Domain.Models.CapacityCalendar", b =>
                 {
                     b.Property<Guid>("Id")
@@ -552,6 +594,79 @@ namespace MesAdmin.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("first_article_inspections", (string)null);
+                });
+
+            modelBuilder.Entity("MesAdmin.Domain.Models.Gauge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccuracyClass")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("CalibrationCycleDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("GaugeNumber")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset?>("LastCalibratedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("NextDueAt")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("RangeSpec")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ResolutionSpec")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StorageLocation")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamptz");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GaugeNumber")
+                        .IsUnique();
+
+                    b.HasIndex("NextDueAt")
+                        .HasDatabaseName("idx_gauges_next_due");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_gauges_status");
+
+                    b.ToTable("gauges", (string)null);
                 });
 
             modelBuilder.Entity("MesAdmin.Domain.Models.GoodsReceipt", b =>

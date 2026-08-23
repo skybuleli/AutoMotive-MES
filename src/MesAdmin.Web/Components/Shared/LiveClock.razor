@@ -1,0 +1,37 @@
+@* 顶栏实时时钟：日期 + 周几 + 秒级时间。独立组件，仅自身每秒重渲染。 *@
+@implements IDisposable
+<MudStack Row Spacing="2" AlignItems="AlignItems.Center" Class="mes-clock">
+    <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" Class="section-copy" />
+    <MudStack Spacing="0">
+        <MudText Typo="Typo.body2" Class="mes-clock-time">@Now.ToString("HH:mm:ss")</MudText>
+        <MudText Typo="Typo.caption" Class="layout-subtitle">@Now.ToString("yyyy-MM-dd") · 周@(Weekday)</MudText>
+    </MudStack>
+</MudStack>
+
+@code {
+    private DateTime Now { get; set; } = DateTime.Now;
+
+    private static readonly string[] Weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+
+    private string Weekday => Weekdays[(int)Now.DayOfWeek];
+
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _timer = new System.Threading.Timer(
+            _ => Tick(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+    }
+
+    private void Tick()
+    {
+        Now = DateTime.Now;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _timer = null;
+    }
+}

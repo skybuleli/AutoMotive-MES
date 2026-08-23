@@ -1,24 +1,24 @@
-@* 全站统一页头：kicker 小标 + 标题 + 描述 + 右侧操作区（HeaderActions）。 *@
-<MudPaper Class="mes-toolbar pa-3" Role="banner">
-    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
-        <MudStack Spacing="0" Class="mes-page-heading">
-            @if (!string.IsNullOrEmpty(Kicker))
-            {
-                <MudText Typo="Typo.overline" Class="section-kicker">@Kicker</MudText>
-            }
-            <MudText Typo="Typo.h5" Class="@($"mes-page-title {TitleClass}")">@Title</MudText>
-            @if (!string.IsNullOrEmpty(Description))
-            {
-                <MudText Typo="Typo.body2" Class="section-copy mes-page-description">@Description</MudText>
-            }
-        </MudStack>
+@* 全站统一页头（紧凑版）：第一行 = 面包屑 + 右侧操作区（HeaderActions）；
+   第二行 = kicker 小标 + 标题 + 描述。相比旧版压缩垂直高度并引入导航层级。 *@
+<MudPaper Class="mes-toolbar mes-page-head" Role="banner">
+    <div class="mes-page-head-crumb">
+        <MesBreadcrumb />
         @if (HeaderActions is not null)
         {
-            <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mes-page-actions">
-                @HeaderActions
-            </MudStack>
+            <div class="mes-page-actions">@HeaderActions</div>
         }
-    </MudStack>
+    </div>
+    <div class="mes-page-head-title">
+        @if (!string.IsNullOrEmpty(Kicker))
+        {
+            <span class="section-kicker">@Kicker</span>
+        }
+        <MudText Typo="Typo.h6" Class="@($"mes-page-title {TitleClass}")">@Title</MudText>
+        @if (!string.IsNullOrEmpty(Description))
+        {
+            <span class="mes-page-desc" title="@Description">@Description</span>
+        }
+    </div>
 </MudPaper>
 
 @code {

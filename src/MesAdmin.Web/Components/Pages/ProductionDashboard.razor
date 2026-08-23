@@ -166,7 +166,7 @@
 
                         @if ((_summary?.RedAlerts ?? 0) > 0)
                         {
-                            <MudPaper Class="pa-3" Style="background:rgba(var(--mes-err-rgb),0.1); border:1px solid rgba(var(--mes-err-rgb),0.3); border-radius:var(--mes-r-sm);">
+                            <MudPaper Class="mes-panel mes-panel-err pa-3">
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                     <MudStack Spacing="0">
                                         <MudText Typo="Typo.body2" Style="color:var(--mes-err);font-weight:600;">
@@ -181,7 +181,7 @@
 
                         @if ((_summary?.YellowAlerts ?? 0) > 0)
                         {
-                            <MudPaper Class="pa-3" Style="background:rgba(var(--mes-warn-rgb),0.1); border:1px solid rgba(var(--mes-warn-rgb),0.3); border-radius:var(--mes-r-sm);">
+                            <MudPaper Class="mes-panel mes-panel-warn pa-3">
                                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                                     <MudStack Spacing="0">
                                         <MudText Typo="Typo.body2" Style="color:var(--mes-warn);font-weight:600;">

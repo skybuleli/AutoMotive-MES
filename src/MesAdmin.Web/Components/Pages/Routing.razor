@@ -461,13 +461,13 @@
                                             @pt.ParameterCode: @pt.StandardValue @pt.Unit
                                             @if (pt.LowerSpecLimit.HasValue || pt.UpperSpecLimit.HasValue)
                                             {
-                                                <span style="color:var(--mud-palette-warning);">
+                                                <span style="color:var(--mes-warn);">
                                                     (@(pt.LowerSpecLimit?.ToString() ?? "∞") ~ @(pt.UpperSpecLimit?.ToString() ?? "∞"))
                                                 </span>
                                             }
                                             @if (pt.EnableSpc)
                                             {
-                                                <span style="color:var(--mud-palette-info);"> SPC</span>
+                                                <span style="color:var(--mes-sky);"> SPC</span>
                                             }
                                         </MudText>
                                     }

@@ -21,6 +21,13 @@ public static class MaintenanceExtensions
         services.AddScoped<ISparePartUsageRepository, SparePartUsageRepository>();
         services.AddScoped<IPurchaseRequestRepository, PurchaseRequestRepository>();
 
+        // ── 计量器具台账与校准提醒（S01 · IATF 16949）──
+        services.AddScoped<GaugeRepository>();
+        services.AddScoped<IGaugeRepository>(sp => sp.GetRequiredService<GaugeRepository>());
+        services.AddScoped<ICalibrationRecordRepository>(sp => sp.GetRequiredService<GaugeRepository>());
+        services.AddSingleton<IFeishuNotifier, FeishuNotifier>();
+        services.AddHostedService<GaugeDueReminderService>();
+
         return services;
     }
 }

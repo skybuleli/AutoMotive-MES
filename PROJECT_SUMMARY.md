@@ -5,7 +5,7 @@
 > 面向 7 站 31 工序制动系统总成产线的全链路制造执行系统，覆盖工单→物料→SPC→追溯→Andon→OEE。
 > 所有流程由 Cleipnir Saga 编排保证崩溃恢复零丢失；热路径零堆分配。
 >
-> **交付状态：99/99 任务完成 ✅ · 383 测试通过 ✅ · 43 性能基准 ✅**
+> **交付状态：99/99 任务完成 ✅ · 479 测试通过 ✅ · 43 性能基准 ✅ · 0 构建告警 ✅**
 
 ---
 
@@ -19,9 +19,9 @@
 | API 端点 | 59（FastEndpoints · 9 功能组） |
 | Blazor 页面 | 21 |
 | SignalR Hub | 4（DashboardHub / AndonHub / MemoryPackHubProtocol / HubMessageEnvelope） |
-| 单元测试 | 166（Domain） |
-| 集成测试 | 217（Application + PostgreSQL Testcontainers） |
-| **总计测试** | **383 ✅ · 0 failed · 0 skipped** |
+| 单元测试 | 175（Domain） |
+| 集成测试 | 304（Application + PostgreSQL Testcontainers） |
+| **总计测试** | **479 ✅ · 0 failed · 0 skipped** |
 | 性能基准 | 43（4 套件：零分配/PLC/追溯/SignalR） |
 | EF Core 迁移 | 19 次 |
 | Docker 文件 | 5（compose.dev.yaml / compose.yaml / Dockerfile ×2 / observability） |
@@ -170,9 +170,9 @@ Api → Infrastructure -──────────────┘
 
 | 测试套件 | 数量 | 类型 | 基础设施 |
 |---------|------|------|---------|
-| `MesAdmin.Domain.Tests` | 166 | 单元测试 | xUnit + Cleipnir InMemory |
-| `MesAdmin.Application.Tests` | 217 | 集成+混沌 | Testcontainers PostgreSQL 17 |
-| **总计** | **383** | | **0 failed · 0 skipped** |
+| `MesAdmin.Domain.Tests` | 175 | 单元测试 | xUnit + Cleipnir InMemory |
+| `MesAdmin.Application.Tests` | 304 | 集成+混沌 | Testcontainers PostgreSQL 17 |
+| **总计** | **479** | | **0 failed · 0 skipped** |
 
 ### 关键测试场景
 

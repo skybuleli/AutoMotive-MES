@@ -144,8 +144,9 @@
     private string _oldPassword = string.Empty;
     private string _newPassword = string.Empty;
     private string? _changePasswordError;
+#pragma warning disable CS0414 // _changingPassword 在 Razor 标记中通过 MudButton Loading 绑定使用
     private bool _changingPassword;
-
+#pragma warning restore CS0414
     private void OpenChangePasswordDialog()
     {
         _oldPassword = string.Empty;

@@ -354,6 +354,38 @@ public class MesApiClient
     public Task<(bool Ok, MaintenanceOrderDto? Data, int Status)> StartMaintenanceOrderAsync(string id, string assignedTo, CancellationToken ct = default)
         => PostAsync<MaintenanceOrderDto>($"api/v1/maintenance/orders/{id}/start", new StartMaintenanceOrderBody(assignedTo), ct);
 
+    // ═══════════════════════════════════════════
+    // S01 计量器具台账与校准 API
+    // ═══════════════════════════════════════════
+
+    /// <summary>查询量具台账（可按状态过滤）</summary>
+    public Task<List<GaugeDto>?> GetGaugesAsync(string? status = null, CancellationToken ct = default)
+    {
+        var url = "api/v1/gauges";
+        if (!string.IsNullOrWhiteSpace(status)) url += $"?status={Uri.EscapeDataString(status)}";
+        return GetAsync<List<GaugeDto>>(url, ct);
+    }
+
+    /// <summary>新建量具台账</summary>
+    public Task<(bool Ok, GaugeDto? Data, int Status)> CreateGaugeAsync(CreateGaugeBody body, CancellationToken ct = default)
+        => PostAsync<GaugeDto>("api/v1/gauges", body, ct);
+
+    /// <summary>登记一次校准</summary>
+    public Task<(bool Ok, GaugeDto? Data, int Status)> RecordCalibrationAsync(string id, RecordCalibrationBody body, CancellationToken ct = default)
+        => PostAsync<GaugeDto>($"api/v1/gauges/{id}/calibrations", body, ct);
+
+    /// <summary>报废量具（终态）</summary>
+    public Task<(bool Ok, GaugeDto? Data, int Status)> ScrapGaugeAsync(string id, string reason, CancellationToken ct = default)
+        => PostAsync<GaugeDto>($"api/v1/gauges/{id}/scrap", new ScrapGaugeBody(reason), ct);
+
+    /// <summary>查询单台量具</summary>
+    public Task<GaugeDto?> GetGaugeByIdAsync(string id, CancellationToken ct = default)
+        => GetAsync<GaugeDto>($"api/v1/gauges/{id}", ct);
+
+    /// <summary>查询量具校准历史</summary>
+    public Task<List<CalibrationRecordDto>?> GetGaugeRecordsAsync(string id, CancellationToken ct = default)
+        => GetAsync<List<CalibrationRecordDto>>($"api/v1/gauges/{id}/records", ct);
+
     /// <summary>完成维护工单</summary>
     public Task<(bool Ok, MaintenanceOrderDto? Data, int Status)> CompleteMaintenanceOrderAsync(string id, string completedBy, string remarks, CancellationToken ct = default)
         => PostAsync<MaintenanceOrderDto>($"api/v1/maintenance/orders/{id}/complete", new CompleteMaintenanceOrderBody(completedBy, remarks), ct);

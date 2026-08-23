@@ -1,0 +1,63 @@
+@* 全站导航面包屑：首页 › 分组 › 当前页。祖先可点击跳转，末段为当前页（不可点击）。
+   数据源为 AppRoutes 路由目录，随路由变化自动刷新。 *@
+@implements IDisposable
+<nav class="mes-crumb" aria-label="面包屑导航">
+    <ol class="mes-crumb-list">
+        @foreach (var seg in Trail)
+        {
+            if (seg.IsCurrent)
+            {
+                <li class="mes-crumb-item is-current" aria-current="page">
+                    <span class="mes-crumb-current">
+                        <MudIcon Icon="@seg.Icon" Size="Size.Small" Class="mes-crumb-icon" />
+                        <span>@seg.Label</span>
+                    </span>
+                </li>
+            }
+            else if (seg.Href is not null)
+            {
+                <li class="mes-crumb-item">
+                    <a class="mes-crumb-link" href="@seg.Href">
+                        <MudIcon Icon="@seg.Icon" Size="Size.Small" Class="mes-crumb-icon" />
+                        <span>@seg.Label</span>
+                    </a>
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="mes-crumb-sep" />
+                </li>
+            }
+            else
+            {
+                <li class="mes-crumb-item">
+                    <span class="mes-crumb-group">
+                        <MudIcon Icon="@seg.Icon" Size="Size.Small" Class="mes-crumb-icon" />
+                        <span>@seg.Label</span>
+                    </span>
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="mes-crumb-sep" />
+                </li>
+            }
+        }
+    </ol>
+</nav>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private IReadOnlyList<CrumbSegment> Trail { get; set; } = [];
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        RefreshTrail();
+    }
+
+    private void OnLocationChanged(object? _, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs __)
+    {
+        RefreshTrail();
+        StateHasChanged();
+    }
+
+    private void RefreshTrail()
+        => Trail = AppRoutes.TrailFor(Navigation.ToBaseRelativePath(Navigation.Uri));
+
+    public void Dispose()
+        => Navigation.LocationChanged -= OnLocationChanged;
+}

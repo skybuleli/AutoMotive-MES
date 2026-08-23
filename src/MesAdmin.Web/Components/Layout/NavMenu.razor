@@ -50,6 +50,14 @@
         <MudNavLink Href="sqe" Icon="@Icons.Material.Filled.Business">
             SQE 供应商质量
         </MudNavLink>
+        @* 计量器具端点开放给质量/设备角色，其余只读角色亦可查看台账 *@
+        <AuthorizeView Roles="QualityEngineer,EquipmentEngineer,ProductionManager,Inspector,Technician,ShiftLeader">
+            <Authorized>
+                <MudNavLink Href="gauges" Icon="@Icons.Material.Filled.Straighten">
+                    计量器具台账
+                </MudNavLink>
+            </Authorized>
+        </AuthorizeView>
         <MudNavLink Href="quality-reports" Icon="@Icons.Material.Filled.Description">
             质量报表
         </MudNavLink>

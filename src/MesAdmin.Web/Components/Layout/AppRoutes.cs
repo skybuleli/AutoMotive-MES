@@ -32,6 +32,7 @@ public static class AppRoutes
         new("inspection-plans", "检验计划", "quality", Icons.Material.Filled.ListAlt),
         new("spc", "SPC 质量管理", "quality", Icons.Material.Filled.QueryStats),
         new("sqe", "SQE 供应商质量", "quality", Icons.Material.Filled.Business),
+        new("gauges", "计量器具台账", "quality", Icons.Material.Filled.Straighten),
         new("quality-reports", "质量报表", "quality", Icons.Material.Filled.Description),
         new("material", "物料管理", "material", Icons.Material.Filled.Inventory),
         new("inventory", "线边库存", "material", Icons.Material.Filled.LocalGroceryStore),

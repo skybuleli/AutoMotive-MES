@@ -46,14 +46,12 @@ public abstract class IntegrationTestBase : IAsyncLifetime
     public virtual async Task InitializeAsync()
     {
         // ── 1. 启动 Testcontainers PostgreSQL ──
-        _container = new PostgreSqlBuilder()
-            .WithImage("postgres:17-alpine")
+        _container = new PostgreSqlBuilder("postgres:17-alpine")
             .WithDatabase("automes_test")
             .WithUsername("mes")
             .WithPassword("mes_dev_password")
             .WithCleanUp(true)
             .Build();
-
         await _container.StartAsync();
 
         // ── 2. 构建 DI 容器 ──

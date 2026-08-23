@@ -3,8 +3,8 @@
 > 面向汽车 Tier-1 供应商（博世 ESP® 电子稳定程序制动系统总成产线）的全链路制造执行系统。
 > 覆盖 **工单 → 物料 → SPC → 追溯 → Andon → OEE**，7 站 31 工序全 Saga 编排，热路径零堆分配。
 >
-> **交付状态：99/99 任务完成 ✅ · 383 测试通过 ✅ · 43 性能基准 ✅**
->
+> **交付状态：99/99 任务完成 ✅ · 479 测试通过 ✅ · 43 性能基准 ✅ · 0 构建告警 ✅**
+
 > [![CI](https://github.com/skybuleli/AutoMotive-MES/actions/workflows/ci.yml/badge.svg)](https://github.com/skybuleli/AutoMotive-MES/actions/workflows/ci.yml)
 
 ---
@@ -19,7 +19,7 @@
 | API 端点 | 59（FastEndpoints · 9 功能组） |
 | Blazor 页面 | 21 |
 | SignalR Hub | 4（DashboardHub / AndonHub / MemoryPackHubProtocol / HubMessageEnvelope） |
-| **测试** | **383 ✅ · 0 failed · 0 skipped**（166 单元 + 217 集成/混沌） |
+| **测试** | **479 ✅ · 0 failed · 0 skipped**（175 单元 + 304 集成/混沌） |
 | 性能基准 | 43（4 套件：零分配/PLC/追溯/SignalR） |
 | EF Core 迁移 | 19 次 |
 | 总工时（预估） | ~212 人天 |
@@ -165,10 +165,9 @@ Api → Infrastructure -──────────────┘
 
 | 测试套件 | 数量 | 类型 | 基础设施 |
 |---------|------|------|---------|
-| `MesAdmin.Domain.Tests` | 166 | 单元测试 | xUnit + Cleipnir InMemory |
-| `MesAdmin.Application.Tests` | 217 | 集成+混沌 | Testcontainers PostgreSQL 17 |
-| **总计** | **383** | | **0 failed · 0 skipped** |
-
+| `MesAdmin.Domain.Tests` | 175 | 单元测试 | xUnit + Cleipnir InMemory |
+| `MesAdmin.Application.Tests` | 304 | 集成+混沌 | Testcontainers PostgreSQL 17 |
+| **总计** | **479** | | **0 failed · 0 skipped** |
 ### 关键测试场景
 
 | 场景 | 测试数 | 覆盖内容 |

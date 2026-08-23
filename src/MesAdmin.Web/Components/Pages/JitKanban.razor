@@ -114,7 +114,7 @@
                                                 <MudText Typo="Typo.caption" Class="kpi-label">需求数量</MudText>
                                                 <MudText Typo="Typo.h4" Color="Color.Warning" Style="font-weight:600;">
                                                     @signal.ShortageQuantity.ToString("F0")
-                                                    <MudText Typo="Typo.caption" Style="display:inline;color:var(--mud-palette-text-secondary);">@signal.Unit</MudText>
+                                                    <MudText Typo="Typo.caption" Style="display:inline;color:var(--mes-text-2);">@signal.Unit</MudText>
                                                 </MudText>
                                             </MudStack>
                                             <MudStack Spacing="0">
@@ -140,7 +140,7 @@
 
                                         <MudText Typo="Typo.caption" Class="kpi-sub">
                                             创建：@signal.CreatedAt.ToLocalTime().ToString("MM-dd HH:mm:ss")
-                                            @if (isUrgent) { <span style="color:var(--mud-palette-error);"> ⚠ 超时</span> }
+                                            @if (isUrgent) { <span style="color:var(--mes-err);"> ⚠ 超时</span> }
                                         </MudText>
                                     </MudStack>
                                 </MudPaper>

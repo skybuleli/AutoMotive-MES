@@ -91,9 +91,11 @@ public sealed partial class AuditPostProcessor(ILogger<AuditPostProcessor> logge
             json = PasswordMaskRegex().Replace(json, $"\"${{name}}\":\"***\"");
             return json.Length <= MaxSummaryLength ? json : json[..MaxSummaryLength];
         }
-        catch
+        catch (Exception ex)
         {
-            return string.Empty; // 摘要序列化失败不阻塞审计主流程
+            // 摘要序列化失败不阻塞审计主流程；记录诊断信息后返回空摘要
+            System.Diagnostics.Debug.WriteLine($"BuildSummary failed: {ex}");
+            return string.Empty;
         }
     }
 }

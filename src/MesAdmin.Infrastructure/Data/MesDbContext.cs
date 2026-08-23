@@ -83,6 +83,10 @@ public class MesDbContext : DbContext
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    // ── 计量器具台账与校准记录（S01 · IATF 16949）──
+    public DbSet<Gauge> Gauges => Set<Gauge>();
+    public DbSet<CalibrationRecord> CalibrationRecords => Set<CalibrationRecord>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // 所有 Ulid 属性自动映射为 PG uuid 列，避免在每个实体中重复配置。

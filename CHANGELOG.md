@@ -1,11 +1,23 @@
 # Changelog
 
+## v1.0.1 (2026-08-21) — 质量加固
+
+> 479 测试通过 · 0 构建告警 · 0 漏洞
+
+### 修复
+- **构建告警清零**：`AuditPostProcessor ERP022` 摘要吞异常补诊断输出、`AuditLogs/UserManagement EPC12` 仅 `ex.Message` 补全量日志、`MudTooltip ActivatorContent` 误用改为 `Text` 直传、`_saving/_changingPassword CS0414` 标记 Razor 绑定误报、`LiveClock/MesBreadcrumb` 补 `@implements IDisposable`
+- **依赖漏洞**：`Testcontainers.PostgreSql 4.2.0→4.14.0` 消除 `SSH.NET 2024.1.0 GHSA-q939`，`PostgreSqlBuilder` 改 `new("postgres:17-alpine")` 消除 `CS0618` 过时构造
+- **主题对比度**：`MesTheme` 成功/告警/错误色加 `ContrastText`（`#0F172A` 深字）并深化 `Darken/Lighten` 阶梯，满足 WCAG 可读性；暗色 `Success #4ADE80/Warning #FBBF24/Error #F87171` 提亮，亮色 `Success #16A34A/Warning #D97706/Error #DC2626` 加深
+
+### 新增
+- **共享组件**：`LiveClock` 顶栏秒级时钟（`Timer` 自刷新）+ `MesBreadcrumb` 面包屑（`AppRoutes.TrailFor` 驱动）+ `MesPageHeader` 紧凑版统一页头
+- **文档同步**：`README/PROJECT_SUMMARY` 测试数 `383→479`（`Domain 166→175` + `Application 217→304`），交付头 `0 构建告警` 徽标
+
 ## v1.0.0 (2026-07-07)
 
 > **AutoMES — 博世 ESP® 制动系统 MES** — 首个完整发布版本
 >
 > 99/99 任务完成 · 383 测试通过 · 43 性能基准 · 0 构建警告
-
 ### 阶段 0：项目骨架
 - .NET 10 解决方案，5 层项目结构（Domain / Application / Infrastructure / Web / Api）
 - 14 个 NuGet 包精确版本锁定（MudBlazor/MemoryPack/Cleipnir/MessagePipe/R3/ZLogger/Ulid 等）

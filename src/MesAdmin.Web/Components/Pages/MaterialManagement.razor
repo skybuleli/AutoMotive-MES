@@ -235,7 +235,7 @@
 
                     @if (_receiveResult is not null)
                     {
-                        <MudPaper Class="pa-4" Style="background:rgba(var(--mes-ok-rgb),0.08); border:1px solid rgba(var(--mes-ok-rgb),0.3); border-radius:var(--mes-r);">
+                        <MudPaper Class="mes-panel mes-panel-ok pa-4">
                             <MudStack Spacing="1">
                                 <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                                     <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
@@ -300,7 +300,7 @@
 
                     @if (_bindResult is not null)
                     {
-                        <MudPaper Class="pa-4" Style="@GetBindResultStyle()">
+                        <MudPaper Class="@GetBindResultClass()">
                             <MudStack Spacing="1">
                                 <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
                                     <MudIcon Icon="@(_bindResult.PokaYokePassed ? Icons.Material.Filled.Verified : Icons.Material.Filled.Error)" 
@@ -543,13 +543,13 @@
         await LoadBatchesAsync();
     }
 
-    private string GetBindResultStyle()
+    private string GetBindResultClass()
     {
         if (_bindResult is null)
             return string.Empty;
         return _bindResult.PokaYokePassed
-            ? "border-radius:var(--mes-r); background:rgba(var(--mes-ok-rgb),0.08); border:1px solid rgba(var(--mes-ok-rgb),0.3);"
-            : "border-radius:var(--mes-r); background:rgba(var(--mes-err-rgb),0.08); border:1px solid rgba(var(--mes-err-rgb),0.3);";
+            ? "mes-panel mes-panel-ok pa-4"
+            : "mes-panel mes-panel-err pa-4";
     }
 
     private async Task PreviousBatchPage()

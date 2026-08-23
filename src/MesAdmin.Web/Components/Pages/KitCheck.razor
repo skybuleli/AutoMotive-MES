@@ -70,7 +70,7 @@
                 </HeaderContent>
                 <RowTemplate>
                     <MudTd DataLabel="工单号">
-                        <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-primary);">
+                        <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mes-lav);">
                             @context.OrderNumber
                         </MudText>
                     </MudTd>
@@ -155,7 +155,7 @@
         }
         else if (_result is not null && _result.IsPassed)
         {
-            <MudPaper Class="pa-6" Style="background:rgba(var(--mes-ok-rgb),0.08); border:1px solid rgba(var(--mes-ok-rgb),0.3); border-radius:var(--mes-r);">
+            <MudPaper Class="mes-panel mes-panel-ok pa-6">
                 <MudStack AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.Verified" Size="Size.Large" Color="Color.Success" />
                     <MudText Typo="Typo.h5" Color="Color.Success" Style="font-weight:600;">齐套检查通过</MudText>
@@ -206,15 +206,15 @@
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="物料编码">
-                                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mud-palette-warning);">
+                                <MudText Typo="Typo.body2" Style="font-weight:600;color:var(--mes-warn);">
                                     @context.MaterialCode
                                 </MudText>
                             </MudTd>
                             <MudTd DataLabel="需求">@context.RequiredQuantity.ToString("F0")</MudTd>
-                            <MudTd DataLabel="可用" Style="color:var(--mud-palette-error);">
+                            <MudTd DataLabel="可用" Style="color:var(--mes-err);">
                                 @context.AvailableQuantity.ToString("F0")
                             </MudTd>
-                            <MudTd DataLabel="短缺" Style="color:var(--mud-palette-error);font-weight:600;">
+                            <MudTd DataLabel="短缺" Style="color:var(--mes-err);font-weight:600;">
                                 @context.ShortageQuantity.ToString("F0")
                             </MudTd>
                             <MudTd DataLabel="单位">@context.Unit</MudTd>
@@ -253,13 +253,13 @@
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="物料编码">
-                                <MudText Typo="Typo.body2" Style="@(context.ShortageQuantity > 0.001 ? "font-weight:600;color:var(--mud-palette-warning);" : "")">
+                                <MudText Typo="Typo.body2" Style="@(context.ShortageQuantity > 0.001 ? "font-weight:600;color:var(--mes-warn);" : "")">
                                     @context.MaterialCode
                                 </MudText>
                             </MudTd>
                             <MudTd DataLabel="需求">@context.RequiredQuantity.ToString("F0")</MudTd>
                             <MudTd DataLabel="可用">@context.AvailableQuantity.ToString("F0")</MudTd>
-                            <MudTd DataLabel="短缺" Style="@(context.ShortageQuantity > 0.001 ? "color:var(--mud-palette-error);font-weight:600;" : "")">
+                            <MudTd DataLabel="短缺" Style="@(context.ShortageQuantity > 0.001 ? "color:var(--mes-err);font-weight:600;" : "")">
                                 @context.ShortageQuantity.ToString("F0")
                             </MudTd>
                             <MudTd DataLabel="单位">@context.Unit</MudTd>

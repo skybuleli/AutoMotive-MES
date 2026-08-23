@@ -3,7 +3,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "ProductionManager")]
 @using MesAdmin.Web.Services
 @inject MesApiClient Api
-@implements IDisposable
+@inject ILogger<UserManagement> PageLogger
 
 <PageTitle>用户管理 - AutoMES</PageTitle>
 
@@ -67,25 +67,19 @@
                         @if (!user.IsActive)
                         {
                             <MudTooltip Text="已停用">
-                                <ActivatorContent>
-                                    <MesStatusDot Status="MesDotStatus.Offline" />
-                                </ActivatorContent>
+                                <MesStatusDot Status="MesDotStatus.Offline" />
                             </MudTooltip>
                         }
                         else if (user.IsLockedOut)
                         {
                             <MudTooltip Text="登录锁定中">
-                                <ActivatorContent>
-                                    <MesStatusDot Status="MesDotStatus.Alarm" />
-                                </ActivatorContent>
+                                <MesStatusDot Status="MesDotStatus.Alarm" />
                             </MudTooltip>
                         }
                         else
                         {
                             <MudTooltip Text="正常">
-                                <ActivatorContent>
-                                    <MesStatusDot Status="MesDotStatus.Running" />
-                                </ActivatorContent>
+                                <MesStatusDot Status="MesDotStatus.Running" />
                             </MudTooltip>
                         }
                     </MudTd>
@@ -189,6 +183,7 @@
         }
         catch (Exception ex)
         {
+            PageLogger.LogWarning(ex, "加载用户列表失败");
             _error = $"加载失败：{ex.Message}";
         }
         finally
@@ -231,8 +226,9 @@
     private bool _editIsActive = true;
     private string _editPassword = string.Empty;
     private string? _editError;
+#pragma warning disable CS0414 // _saving 在 Razor 标记中通过 MudButton Loading 绑定使用，编译器误报
     private bool _saving;
-
+#pragma warning restore CS0414
     private static readonly (string Key, string Label)[] AllRoles =
     [
         ("ProductionManager", "生产经理"),
