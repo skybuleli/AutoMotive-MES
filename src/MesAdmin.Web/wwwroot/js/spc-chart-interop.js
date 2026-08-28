@@ -4,6 +4,14 @@
 window.spcCharts = {
     charts: {},
 
+    // 读取主题 CSS 变量（失败时回退暗色令牌），图表颜色随明暗主题自动适配
+    _v: function (name, fallback) {
+        try {
+            var val = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            return val || fallback;
+        } catch (e) { return fallback; }
+    },
+
     // 初始化 X̄-R 控制图
     initXbarRChart: function (chartId, data) {
         if (!window.echarts) {
@@ -124,8 +132,8 @@ window.spcCharts = {
                 show: false,
                 pieces: [
                     { min: lcl, max: ucl, color: '#1a1d2e' },
-                    { lt: lcl, color: '#ef4444' },
-                    { gt: ucl, color: '#ef4444' }
+                    { lt: lcl, color: this._v('--mes-err', '#F87171') },
+                    { gt: ucl, color: this._v('--mes-err', '#F87171') }
                 ],
                 seriesIndex: 0,
                 dimension: 1
@@ -137,14 +145,14 @@ window.spcCharts = {
                     data: means,
                     symbol: 'circle',
                     symbolSize: 6,
-                    lineStyle: { width: 1.5, color: '#CBA6F7' },
-                    itemStyle: { color: '#CBA6F7' },
+                    lineStyle: { width: 1.5, color: this._v('--mes-lav', '#CBA6F7') },
+                    itemStyle: { color: this._v('--mes-lav', '#CBA6F7') },
                     markLine: {
                         silent: true,
                         data: [
-                            { yAxis: ucl, label: { formatter: 'UCL: ' + ucl.toFixed(2), color: '#ef4444' }, lineStyle: { color: '#ef4444', type: 'dashed' } },
-                            { yAxis: cl, label: { formatter: 'CL: ' + cl.toFixed(2), color: '#4ade80' }, lineStyle: { color: '#4ade80', type: 'solid' } },
-                            { yAxis: lcl, label: { formatter: 'LCL: ' + lcl.toFixed(2), color: '#ef4444' }, lineStyle: { color: '#ef4444', type: 'dashed' } }
+                            { yAxis: ucl, label: { formatter: 'UCL: ' + ucl.toFixed(2), color: this._v('--mes-err', '#F87171') }, lineStyle: { color: this._v('--mes-err', '#F87171'), type: 'dashed' } },
+                            { yAxis: cl, label: { formatter: 'CL: ' + cl.toFixed(2), color: this._v('--mes-ok', '#4ADE80') }, lineStyle: { color: this._v('--mes-ok', '#4ADE80'), type: 'solid' } },
+                            { yAxis: lcl, label: { formatter: 'LCL: ' + lcl.toFixed(2), color: this._v('--mes-err', '#F87171') }, lineStyle: { color: this._v('--mes-err', '#F87171'), type: 'dashed' } }
                         ]
                     },
                     markPoint: {
@@ -152,7 +160,7 @@ window.spcCharts = {
                             coord: p,
                             symbol: 'pin',
                             symbolSize: 30,
-                            itemStyle: { color: '#ef4444' },
+                            itemStyle: { color: this._v('--mes-err', '#F87171') },
                             label: { show: false }
                         }))
                     }
@@ -250,8 +258,8 @@ window.spcCharts = {
                     markLine: {
                         silent: true,
                         data: [
-                            { yAxis: uclR, label: { formatter: 'UCL: ' + uclR.toFixed(2), color: '#ef4444' }, lineStyle: { color: '#ef4444', type: 'dashed' } },
-                            { yAxis: clR, label: { formatter: 'CL: ' + clR.toFixed(2), color: '#4ade80' }, lineStyle: { color: '#4ade80', type: 'solid' } }
+                            { yAxis: uclR, label: { formatter: 'UCL: ' + uclR.toFixed(2), color: this._v('--mes-err', '#F87171') }, lineStyle: { color: this._v('--mes-err', '#F87171'), type: 'dashed' } },
+                            { yAxis: clR, label: { formatter: 'CL: ' + clR.toFixed(2), color: this._v('--mes-ok', '#4ADE80') }, lineStyle: { color: this._v('--mes-ok', '#4ADE80'), type: 'solid' } }
                         ]
                     },
                     markPoint: {
@@ -259,7 +267,7 @@ window.spcCharts = {
                             coord: p,
                             symbol: 'pin',
                             symbolSize: 30,
-                            itemStyle: { color: '#ef4444' },
+                            itemStyle: { color: this._v('--mes-err', '#F87171') },
                             label: { show: false }
                         }))
                     }
