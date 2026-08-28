@@ -67,14 +67,16 @@ set +a
 if [ -n "$ROLLBACK" ]; then
   REGISTRY_MODE=1
   info "解析回滚候选（git 历史 × GHCR 标签）..."
-  TOKEN=$(curl -fsS "https://ghcr.io/token?scope=repository:skybuleli/automotive-mes/mes-api:pull" \
+  TOKEN=$(curl -fsS -m 10 "https://ghcr.io/token?scope=repository:skybuleli/automotive-mes/mes-api:pull" \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
-  TAGS=$(curl -fsS -H "Authorization: Bearer $TOKEN" \
+  TAGS=$(curl -fsS -m 10 -H "Authorization: Bearer $TOKEN" \
     "https://ghcr.io/v2/skybuleli/automotive-mes/mes-api/tags/list" \
     | python3 -c 'import json,sys; print("\n".join(t for t in json.load(sys.stdin)["tags"] if len(t) == 7))')
   [ -n "$TAGS" ] || fail "GHCR 上没有任何 sha 标签，无从回滚"
   TARGET=$(git -C "$ROOT" log --first-parent --format=%h main \
-    | while read -r c; do printf '%s\n' "$TAGS" | grep -qx "$c" && echo "$c"; done \
+    | while read -r c; do
+        if printf '%s\n' "$TAGS" | grep -qx "$c"; then echo "$c"; fi
+      done \
     | sed -n "$((ROLLBACK + 1))p")
   [ -n "$TARGET" ] || fail "回滚目标不存在（候选见上；N 太大？）"
   docker manifest inspect "${IMAGE_REPO}/mes-api:${TARGET}" >/dev/null 2>&1 \
