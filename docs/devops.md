@@ -61,12 +61,16 @@
 ## 四、常用操作
 
 ```bash
-# 部署（GHCR 镜像）
+# 部署（GHCR 镜像，建议传不可变 sha 标签——latest 不变时 Uncloud 不会重新拉取）
 IMAGE_TAG=latest ./scripts/deploy-uncloud.sh --registry
-IMAGE_TAG=1aef3ff ./scripts/deploy-uncloud.sh --registry   # 指定版本
+IMAGE_TAG=2fd2c89 ./scripts/deploy-uncloud.sh --registry
 
-# 回滚：重新部署上一个 sha 标签即可（GHCR 保留全部历史）
-IMAGE_TAG=<上一个短sha> ./scripts/deploy-uncloud.sh --registry
+# 一键回滚（N=倒数第 N 个历史版本，默认上一个；候选=git 父历史 ∩ GHCR sha 标签）
+./scripts/deploy-uncloud.sh --registry --rollback
+./scripts/deploy-uncloud.sh --registry --rollback 2
+
+# 部署前恢复演练：最近备份恢复到临时库 automes_verify，校验表数量后清理
+./scripts/deploy-uncloud.sh --registry --verify-backup
 
 # 部署观测栈
 uc deploy -f docker/observability/compose.uncloud.yaml -c automes-local -y
@@ -76,6 +80,9 @@ uc ps -c automes-local                     # 容器/健康状态
 uc logs -c automes-local mes-api           # 服务日志
 uc service exec -c automes-local postgres -- psql -U mes automes   # 进库
 uc proxy -c automes-local greptimedb 4000  # 转发到本机调试
+
+# 备份策略：每次部署前自动 pg_dump → VM pg-backup-data 卷 + 本机 backups/ 双份，
+# 各保留最近 10 份；--verify-backup 可随时做恢复演练。异地容灾需另行同步 backups/。
 
 # 密钥轮换：改 .env.uncloud.local → 重新部署（滚动注入新值）
 ```
@@ -120,8 +127,18 @@ GitHub Actions 无法直接触达内网 VM（OrbStack NAT）。如需 push 即�
 
 ## 七、已知权衡 / 后续
 
-- GHCR 私有转公开已完成；若未来改回私有，本机 `docker login ghcr.io`
-  （PAT 需 `read:packages`），Uncloud 会转发凭证到 VM。
+- **日志轮转**：VM `/etc/docker/daemon.json` 已配 `json-file max-size=50m max-file=5`
+  （live-restore 开启，重启 docker 不影响运行容器）。只对重启后创建的容器生效，
+  存量容器随下次部署重建自动纳入。
+- **GHCR 保留策略**：docker.yml 每次推送后自动删除单 sha 标签的旧版本
+  （保留最近 20 个），`latest` 所在版本永不删除。
+- **集群监控**：vmagent 抓 Uncloud daemon `:51090/metrics`（经 WireGuard 网关
+  10.210.0.1）→ GreptimeDB，`up{job="uncloud-daemon"}` 等指标已入库；
+  daemon 侧告警规则待按需补充。
+- **依赖更新**：Dependabot 周更（nuget/docker/actions）；MudBlazor 主版本已
+  配置忽略，需人工评估升级。
+- GHCR 若改回私有，本机 `docker login ghcr.io`（PAT 需 `read:packages`），
+  Uncloud 会转发凭证到 VM。
 - QEMU 跨架构构建较慢（冷构建 arm64 侧 15-30 分钟），GHA 缓存命中后增量分钟级。
   若源仓库转公开，可改用 GitHub 免费 arm64 原生 runner（ubuntu-24.04-arm）
   matrix 提速。
