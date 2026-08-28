@@ -14,7 +14,9 @@ services:
     environment:
       POSTGRES_DB: automes
       POSTGRES_USER: mes
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # Uncloud 0.20 secrets：部署时由 x-command 从本机 .env.uncloud.local 解析，
+      # 密码不出现在部署计划/命令行/shell 环境中
+      POSTGRES_PASSWORD: secret://postgres_password
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
       TZ: Asia/Shanghai
     volumes:
@@ -46,7 +48,7 @@ services:
       PGPORT: 5432
       PGDATABASE: automes
       PGUSER: mes
-      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGPASSWORD: secret://postgres_password
       PGSSLMODE: disable
       BACKUP_DIR: /backups
       RETENTION_DAYS: 7
@@ -92,8 +94,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5040
-      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=secret://postgres_password
+      Jwt__Secret: secret://jwt_secret
       Sap__BaseUrl: ${SAP_BASE_URL:-http://sap-erp:8000/sap/opu/odata}
       Sap__Username: ${SAP_USERNAME:-}
       Sap__Password: ${SAP_PASSWORD:-}
@@ -142,8 +144,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5138
-      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=secret://postgres_password
+      Jwt__Secret: secret://jwt_secret
       Api__BaseUrl: http://mes-api:5040/
       SignalR__DashboardHubUrl: http://mes-api:5040/hubs/dashboard
       SignalR__AndonHubUrl: http://mes-api:5040/hubs/andon
@@ -162,9 +164,14 @@ services:
       # A `:80` catch-all matches every Host — localhost AND the machine's real
       # IP — so the dashboard can be opened from other machines on the LAN.
       http://:80 {
+        # zstd/gzip 压缩 Blazor/静态资源（JS/CSS 传输体积降 70%+）
+        encode zstd gzip
         reverse_proxy {{upstreams 5138}} {
           import common_proxy
         }
+        # Blazor 框架文件带内容指纹，可长缓存
+        @framework path /_framework/*
+        header @framework Cache-Control "public, max-age=31536000, immutable"
         log
       }
     depends_on:
@@ -195,3 +202,13 @@ volumes:
     driver: local
   mes-web-dp-keys:
     driver: local
+
+# ── Uncloud 0.20 secrets ──
+# 部署时在本机执行 x-command 解析（目录 = compose 文件所在目录），
+# 值存入集群配置而不出现在部署计划、命令行参数或 shell 环境里。
+# 轮换方式：改 .env.uncloud.local 后重新 uc deploy 即可滚动注入新值。
+secrets:
+  postgres_password:
+    x-command: sh -c 'grep "^POSTGRES_PASSWORD=" ../../.env.uncloud.local | cut -d= -f2-'
+  jwt_secret:
+    x-command: sh -c 'grep "^JWT_SECRET=" ../../.env.uncloud.local | cut -d= -f2-'

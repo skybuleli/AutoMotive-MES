@@ -1,0 +1,95 @@
+# AutoMES 观测栈 — Uncloud 部署版
+# 由 docker/observability/compose.yaml（本地 docker 直跑版）适配：
+#   - 去掉 container_name（Uncloud 按服务名管理，服务名即集群内 DNS 名）
+#   - ports 改为 x-ports（仅 GreptimeDB HTTP 供宿主机排查，其余仅集群内可达）
+#   - 规则/告警配置改用 Uncloud Configs（集群存储分发，改配置后重新 deploy 生效）
+#   - GreptimeDB 作为 OTLP/Prometheus 后端：mes-api 的
+#     OTEL_EXPORTER_OTLP_ENDPOINT=http://greptimedb:4000/v1/otlp 按服务名直连
+#
+# 部署：
+#   uc deploy -f docker/observability/compose.uncloud.yaml -c automes-local -y
+
+services:
+  greptimedb:
+    image: greptime/greptimedb:v1.1.2
+    command:
+      - standalone
+      - start
+      - --http-addr
+      - 0.0.0.0:4000
+      - --mysql-addr
+      - 0.0.0.0:4002
+      - --postgres-addr
+      - 0.0.0.0:4003
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - greptimedb-data:/greptimedb_data
+    x-ports:
+      - "14000:4000/tcp@host"   # 宿主机排查：http://<vm-ip>:14000（/health、/metrics、SQL API）
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.146.0
+    command:
+      - -rule=/etc/vmalert/vmalert-rules.yaml
+      - -datasource.url=http://greptimedb:4000/v1/prometheus?db=public
+      - "-datasource.headers=Content-Type: application/x-www-form-urlencoded"
+      - -datasource.disableStepParam
+      - -notifier.url=http://alertmanager:9093
+      - -evaluationInterval=30s
+      - -httpListenAddr=:8880
+    configs:
+      - source: vmalert_rules
+        target: /etc/vmalert/vmalert-rules.yaml
+        mode: 0644
+    depends_on:
+      greptimedb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8880/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.33.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yaml
+      - --storage.path=/alertmanager
+    configs:
+      - source: alertmanager_config
+        target: /etc/alertmanager/alertmanager.yaml
+        mode: 0644
+    volumes:
+      - alertmanager-data:/alertmanager
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  greptimedb-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+
+# 配置内容在部署时随 spec 分发到集群；修改后需重新 uc deploy
+configs:
+  vmalert_rules:
+    file: ./vmalert-rules.yaml
+  alertmanager_config:
+    file: ./alertmanager.yaml

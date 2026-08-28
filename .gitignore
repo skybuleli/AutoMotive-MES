@@ -36,3 +36,4 @@ docker/volumes/
 
 # ── EF Core 迁移临时 ──
 *.tmp
+backups/
