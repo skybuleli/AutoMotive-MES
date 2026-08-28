@@ -1,0 +1,197 @@
+# AutoMES local acceptance deployment for Uncloud 0.20.
+# This is a standalone Compose file because Uncloud ingress mode does not
+# support loopback host-IP bindings from the production Compose file.
+#
+# Deploy with:
+#   set -a; . ./.env.uncloud.local; set +a
+#   /opt/homebrew/bin/uc deploy -f docker/compose.uncloud.yaml -c automes-local
+#
+# This local VM intentionally uses Development + simulated SAP/PLC clients.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: automes
+      POSTGRES_USER: mes
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-wal:/var/lib/postgresql/wal_archive
+    # 避免高并发下 dynamic shared memory 抖动
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mes -d automes"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2G
+        reservations:
+          cpus: "1"
+          memory: 1G
+    restart: unless-stopped
+    stop_grace_period: 60s
+
+  pg-backup:
+    image: postgres:17-alpine
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: automes
+      PGUSER: mes
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGSSLMODE: disable
+      BACKUP_DIR: /backups
+      RETENTION_DAYS: 7
+      WAL_RETENTION_DAYS: 14
+      TZ: Asia/Shanghai
+    volumes:
+      - pg-backup-data:/backups
+      - postgres-wal:/wal_archive:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    restart: unless-stopped
+    entrypoint: >-
+      sh -c '
+        apk add --no-cache curl >/dev/null 2>&1 &&
+        echo "pg-backup started, waiting for postgres..." &&
+        until pg_isready -h postgres -U mes -d automes; do sleep 5; done &&
+        while true; do
+          HOUR=$$(date +%H); MINUTE=$$(date +%M);
+          if [ "$$HOUR" = "03" ] && [ "$$MINUTE" = "00" ]; then
+            BACKUP_FILE="$$BACKUP_DIR/automes-$$(date +%Y%m%d-%H%M%S).dump";
+            pg_dump -Fc -h postgres -U mes -d automes -f "$$BACKUP_FILE";
+            find "$$BACKUP_DIR" -name "automes-*.dump" -type f -mtime +6 -delete;
+          fi;
+          sleep 60;
+        done
+      '
+
+  mes-api:
+    # 本地构建模式（默认）：uc deploy 构建后打上该标签
+    # 镜像仓库模式：IMAGE_TAG=<tag> uc deploy -f docker/compose.uncloud.yaml --no-build
+    # 直接从 GHCR 拉取 CI 构建的镜像（私有仓库需先本机 docker login ghcr.io，
+    # uc deploy 会自动把本机凭证传给目标机器）
+    image: ghcr.io/skybuleli/automotive-mes/mes-api:${IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: src/MesAdmin.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5040
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
+      Sap__BaseUrl: ${SAP_BASE_URL:-http://sap-erp:8000/sap/opu/odata}
+      Sap__Username: ${SAP_USERNAME:-}
+      Sap__Password: ${SAP_PASSWORD:-}
+      Sap__Client: ${SAP_CLIENT:-800}
+      Sap__TimeoutSeconds: ${SAP_TIMEOUT_SECONDS:-2}
+      Sap__UseRealClient: "false"
+      Sap__WebhookSecret: ${SAP_WEBHOOK_SECRET:-}
+      Plc__UseRealClients: "false"
+      QualityReports__Email__Enabled: ${SMTP_ENABLED:-false}
+      QualityReports__Email__From: ${SMTP_FROM:-automes@bosch.com}
+      QualityReports__Email__SmtpHost: ${SMTP_HOST:-localhost}
+      QualityReports__Email__SmtpPort: ${SMTP_PORT:-25}
+      QualityReports__Email__EnableSsl: ${SMTP_SSL:-false}
+      QualityReports__Email__Username: ${SMTP_USERNAME:-}
+      QualityReports__Email__Password: ${SMTP_PASSWORD:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTLP_ENDPOINT:-http://greptimedb:4000/v1/otlp}
+      OTEL_SERVICE_NAME: MesAdmin.Api
+      OTEL_SERVICE_NAMESPACE: AutoMES
+      TZ: Asia/Shanghai
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    restart: unless-stopped
+    # HTTP 健康检查已随镜像内 curl 恢复启用：Uncloud 的滚动发布
+    # 会等新容器通过健康门禁才替换旧容器
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://localhost:5040/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  mes-web:
+    image: ghcr.io/skybuleli/automotive-mes/mes-web:${IMAGE_TAG:-local}
+    build:
+      context: ..
+      dockerfile: src/MesAdmin.Web/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5138
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      Jwt__Secret: ${JWT_SECRET:?JWT_SECRET is required}
+      Api__BaseUrl: http://mes-api:5040/
+      SignalR__DashboardHubUrl: http://mes-api:5040/hubs/dashboard
+      SignalR__AndonHubUrl: http://mes-api:5040/hubs/andon
+      TZ: Asia/Shanghai
+    volumes:
+      # Persist ASP.NET Data Protection keys so the antiforgery/cookie key ring
+      # survives container replacement (otherwise every `uc deploy` that re-creates
+      # the container destroys existing sessions and logs everyone out).
+      - mes-web-dp-keys:/home/app/.aspnet/DataProtection-Keys
+    x-ports:
+      - "15138:5138/tcp@host"
+    x-caddy: |
+      # NOTE: The `http://` scheme prefix is REQUIRED here. Uncloud's Caddy is
+      # HTTP-only (listens on :80 with auto_https off), so a bare site block
+      # would be bound to the default :443 HTTPS port and never receive traffic.
+      # A `:80` catch-all matches every Host — localhost AND the machine's real
+      # IP — so the dashboard can be opened from other machines on the LAN.
+      http://:80 {
+        reverse_proxy {{upstreams 5138}} {
+          import common_proxy
+        }
+        log
+      }
+    depends_on:
+      mes-api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1.5G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/bin/busybox", "wget", "-q", "-O", "/dev/null", "http://localhost:5138/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+
+volumes:
+  postgres-data:
+    driver: local
+  postgres-wal:
+    driver: local
+  pg-backup-data:
+    driver: local
+  mes-web-dp-keys:
+    driver: local

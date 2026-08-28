@@ -5,6 +5,7 @@ using MesAdmin.Infrastructure;
 using MesAdmin.Infrastructure.Data;
 using MesAdmin.Infrastructure.Hubs;
 using Microsoft.EntityFrameworkCore;
+using ZLogger;
 
 namespace MesAdmin.Api.DependencyInjection;
 
@@ -15,15 +16,31 @@ public static class ApplicationStartupExtensions
 {
     /// <summary>
     /// 启动时自动应用 EF Core Migration 并执行幂等种子数据。
+    /// 带重试：VM/容器重启后 Docker DNS 与 Postgres 可能晚于本服务就绪，
+    /// 监听在迁移之后才开始，若迁移失败进程会崩溃循环导致 Web 报“无法连接 API”。
     /// </summary>
     public static async Task UseMesMigrationsAndSeedAsync(this WebApplication app)
     {
         using var scope = app.Services.CreateScope();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         var db = scope.ServiceProvider.GetRequiredService<MesDbContext>();
-        await db.Database.MigrateAsync();
+
+        const int maxAttempts = 12;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await db.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
+                break;
+            }
+            catch (Exception ex) when (attempt < maxAttempts && !app.Lifetime.ApplicationStopping.IsCancellationRequested)
+            {
+                logger.ZLogError(ex, $"数据库迁移失败（第 {attempt}/{maxAttempts} 次），5 秒后重试");
+                await Task.Delay(TimeSpan.FromSeconds(5), app.Lifetime.ApplicationStopping);
+            }
+        }
 
         // 仅首次启动时写入，已存在数据则跳过（幂等）
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         await MesDataSeeder.SeedAsync(app.Services, logger);
     }
 

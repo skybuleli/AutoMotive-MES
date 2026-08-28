@@ -1,30 +1,36 @@
-# ── .NET ──
-bin/
-obj/
+# ── Git / 本地工具目录 ──
+.git/
+.gsd/
+.zcode/
+.agents/
+.vs/
+.vscode/
+.idea/
+
+# ── .NET 构建产物 ──
+# 注意：必须用 **/ 前缀，否则只匹配仓库根目录，
+# src/*/bin（约 300MB）会被打进构建上下文每次上传
+**/bin/
+**/obj/
 artifacts/
+TestResults/
+[Bb]uild[Ll]og.*
 *.user
 *.suo
 *.userprefs
 *.cache
 *.log
-TestResults/
-[Bb]uild[Ll]og.*
 
 # ── NuGet ──
 *.nupkg
 *.snupkg
 .nuget/
 
-# ── IDE ──
-.vs/
-.vscode/
-.idea/
-*.swp
-*~
-
-# ── Docker ──
-docker/data/
-docker/volumes/
+# ── Docker / 部署 / 脚本（镜像内只用到 Directory.Build.props 和 src/）──
+docker/
+scripts/
+docs/
+.github/
 
 # ── 环境与密钥 ──
 .env
@@ -34,3 +40,8 @@ docker/volumes/
 
 # ── 测试项目（运行时不需要）──
 tests/
+
+# ── 杂项 ──
+*.md
+*.swp
+*~
