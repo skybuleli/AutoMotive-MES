@@ -1,0 +1,11 @@
+# vmagent 抓取配置：集群基础设施指标
+# 10.210.0.1 = Uncloud WireGuard 网关（各机器 daemon 的可达地址），
+# daemon 在 51090 暴露 Prometheus 指标（机器/容器/集群状态）
+global:
+  scrape_interval: 30s
+
+scrape_configs:
+  - job_name: uncloud-daemon
+    static_configs:
+      - targets:
+          - 10.210.0.1:51090

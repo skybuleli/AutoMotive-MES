@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # .NET 包：主版本（如 MudBlazor）人工评估，min/patch 自动成组
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dotnet-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "MudBlazor"
+        update-types:
+          - version-update:semver-major
+
+  # 基础镜像（SDK/ASP.NET chiseled、busybox）
+  - package-ecosystem: docker
+    directories:
+      - src/MesAdmin.Api
+      - src/MesAdmin.Web
+    schedule:
+      interval: weekly
+
+  # CI Action 版本
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

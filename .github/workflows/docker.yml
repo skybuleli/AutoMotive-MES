@@ -82,3 +82,19 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Prune old GHCR versions (keep newest 20 sha versions)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PKG="automotive-mes%2F${{ matrix.name }}"
+          IDS=$(gh api --paginate "/user/packages/container/$PKG/versions" \
+            --jq '[.[]] | sort_by(.updated_at) | .[]
+                  | select((.metadata.container.tags | length) == 1) | .id' 2>/dev/null || true)
+          COUNT=$(printf '%s' "$IDS" | grep -c . || true)
+          echo "single-tag versions: $COUNT (keeping newest 20)"
+          printf '%s\n' "$IDS" | head -n -20 | while read -r id; do
+            [ -n "$id" ] || continue
+            gh api -X DELETE "/user/packages/container/$PKG/versions/$id" && echo "deleted version $id"
+          done

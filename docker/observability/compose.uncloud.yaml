@@ -60,6 +60,27 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  vmagent:
+    image: victoriametrics/vmagent:v1.146.0
+    command:
+      - -promscrape.config=/etc/vmagent/scrape.yaml
+      - -remoteWrite.url=http://greptimedb:4000/v1/prometheus?db=public
+      - -httpListenAddr=:8429
+    configs:
+      - source: vmagent_config
+        target: /etc/vmagent/scrape.yaml
+        mode: 0644
+    depends_on:
+      greptimedb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8429/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
   alertmanager:
     image: prom/alertmanager:v0.33.1
     command:
@@ -93,3 +114,5 @@ configs:
     file: ./vmalert-rules.yaml
   alertmanager_config:
     file: ./alertmanager.yaml
+  vmagent_config:
+    file: ./vmagent-scrape.yaml
