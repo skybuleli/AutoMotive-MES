@@ -129,8 +129,9 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
+      # Benchmarks 不在 MesAdmin.sln 中，必须显式还原
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore tests/MesAdmin.Benchmarks/
 
       - name: Build Benchmarks (Release)
         run: dotnet build tests/MesAdmin.Benchmarks/ -c Release --no-restore

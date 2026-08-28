@@ -64,7 +64,7 @@ services:
     image: victoriametrics/vmagent:v1.146.0
     command:
       - -promscrape.config=/etc/vmagent/scrape.yaml
-      - -remoteWrite.url=http://greptimedb:4000/v1/prometheus?db=public
+      - -remoteWrite.url=http://greptimedb:4000/v1/prometheus/write?db=public
       - -httpListenAddr=:8429
     configs:
       - source: vmagent_config
