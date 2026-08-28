@@ -111,6 +111,10 @@ jobs:
     name: Benchmarks
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # 发布基准对比评论需要 PR 写权限（GITHUB_TOKEN 默认只读）
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
