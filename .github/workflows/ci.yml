@@ -170,7 +170,7 @@ jobs:
           echo "pr_run=true" >> $GITHUB_OUTPUT
 
       - name: Upload Benchmark Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: |
@@ -258,7 +258,7 @@ jobs:
           fi
 
       - name: Upload Build Log
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-log
           path: build-output.log
