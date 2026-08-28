@@ -447,7 +447,7 @@ public record CancelMaintenanceOrderBody(string Reason);
 // T1.5 首件检验相关 DTO
 // ═══════════════════════════════════════════
 
-/// <summary>首件检验响应 DTO（镜像 InspectionResponse）</summary>
+/// <summary>首件检验响应 DTO（镜像 InspectionResponse，S02 追加 GaugeId）</summary>
 public record InspectionDto(
     string Id,
     string OrderId,
@@ -457,6 +457,7 @@ public record InspectionDto(
     string Status,
     string OperatorId,
     string? InspectorId,
+    string? GaugeId,
     List<InspectionItemDto> Items,
     string? Conclusion,
     DateTimeOffset CreatedAt,
@@ -473,8 +474,11 @@ public record InspectionItemDto(
     double? ActualValue,
     bool IsPass);
 
-/// <summary>创建首件检验请求体</summary>
-public record CreateInspectionBody(string InspectionType, string OperatorId);
+/// <summary>创建首件检验请求体（S02 可选量具）</summary>
+public record CreateInspectionBody(string InspectionType, string OperatorId, string? GaugeId = null);
+
+/// <summary>记录检验项实测值请求体（S02 必选量具）</summary>
+public record RecordInspectionValueBody(double ActualValue, string? GaugeId = null);
 
 // ═══════════════════════════════════════════
 // T4.1 报表模板引擎 DTO
@@ -545,9 +549,6 @@ public record SapWritebackResultDto(
     bool Success,
     string Message,
     string? DocumentNumber);
-
-/// <summary>记录检验项实测值请求体</summary>
-public record RecordInspectionValueBody(double ActualValue);
 
 /// <summary>完成首件检验请求体</summary>
 public record CompleteInspectionBody(string InspectorId);
@@ -1153,3 +1154,56 @@ public record RecordCalibrationBody(
 
 /// <summary>报废量具请求体</summary>
 public record ScrapGaugeBody(string Reason);
+
+// ═══════════════════════════════════════════
+// 受控文档中心（S03 · IATF 16949 文件控制）
+// ═══════════════════════════════════════════
+
+/// <summary>受控文档 DTO（镜像 ControlledDocumentResponse）</summary>
+public record ControlledDocumentDto(
+    string Id,
+    string DocNumber,
+    string Title,
+    string Type,
+    string? StationScope,
+    string? CurrentVersionId,
+    string? CurrentVersionNo,
+    string? CurrentVersionStatus,
+    int VersionCount,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>文档版本 DTO（镜像 DocumentVersionResponse）</summary>
+public record DocumentVersionDto(
+    string Id,
+    string DocumentId,
+    string VersionNo,
+    string FileName,
+    long FileSize,
+    string ContentType,
+    string Status,
+    string? SubmittedBy,
+    DateTimeOffset? SubmittedAt,
+    string? ApprovedBy,
+    DateTimeOffset? ApprovedAt,
+    DateTimeOffset? EffectiveAt,
+    DateTimeOffset? SupersededAt,
+    string? Remarks,
+    DateTimeOffset CreatedAt);
+
+/// <summary>文档详情 DTO（镜像 DocumentDetailResponse）</summary>
+public record DocumentDetailDto(
+    ControlledDocumentDto Document,
+    List<DocumentVersionDto> Versions);
+
+/// <summary>新建文档/版本请求体（文件以 Base64 传输）</summary>
+public record CreateDocumentBody(
+    string DocNumber,
+    string Title,
+    string Type,
+    string VersionNo,
+    string FileName,
+    string? ContentType,
+    string FileBase64,
+    string? StationScope = null,
+    string? Remarks = null);

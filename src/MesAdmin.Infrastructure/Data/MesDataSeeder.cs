@@ -114,6 +114,9 @@ public static class MesDataSeeder
         {
             logger.ZLogInformation($"种子数据：物料库存已存在，跳过");
         }
+
+        // ── 4. 关联业务演示数据（幂等，使用 DEMO-* 业务编号）────
+        await DemoDataSeeder.SeedAsync(db, logger);
     }
 
     // ══════════════════════════════════════════════════════════

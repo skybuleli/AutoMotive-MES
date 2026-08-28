@@ -1,0 +1,477 @@
+@page "/documents"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+@inject ILogger<Documents> PageLogger
+@inject IJSRuntime JS
+
+<PageTitle>受控文档 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="S03 · Document Control / IATF 16949" Title="受控文档中心"
+                  Description="SOP 受控分发 · 版本审批流 Draft→Pending→Released→Superseded · 发布时旧版自动归档">
+        <HeaderActions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.UploadFile" OnClick="() => OpenCreateDialog()">新建 / 上传版本</MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadDocumentsAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudPaper Class="module-card pa-4">
+        @if (_isLoading && _documents is null)
+        {
+            <MesStateCard Loading="true" Text="加载受控文档..." />
+        }
+        else if (_documents is not null && _documents.Count == 0)
+        {
+            <MesStateCard Loading="false" Icon="@Icons.Material.Filled.Article"
+                          Text="暂无受控文档"
+                          Hint="点击右上角「新建 / 上传版本」上传第一版 SOP（例 DOC-SOP-ESP-001 v1.0），建档后可提交审批、审核发布。" />
+        }
+        else if (_documents is not null)
+        {
+            <MudTable Items="@_documents" Hover="true" Dense="true" RowsPerPage="10" Breakpoint="Breakpoint.Md">
+                <HeaderContent>
+                    <MudTh>文档编号</MudTh>
+                    <MudTh>标题</MudTh>
+                    <MudTh>类型</MudTh>
+                    <MudTh>当前生效版</MudTh>
+                    <MudTh>状态</MudTh>
+                    <MudTh>版本数</MudTh>
+                    <MudTh Style="text-align:right;">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="编号"><strong>@context.DocNumber</strong></MudTd>
+                    <MudTd DataLabel="标题">@context.Title</MudTd>
+                    <MudTd DataLabel="类型">@FormatType(context.Type)</MudTd>
+                    <MudTd DataLabel="当前版">@(context.CurrentVersionNo ?? "-")</MudTd>
+                    <MudTd DataLabel="状态">
+                        @if (!string.IsNullOrWhiteSpace(context.CurrentVersionStatus))
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Color="@StatusColor(context.CurrentVersionStatus!)">@FormatStatus(context.CurrentVersionStatus!)</MudChip>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption">-</MudText>
+                        }
+                    </MudTd>
+                    <MudTd DataLabel="版本数">@context.VersionCount</MudTd>
+                    <MudTd Style="text-align:right;">
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="() => OpenDetailAsync(context.Id)">详情 / 版本</MudButton>
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+</MudStack>
+
+@* ── 新建 / 上传版本对话框 ── *@
+<MudDialog @bind-Visible="_showCreateDialog" MaxWidth="MaxWidth.Medium">
+    <TitleContent>
+        <MudText Typo="Typo.h6">新建受控文档 / 上传新版</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense>
+                同一文档编号下版本号（例 v1.0, v1.1）唯一；文件以 Base64 上传，落盘到服务端。
+            </MudAlert>
+            <MudStack Row Spacing="2">
+                <MudTextField @bind-Value="_form.DocNumber" Label="文档编号 *" Placeholder="DOC-SOP-ESP-001" Immediate />
+                <MudSelect T="string" @bind-Value="_form.Type" Label="类型 *" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@("Sop")">SOP</MudSelectItem>
+                    <MudSelectItem Value="@("Wi")">WI</MudSelectItem>
+                    <MudSelectItem Value="@("Drawing")">图纸</MudSelectItem>
+                    <MudSelectItem Value="@("Form")">表单</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+            <MudTextField @bind-Value="_form.Title" Label="标题 *" Immediate />
+            <MudStack Row Spacing="2">
+                <MudTextField @bind-Value="_form.VersionNo" Label="版本号 *" Placeholder="v1.0" Immediate />
+                <MudTextField @bind-Value="_form.StationScope" Label="工站范围（可选）" Placeholder="ST3 或留空通用" />
+            </MudStack>
+            <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.body2">文件 *</MudText>
+                <InputFile OnChange="OnFileSelected" />
+                @if (!string.IsNullOrWhiteSpace(_form.FileName))
+                {
+                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">@_form.FileName (@FormatBytes(_fileSize))</MudChip>
+                }
+            </MudStack>
+            @if (!string.IsNullOrWhiteSpace(_fileError))
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense>@_fileError</MudAlert>
+            }
+            <MudTextField @bind-Value="_form.Remarks" Label="备注" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreateDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Loading="@_submitting"
+                   Disabled="@(!CanSubmitCreate)" OnClick="() => SubmitCreateAsync()">上传并创建 Draft</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ── 详情 / 版本时间线对话框 ── *@
+<MudDialog @bind-Visible="_showDetailDialog" MaxWidth="MaxWidth.Large" FullWidth="true">
+    <TitleContent>
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h6">@(_detail?.Document.DocNumber ?? "") · @(_detail?.Document.Title ?? "")</MudText>
+                <MudText Typo="Typo.caption" Class="kpi-sub">当前生效：@(_detail?.Document.CurrentVersionNo ?? "无") · 版本数 @_detail?.Versions.Count</MudText>
+            </MudStack>
+            @if (_detail?.Document.CurrentVersionStatus is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="@StatusColor(_detail.Document.CurrentVersionStatus!)">@FormatStatus(_detail.Document.CurrentVersionStatus!)</MudChip>
+            }
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        @if (_detail is not null)
+        {
+            <MudTable Items="@_detail.Versions" Dense Hover Breakpoint="Breakpoint.Sm" Elevation="0">
+                <HeaderContent>
+                    <MudTh>版本号</MudTh>
+                    <MudTh>文件名</MudTh>
+                    <MudTh>大小</MudTh>
+                    <MudTh>状态</MudTh>
+                    <MudTh>提交人</MudTh>
+                    <MudTh>审批人</MudTh>
+                    <MudTh>生效时间</MudTh>
+                    <MudTh Style="text-align:right;">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="版本"><strong>@context.VersionNo</strong></MudTd>
+                    <MudTd DataLabel="文件名">@context.FileName</MudTd>
+                    <MudTd DataLabel="大小">@FormatBytes(context.FileSize)</MudTd>
+                    <MudTd DataLabel="状态"><MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Status)">@FormatStatus(context.Status)</MudChip></MudTd>
+                    <MudTd DataLabel="提交人">@(context.SubmittedBy ?? "-")</MudTd>
+                    <MudTd DataLabel="审批人">@(context.ApprovedBy ?? "-")</MudTd>
+                    <MudTd DataLabel="生效时间">@(context.EffectiveAt?.ToLocalTime().ToString("MM-dd HH:mm") ?? "-")</MudTd>
+                    <MudTd Style="text-align:right;">
+                        @if (context.Status == "Draft")
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SubmitVersionAsync(context)" Disabled="@_submitting">提交审批</MudButton>
+                        }
+                        else if (context.Status == "PendingApproval")
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="() => ApproveVersionAsync(context)" Disabled="@_submitting">批准发布</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Info" OnClick="() => DownloadVersionAsync(context)">下载</MudButton>
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+            @if (_detail.Versions.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Class="pa-2">暂无版本</MudText>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showDetailDialog = false">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<ControlledDocumentDto>? _documents;
+    private DocumentDetailDto? _detail;
+    private bool _isLoading;
+    private bool _submitting;
+    private string? _message;
+    private bool _isError;
+
+    private bool _showCreateDialog;
+    private bool _showDetailDialog;
+    private DocumentFormModel _form = new();
+    private IBrowserFile? _selectedFile;
+    private long _fileSize;
+    private string? _fileError;
+    private string? _fileBase64;
+
+    private bool CanSubmitCreate =>
+        !string.IsNullOrWhiteSpace(_form.DocNumber)
+        && !string.IsNullOrWhiteSpace(_form.Title)
+        && !string.IsNullOrWhiteSpace(_form.Type)
+        && !string.IsNullOrWhiteSpace(_form.VersionNo)
+        && !string.IsNullOrWhiteSpace(_fileBase64);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDocumentsAsync();
+    }
+
+    private async Task LoadDocumentsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _documents = await Api.GetDocumentsAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载受控文档失败");
+            _message = $"加载失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void OpenCreateDialog()
+    {
+        _form = new DocumentFormModel();
+        _selectedFile = null;
+        _fileBase64 = null;
+        _fileSize = 0;
+        _fileError = null;
+        _showCreateDialog = true;
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _fileError = null;
+        var file = e.File;
+        if (file is null)
+        {
+            _selectedFile = null;
+            _fileBase64 = null;
+            _fileSize = 0;
+            return;
+        }
+        const long maxBytes = 20 * 1024 * 1024;
+        if (file.Size > maxBytes)
+        {
+            _fileError = $"文件超过 20 MB 限制（当前 {file.Size / 1024 / 1024} MB）";
+            _selectedFile = null;
+            _fileBase64 = null;
+            _fileSize = file.Size;
+            return;
+        }
+        _selectedFile = file;
+        _form.FileName = file.Name;
+        _fileSize = file.Size;
+        try
+        {
+            await using var ms = new MemoryStream();
+            await file.OpenReadStream(maxBytes).CopyToAsync(ms);
+            _fileBase64 = Convert.ToBase64String(ms.ToArray());
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "读取上传文件失败：{FileName}", file.Name);
+            _fileError = $"读取文件失败：{ex.Message}";
+            _fileBase64 = null;
+        }
+    }
+
+    private async Task SubmitCreateAsync()
+    {
+        _submitting = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_fileBase64))
+            {
+                _message = "请选择文件";
+                _isError = true;
+                return;
+            }
+            var contentType = _selectedFile?.ContentType;
+            var body = new CreateDocumentBody(
+                _form.DocNumber.Trim(), _form.Title.Trim(), _form.Type, _form.VersionNo.Trim(),
+                _form.FileName ?? _selectedFile?.Name ?? "document",
+                contentType, _fileBase64!, _form.StationScope?.Trim(), _form.Remarks?.Trim());
+            var (ok, data, status) = await Api.CreateDocumentAsync(body);
+            if (ok && data is not null)
+            {
+                _showCreateDialog = false;
+                _message = $"文档 {data.Document.DocNumber} 版本 {data.Versions.FirstOrDefault(v => v.VersionNo == _form.VersionNo)?.VersionNo ?? _form.VersionNo} 已创建（Draft）";
+                _isError = false;
+                await LoadDocumentsAsync();
+            }
+            else
+            {
+                _message = status == 409 ? "版本号在该文档下已存在（409）" : $"创建失败（HTTP {status}）";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "创建受控文档失败");
+            _message = $"创建失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task OpenDetailAsync(string docId)
+    {
+        _isLoading = true;
+        try
+        {
+            _detail = await Api.GetDocumentDetailAsync(docId);
+            _showDetailDialog = _detail is not null;
+            if (_detail is null)
+            {
+                _message = "文档不存在或已被删除";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载文档详情失败");
+            _message = $"加载详情失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SubmitVersionAsync(DocumentVersionDto version)
+    {
+        if (_detail is null) return;
+        _submitting = true;
+        try
+        {
+            var (ok, data, status) = await Api.SubmitDocumentVersionAsync(_detail.Document.Id, version.Id);
+            if (ok && data is not null)
+            {
+                _message = $"版本 {version.VersionNo} 已提交审批";
+                _isError = false;
+                await RefreshDetailAsync();
+            }
+            else
+            {
+                _message = $"提交失败（HTTP {status}）";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "提交审批失败");
+            _message = $"提交失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task ApproveVersionAsync(DocumentVersionDto version)
+    {
+        if (_detail is null) return;
+        _submitting = true;
+        try
+        {
+            var (ok, data, status) = await Api.ApproveDocumentVersionAsync(_detail.Document.Id, version.Id);
+            if (ok && data is not null)
+            {
+                _message = $"版本 {version.VersionNo} 已批准发布，旧版已自动 Superseded";
+                _isError = false;
+                await RefreshDetailAsync();
+                await LoadDocumentsAsync();
+            }
+            else
+            {
+                _message = status == 409
+                    ? $"批准失败（409）：{data?.Status ?? "并发冲突或状态非法"}"
+                    : $"批准失败（HTTP {status}）";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "批准发布失败");
+            _message = $"批准失败：{ex.Message}";
+            _isError = true;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task DownloadVersionAsync(DocumentVersionDto version)
+    {
+        if (_detail is null) return;
+        try
+        {
+            var (ok, bytes, fileName, status) = await Api.DownloadDocumentFileAsync(_detail.Document.Id, version.Id);
+            if (ok && bytes is not null)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("eval", $"var a=document.createElement('a');a.href='data:{version.ContentType};base64,{base64}';a.download='{fileName}';a.click();");
+                _message = $"已下载 {fileName}（{bytes.Length} 字节）";
+                _isError = false;
+            }
+            else
+            {
+                _message = $"下载失败（HTTP {status}）";
+                _isError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "下载文档失败");
+            _message = $"下载失败：{ex.Message}";
+            _isError = true;
+        }
+    }
+
+    private async Task RefreshDetailAsync()
+    {
+        if (_detail is null) return;
+        _detail = await Api.GetDocumentDetailAsync(_detail.Document.Id);
+        StateHasChanged();
+    }
+
+    private static string FormatType(string type) => type switch
+    {
+        "Sop" => "SOP", "Wi" => "WI", "Drawing" => "图纸", "Form" => "表单", _ => type
+    };
+    private static string FormatStatus(string status) => status switch
+    {
+        "Draft" => "草稿", "PendingApproval" => "待审批", "Released" => "已发布", "Superseded" => "已取代", _ => status
+    };
+    private static Color StatusColor(string status) => status switch
+    {
+        "Draft" => Color.Default, "PendingApproval" => Color.Warning, "Released" => Color.Success, "Superseded" => Color.Error, _ => Color.Default
+    };
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / 1024.0 / 1024.0:F2} MB";
+    }
+
+    private sealed class DocumentFormModel
+    {
+        public string DocNumber { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Type { get; set; } = "Sop";
+        public string VersionNo { get; set; } = "v1.0";
+        public string? StationScope { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public string? Remarks { get; set; }
+    }
+}

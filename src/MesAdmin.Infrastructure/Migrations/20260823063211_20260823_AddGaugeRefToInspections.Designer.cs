@@ -3,6 +3,7 @@ using System;
 using MesAdmin.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MesAdmin.Infrastructure.Migrations
 {
     [DbContext(typeof(MesDbContext))]
-    partial class MesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260823063211_20260823_AddGaugeRefToInspections")]
+    partial class _20260823_AddGaugeRefToInspections
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -376,48 +379,6 @@ namespace MesAdmin.Infrastructure.Migrations
                     b.ToTable("consumption_variance_reports", (string)null);
                 });
 
-            modelBuilder.Entity("MesAdmin.Domain.Models.ControlledDocument", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<Guid?>("CurrentVersionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DocNumber")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("StationScope")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DocNumber")
-                        .IsUnique();
-
-                    b.HasIndex("Type")
-                        .HasDatabaseName("idx_docs_type");
-
-                    b.ToTable("controlled_documents", (string)null);
-                });
-
             modelBuilder.Entity("MesAdmin.Domain.Models.CriticalSupplierSetting", b =>
                 {
                     b.Property<Guid>("Id")
@@ -470,84 +431,6 @@ namespace MesAdmin.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("critical_supplier_settings", (string)null);
-                });
-
-            modelBuilder.Entity("MesAdmin.Domain.Models.DocumentVersion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("ApprovedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("ApprovedBy")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<Guid>("DocumentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset?>("EffectiveAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<long>("FileSize")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("FileStoragePath")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<string>("Remarks")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("SubmittedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("SubmittedBy")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<DateTimeOffset?>("SupersededAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamptz");
-
-                    b.Property<string>("VersionNo")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DocumentId")
-                        .HasDatabaseName("idx_docver_document");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("idx_docver_status");
-
-                    b.HasIndex("DocumentId", "VersionNo")
-                        .IsUnique();
-
-                    b.ToTable("document_versions", (string)null);
                 });
 
             modelBuilder.Entity("MesAdmin.Domain.Models.EightDReport", b =>

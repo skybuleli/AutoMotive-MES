@@ -87,6 +87,10 @@ public class MesDbContext : DbContext
     public DbSet<Gauge> Gauges => Set<Gauge>();
     public DbSet<CalibrationRecord> CalibrationRecords => Set<CalibrationRecord>();
 
+    // ── 受控文档中心（S03 · IATF 16949 文件控制）──
+    public DbSet<ControlledDocument> ControlledDocuments => Set<ControlledDocument>();
+    public DbSet<DocumentVersion> DocumentVersions => Set<DocumentVersion>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // 所有 Ulid 属性自动映射为 PG uuid 列，避免在每个实体中重复配置。

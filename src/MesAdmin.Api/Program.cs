@@ -55,6 +55,9 @@ builder.Services.AddMesQuality();
 // ── 设备维护、预防性维护与备件管理 ──
 builder.Services.AddMesMaintenance();
 
+// ── 受控文档中心（S03 · IATF 16949）──
+builder.Services.AddMesDocuments();
+
 // ── 工艺路线管理与防错三重校验 ──
 builder.Services.AddMesRouting();
 

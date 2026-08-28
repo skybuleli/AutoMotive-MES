@@ -86,6 +86,9 @@ public partial class QualityRecord
     /// <summary>检验员工号</summary>
     public string InspectorId { get; set; } = string.Empty;
 
+    /// <summary>本次检验所用量具 Id（S02 · IATF 16949 计量溯源，nullable 兼容历史存量）</summary>
+    public Ulid? GaugeId { get; set; }
+
     /// <summary>检验结果判定</summary>
     public InspectionVerdict Verdict { get; set; } = InspectionVerdict.Pending;
 
@@ -117,7 +120,8 @@ public partial class QualityRecord
         int acceptNumber,
         int rejectNumber,
         string? aqlScheme = null,
-        List<MeasuredCharacteristic>? characteristics = null)
+        List<MeasuredCharacteristic>? characteristics = null,
+        Ulid? gaugeId = null)
     {
         ValidateRequired(materialCode, nameof(materialCode));
         ValidateRequired(batchNumber, nameof(batchNumber));
@@ -139,6 +143,7 @@ public partial class QualityRecord
             AcceptNumber = acceptNumber,
             RejectNumber = rejectNumber,
             InspectorId = inspectorId.Trim(),
+            GaugeId = gaugeId,
             Verdict = InspectionVerdict.Pending,
             Characteristics = characteristics ?? [],
             CreatedAt = DateTimeOffset.UtcNow,
@@ -155,7 +160,8 @@ public partial class QualityRecord
         string inspectorId,
         List<MeasuredCharacteristic> characteristics,
         int acceptNumber = 0,
-        int rejectNumber = 1)
+        int rejectNumber = 1,
+        Ulid? gaugeId = null)
     {
         ValidateRequired(productCode, nameof(productCode));
         ValidateRequired(inspectorId, nameof(inspectorId));
@@ -171,6 +177,7 @@ public partial class QualityRecord
             InspectionPlanId = inspectionPlanId,
             InspectionPlanName = inspectionPlanName.Trim(),
             InspectorId = inspectorId.Trim(),
+            GaugeId = gaugeId,
             SampleSize = characteristics.Count,
             AcceptNumber = acceptNumber,
             RejectNumber = rejectNumber,

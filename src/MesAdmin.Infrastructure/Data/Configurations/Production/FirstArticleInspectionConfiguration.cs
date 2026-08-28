@@ -16,6 +16,8 @@ public sealed class FirstArticleInspectionConfiguration : IEntityTypeConfigurati
         builder.Property(f => f.InspectionType).HasMaxLength(32).IsRequired();
         builder.Property(f => f.Status).HasConversion<string>().HasMaxLength(16);
         builder.Property(f => f.OperatorId).HasMaxLength(32);
+        builder.Property(f => f.GaugeId).IsRequired(false);
+        builder.HasIndex(f => f.GaugeId).HasDatabaseName("idx_fai_gauge");
         builder.Property(f => f.InspectorId).HasMaxLength(32);
         builder.Property(f => f.Conclusion).HasMaxLength(256);
         builder.Property(f => f.CreatedAt).HasColumnType("timestamptz");

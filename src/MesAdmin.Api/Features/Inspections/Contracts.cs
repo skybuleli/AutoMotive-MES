@@ -16,6 +16,7 @@ public partial record InspectionResponse(
     string Status,
     string OperatorId,
     string? InspectorId,
+    string? GaugeId,
     List<InspectionItemResponse> Items,
     string? Conclusion,
     DateTimeOffset CreatedAt,
@@ -44,6 +45,7 @@ public static class InspectionMapper
             inspection.Status.ToString(),
             inspection.OperatorId,
             inspection.InspectorId,
+            inspection.GaugeId?.ToString(),
             inspection.Items.Select(i => new InspectionItemResponse(
                 i.CharacteristicCode,
                 i.CharacteristicName,

@@ -34,6 +34,7 @@ public partial record QualityRecordResponse(
     int AcceptNumber,
     int RejectNumber,
     string InspectorId,
+    string? GaugeId,
     string Verdict,
     List<MeasuredCharacteristicResponse> Characteristics,
     int DefectCount,
@@ -98,6 +99,7 @@ public partial record SpcSampleResponse(
     double Range,
     double StdDev,
     string Source,
+    string? GaugeId,
     DateTimeOffset CollectedAt);
 
 [MemoryPackable]
@@ -189,6 +191,7 @@ public static class QualityMapper
             r.AcceptNumber,
             r.RejectNumber,
             r.InspectorId,
+            r.GaugeId?.ToString(),
             r.Verdict.ToString(),
             r.Characteristics.Select(c => new MeasuredCharacteristicResponse(
                 c.CharacteristicCode, c.CharacteristicName,
@@ -234,6 +237,7 @@ public static class QualityMapper
             s.Range,
             s.StdDev,
             s.Source,
+            s.GaugeId?.ToString(),
             s.CollectedAt);
 
     public static SpcRuleAlertResponse ToRuleAlertResponse(SpcRuleAlert a)

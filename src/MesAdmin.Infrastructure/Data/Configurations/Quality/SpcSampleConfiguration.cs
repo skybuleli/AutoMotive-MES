@@ -20,6 +20,8 @@ public sealed class SpcSampleConfiguration : IEntityTypeConfiguration<SpcSample>
         builder.HasIndex(s => s.SubgroupIndex).HasDatabaseName("idx_spc_subgroup");
         builder.HasIndex(s => new { s.CharacteristicCode, s.SubgroupIndex }).IsUnique();
         builder.Property(s => s.Source).HasMaxLength(8);
+        builder.Property(s => s.GaugeId).IsRequired(false);
+        builder.HasIndex(s => s.GaugeId).HasDatabaseName("idx_spc_gauge");
         builder.Property(s => s.Values).HasColumnType("jsonb");
         builder.Property(s => s.CollectedAt).HasColumnType("timestamptz");
         builder.HasIndex(s => s.CollectedAt).HasDatabaseName("idx_spc_collected_at");

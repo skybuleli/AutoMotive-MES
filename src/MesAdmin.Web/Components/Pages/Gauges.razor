@@ -1,0 +1,552 @@
+@page "/gauges"
+@attribute [StreamRendering]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using MesAdmin.Web.Services
+@inject MesApiClient Api
+@inject ILogger<Gauges> PageLogger
+
+<PageTitle>计量器具台账 - AutoMES</PageTitle>
+
+<MudStack Spacing="2">
+    <MesPageHeader Kicker="S01 · Metrology / IATF 16949" Title="计量器具台账"
+                  Description="校准周期管理 · 临期/过期自动预警 · 校准记录留档">
+        <HeaderActions>
+            @if (_gauges is not null)
+            {
+                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">过期 @_overdueCount</MudChip>
+                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">临期 @_dueSoonCount</MudChip>
+                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">在用 @_inServiceCount</MudChip>
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Add" OnClick="() => OpenCreateDialog()">新建器具</MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@_isLoading"
+                           OnClick="() => LoadGaugesAsync()" Size="Size.Small" />
+        </HeaderActions>
+    </MesPageHeader>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <MudAlert Severity="@(_isError ? Severity.Error : Severity.Success)" Variant="Variant.Filled" Dense>
+            @_message
+        </MudAlert>
+    }
+
+    <MudPaper Class="module-card pa-4">
+        <MudStack Row Spacing="1" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6">台账明细</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                     Color="@(_filterStatus is null ? Color.Primary : Color.Default)"
+                     OnClick="@(() => ApplyFilterAsync(null))">全部</MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                     Color="@(_filterStatus == "InService" ? Color.Success : Color.Default)"
+                     OnClick="@(() => ApplyFilterAsync("InService"))">在用</MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                     Color="@(_filterStatus == "DueSoon" ? Color.Warning : Color.Default)"
+                     OnClick="@(() => ApplyFilterAsync("DueSoon"))">临期 30 天</MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                     Color="@(_filterStatus == "Overdue" ? Color.Error : Color.Default)"
+                     OnClick="@(() => ApplyFilterAsync("Overdue"))">已过期</MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                     Color="@(_filterStatus == "Scrapped" ? Color.Info : Color.Default)"
+                     OnClick="@(() => ApplyFilterAsync("Scrapped"))">已报废</MudChip>
+        </MudStack>
+
+        @if (_isLoading && _gauges is null)
+        {
+            <MesStateCard Loading="true" Text="加载量具台账..." />
+        }
+        else if (_gauges is not null && _gauges.Count == 0)
+        {
+            <MesStateCard Loading="false" Icon="@Icons.Material.Filled.Straighten"
+                          Text="暂无计量器具"
+                          Hint="点击右上角「新建器具」录入第一把量具，建账后系统每日自动扫描校准有效期并推送飞书提醒。" />
+        }
+        else if (_gauges is not null)
+        {
+            <MudTable Items="@_gauges" Hover="true" Dense="true" Loading="@_isLoading"
+                      RowsPerPage="15" Breakpoint="Breakpoint.Md">
+                <HeaderContent>
+                    <MudTh>编号</MudTh>
+                    <MudTh>名称</MudTh>
+                    <MudTh>类型</MudTh>
+                    <MudTh>量程 / 分辨力</MudTh>
+                    <MudTh>精度等级</MudTh>
+                    <MudTh>周期(天)</MudTh>
+                    <MudTh>上次校准</MudTh>
+                    <MudTh>下次到期</MudTh>
+                    <MudTh>状态</MudTh>
+                    <MudTh Style="text-align:right;">操作</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="编号"><strong>@context.GaugeNumber</strong></MudTd>
+                    <MudTd DataLabel="名称">@context.Name</MudTd>
+                    <MudTd DataLabel="类型">@FormatType(context.Type)</MudTd>
+                    <MudTd DataLabel="量程">@context.RangeSpec / @context.ResolutionSpec</MudTd>
+                    <MudTd DataLabel="精度">@context.AccuracyClass</MudTd>
+                    <MudTd DataLabel="周期">@context.CalibrationCycleDays</MudTd>
+                    <MudTd DataLabel="上次校准">@FormatDate(context.LastCalibratedAt)</MudTd>
+                    <MudTd DataLabel="下次到期">@FormatDate(context.NextDueAt)</MudTd>
+                    <MudTd DataLabel="状态">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                 Color="@StatusColor(context.Status)">
+                            @FormatStatus(context.Status)@(context.DaysToDue >= 0 && context.Status is "DueSoon" or "InService" ? $" · {context.DaysToDue}天" : "")
+                        </MudChip>
+                    </MudTd>
+                    <MudTd Style="text-align:right;">
+                        @if (context.Status != "Scrapped")
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.EventAvailable" Size="Size.Small" Color="Color.Primary"
+                                           Title="登记校准" OnClick="() => OpenCalibrateDialog(context)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.History" Size="Size.Small" Color="Color.Info"
+                                           Title="校准历史" OnClick="() => OpenRecordsDialog(context)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" Size="Size.Small" Color="Color.Error"
+                                           Title="报废" OnClick="() => OpenScrapDialog(context)" />
+                        }
+                        else
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.History" Size="Size.Small" Color="Color.Info"
+                                           Title="校准历史" OnClick="() => OpenRecordsDialog(context)" Disabled="@_isLoading" />
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </MudPaper>
+</MudStack>
+
+@* ── 新建器具对话框 ── *@
+<MudDialog @bind-Visible="_showCreateDialog" MaxWidth="MaxWidth.Medium">
+    <TitleContent>
+        <MudText Typo="Typo.h6">新建计量器具</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2">
+                <MudStack Row Spacing="2">
+                    <MudTextField @bind-Value="_form.Number" Label="器具编号 *" Placeholder="GT-TQ-001" Immediate />
+                    <MudTextField @bind-Value="_form.Name" Label="器具名称 *" Immediate />
+                </MudStack>
+                <MudStack Row Spacing="2">
+                    <MudSelect @bind-Value="_form.Type" Label="类型 *" T="string">
+                        <MudSelectItem Value="@("TorqueWrench")">扭矩扳手/扭矩仪</MudSelectItem>
+                        <MudSelectItem Value="@("Caliper")">卡尺/千分尺</MudSelectItem>
+                        <MudSelectItem Value="@("PressureGauge")">压力表/校验仪</MudSelectItem>
+                        <MudSelectItem Value="@("Multimeter")">万用表/电参数仪</MudSelectItem>
+                        <MudSelectItem Value="@("Other")">其他</MudSelectItem>
+                    </MudSelect>
+                    <MudTextField @bind-Value="_form.AccuracyClass" Label="精度等级" Placeholder="0.5 级" />
+                </MudStack>
+                <MudStack Row Spacing="2">
+                    <MudTextField @bind-Value="_form.RangeSpec" Label="量程规格" Placeholder="0-100 Nm" />
+                    <MudTextField @bind-Value="_form.ResolutionSpec" Label="分辨力" Placeholder="0.01 Nm" />
+                </MudStack>
+                <MudStack Row Spacing="2">
+                    <MudNumericField @bind-Value="_form.CycleDays" Label="校准周期（天）*" Min="1" Max="3650" />
+                    <MudDatePicker T="DateTimeOffset?" @bind-Value="_form.LastCalibrated" Label="最近校准日期 *" CloseOnSelect />
+                </MudStack>
+                <MudTextField @bind-Value="_form.StorageLocation" Label="存放位置" Placeholder="计量室 A 柜 02" />
+                <MudTextField @bind-Value="_form.Remarks" Label="备注" Lines="2" />
+            </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCreateDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Loading="@_submitting"
+                   Disabled="@(!_canSubmitCreate)" OnClick="() => SubmitCreateAsync()">保存建账</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ── 校准登记对话框 ── *@
+<MudDialog @bind-Visible="_showCalibrateDialog" MaxWidth="MaxWidth.Small">
+    <TitleContent>
+        <MudText Typo="Typo.h6">登记校准 — @(_target?.GaugeNumber) @(_target?.Name)</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="2">
+            <MudAlert Severity="Severity.Info" Dense>
+                到期日默认按「校准日 + 周期(@(_target?.CalibrationCycleDays ?? 0) 天)」推算，证书另有指定时请填写。
+            </MudAlert>
+            <MudStack Row Spacing="2">
+                <MudDatePicker T="DateTimeOffset?" @bind-Value="_calib.Date" Label="校准日期 *" CloseOnSelect />
+                <MudSelect @bind-Value="_calib.Result" Label="结论 *" T="string">
+                    <MudSelectItem Value="@("Pass")">合格</MudSelectItem>
+                    <MudSelectItem Value="@("Adjusted")">调修后合格</MudSelectItem>
+                    <MudSelectItem Value="@("Fail")">不合格（应停用处置）</MudSelectItem>
+                </MudSelect>
+            </MudStack>
+            <MudStack Row Spacing="2">
+                <MudTextField @bind-Value="_calib.CertificateNo" Label="校准证书编号 *" Immediate />
+                <MudTextField @bind-Value="_calib.OperatorId" Label="执行人工号 *" Immediate />
+            </MudStack>
+            <MudDatePicker T="DateTimeOffset?" @bind-Value="_calib.NextDue" Label="下次到期日（可选覆盖）" CloseOnSelect />
+            <MudTextField @bind-Value="_calib.Remarks" Label="备注" Lines="2" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showCalibrateDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Loading="@_submitting"
+                   Disabled="@(!_canSubmitCalibration)" OnClick="() => SubmitCalibrationAsync()">确认登记</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ── 报废确认对话框 ── *@
+<MudDialog @bind-Visible="_showScrapDialog" MaxWidth="MaxWidth.Small">
+    <TitleContent>
+        <MudText Typo="Typo.h6">报废量具 — @(_target?.GaugeNumber)</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudAlert Severity="Severity.Warning" Dense Class="mb-2">
+            报废为终态操作，报废后该量具不可参与任何检验记录（S02 起强制拦截）。原因将追加至备注留档。
+        </MudAlert>
+        <MudTextField @bind-Value="_scrapReason" Label="报废原因 *" Lines="2" Immediate />
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showScrapDialog = false">取消</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Error" Loading="@_submitting"
+                   Disabled="@string.IsNullOrWhiteSpace(_scrapReason)" OnClick="() => SubmitScrapAsync()">确认报废</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* ── 校准历史对话框 ── *@
+<MudDialog @bind-Visible="_showRecordsDialog" MaxWidth="MaxWidth.Medium">
+    <TitleContent>
+        <MudText Typo="Typo.h6">校准历史 — @(_target?.GaugeNumber) @(_target?.Name)</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_records is null || _records.Count == 0)
+        {
+            <MudText Typo="Typo.body2">暂无校准记录</MudText>
+        }
+        else
+        {
+            <MudTable Items="@_records" Hover="true" Dense="true" RowsPerPage="8">
+                <HeaderContent>
+                    <MudTh>校准日期</MudTh>
+                    <MudTh>结论</MudTh>
+                    <MudTh>证书编号</MudTh>
+                    <MudTh>执行人</MudTh>
+                    <MudTh>到期日</MudTh>
+                    <MudTh>备注</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="校准日期">@FormatDate(context.CalibratedAt)</MudTd>
+                    <MudTd DataLabel="结论">@FormatResult(context.Result)</MudTd>
+                    <MudTd DataLabel="证书">@context.CertificateNo</MudTd>
+                    <MudTd DataLabel="执行人">@context.OperatorId</MudTd>
+                    <MudTd DataLabel="到期日">@FormatDate(context.NextDueAfter)</MudTd>
+                    <MudTd DataLabel="备注">@(context.Remarks ?? "-")</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="() => _showRecordsDialog = false">关闭</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<GaugeDto>? _gauges;
+    private bool _isLoading;
+    private bool _submitting;
+    private string? _message;
+    private bool _isError;
+    private string? _filterStatus;
+
+    private int _overdueCount;
+    private int _dueSoonCount;
+    private int _inServiceCount;
+
+    // 新建表单
+    private bool _showCreateDialog;
+    private GaugeFormModel _form = new();
+
+    // 校准/报废目标与表单
+    private GaugeDto? _target;
+    private bool _showCalibrateDialog;
+    private bool _showScrapDialog;
+    private bool _showRecordsDialog;
+    private CalibrationFormModel _calib = new();
+    private string _scrapReason = string.Empty;
+    private List<CalibrationRecordDto>? _records;
+
+    private bool _canSubmitCreate =>
+        !string.IsNullOrWhiteSpace(_form.Number)
+        && !string.IsNullOrWhiteSpace(_form.Name)
+        && !string.IsNullOrWhiteSpace(_form.Type)
+        && _form.CycleDays > 0
+        && _form.LastCalibrated is not null;
+
+    private bool _canSubmitCalibration =>
+        _calib.Date is not null
+        && !string.IsNullOrWhiteSpace(_calib.Result)
+        && !string.IsNullOrWhiteSpace(_calib.CertificateNo)
+        && !string.IsNullOrWhiteSpace(_calib.OperatorId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGaugesAsync();
+    }
+
+    private async Task LoadGaugesAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            var all = await Api.GetGaugesAsync(status: _filterStatus);
+            if (all is not null)
+            {
+                _gauges = all;
+                _overdueCount = all.Count(g => g.Status == "Overdue");
+                _dueSoonCount = all.Count(g => g.Status == "DueSoon");
+                _inServiceCount = all.Count(g => g.Status == "InService");
+            }
+
+            // KPI 始终基于全量统计（过滤态下也正确显示）
+            if (_filterStatus is not null)
+            {
+                var full = await Api.GetGaugesAsync();
+                if (full is not null)
+                {
+                    _overdueCount = full.Count(g => g.Status == "Overdue");
+                    _dueSoonCount = full.Count(g => g.Status == "DueSoon");
+                    _inServiceCount = full.Count(g => g.Status == "InService");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载量具台账失败");
+            SetMessage($"加载量具台账失败：{ex.Message}", error: true);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ApplyFilterAsync(string? status)
+    {
+        _filterStatus = status;
+        await LoadGaugesAsync();
+    }
+
+    // ── 新建 ──
+
+    private void OpenCreateDialog()
+    {
+        _form = new GaugeFormModel();
+        _showCreateDialog = true;
+    }
+
+    private async Task SubmitCreateAsync()
+    {
+        _submitting = true;
+        try
+        {
+            var body = new CreateGaugeBody(
+                _form.Number.Trim(),
+                _form.Name.Trim(),
+                _form.Type,
+                _form.RangeSpec?.Trim() ?? string.Empty,
+                _form.ResolutionSpec?.Trim() ?? string.Empty,
+                _form.AccuracyClass?.Trim() ?? string.Empty,
+                _form.CycleDays,
+                _form.LastCalibrated!.Value,
+                _form.StorageLocation?.Trim(),
+                _form.Remarks?.Trim());
+
+            var (ok, _, status) = await Api.CreateGaugeAsync(body);
+            if (ok)
+            {
+                _showCreateDialog = false;
+                SetMessage($"器具 {body.GaugeNumber} 建账成功");
+                await LoadGaugesAsync();
+            }
+            else
+            {
+                SetMessage($"建账失败（HTTP {status}）：请检查编号是否重复", error: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "新建量具失败");
+            SetMessage($"新建量具失败：{ex.Message}", error: true);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    // ── 校准登记 ──
+
+    private void OpenCalibrateDialog(GaugeDto gauge)
+    {
+        _target = gauge;
+        _calib = new CalibrationFormModel();
+        _showCalibrateDialog = true;
+    }
+
+    private async Task SubmitCalibrationAsync()
+    {
+        if (_target is null) return;
+        _submitting = true;
+        try
+        {
+            var body = new RecordCalibrationBody(
+                _calib.Date!.Value,
+                _calib.Result,
+                _calib.CertificateNo.Trim(),
+                _calib.OperatorId.Trim(),
+                _calib.NextDue,
+                _calib.Remarks?.Trim());
+
+            var (ok, data, status) = await Api.RecordCalibrationAsync(_target.Id, body);
+            if (ok)
+            {
+                _showCalibrateDialog = false;
+                SetMessage($"校准已登记，{data?.GaugeNumber} 下次到期 {data?.NextDueAt:yyyy-MM-dd}");
+                await LoadGaugesAsync();
+            }
+            else
+            {
+                SetMessage($"校准登记失败（HTTP {status}）", error: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "登记校准失败");
+            SetMessage($"登记校准失败：{ex.Message}", error: true);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    // ── 报废 ──
+
+    private void OpenScrapDialog(GaugeDto gauge)
+    {
+        _target = gauge;
+        _scrapReason = string.Empty;
+        _showScrapDialog = true;
+    }
+
+    private async Task SubmitScrapAsync()
+    {
+        if (_target is null) return;
+        _submitting = true;
+        try
+        {
+            var (ok, _, status) = await Api.ScrapGaugeAsync(_target.Id, _scrapReason.Trim());
+            if (ok)
+            {
+                _showScrapDialog = false;
+                SetMessage($"{_target.GaugeNumber} 已报废");
+                await LoadGaugesAsync();
+            }
+            else
+            {
+                SetMessage($"报废操作失败（HTTP {status}）", error: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "报废量具失败");
+            SetMessage($"报废量具失败：{ex.Message}", error: true);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    // ── 校准历史 ──
+
+    private async Task OpenRecordsDialog(GaugeDto gauge)
+    {
+        _target = gauge;
+        _records = null;
+        _showRecordsDialog = true;
+        try
+        {
+            _records = await Api.GetGaugeRecordsAsync(gauge.Id);
+        }
+        catch (Exception ex)
+        {
+            PageLogger.LogError(ex, "加载校准历史失败");
+            SetMessage($"加载校准历史失败：{ex.Message}", error: true);
+        }
+    }
+
+    // ── 展示辅助 ──
+
+    private static string FormatDate(DateTimeOffset? date)
+        => date?.ToString("yyyy-MM-dd") ?? "-";
+
+    private static string FormatType(string type) => type switch
+    {
+        "TorqueWrench" => "扭矩扳手",
+        "Caliper" => "卡尺",
+        "PressureGauge" => "压力表",
+        "Multimeter" => "万用表",
+        _ => "其他"
+    };
+
+    private static string FormatStatus(string status) => status switch
+    {
+        "InService" => "在用",
+        "DueSoon" => "临期",
+        "Overdue" => "已过期",
+        "Scrapped" => "已报废",
+        _ => status
+    };
+
+    private static string FormatResult(string result) => result switch
+    {
+        "Pass" => "合格",
+        "Fail" => "不合格",
+        "Adjusted" => "调修后合格",
+        _ => result
+    };
+
+    private static Color StatusColor(string status) => status switch
+    {
+        "InService" => Color.Success,
+        "DueSoon" => Color.Warning,
+        "Overdue" => Color.Error,
+        "Scrapped" => Color.Default,
+        _ => Color.Default
+    };
+
+    private void SetMessage(string msg, bool error = false)
+    {
+        _message = msg;
+        _isError = error;
+    }
+
+    // ── 表单模型 ──
+
+    private sealed class GaugeFormModel
+    {
+        public string Number { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string RangeSpec { get; set; } = string.Empty;
+        public string ResolutionSpec { get; set; } = string.Empty;
+        public string AccuracyClass { get; set; } = string.Empty;
+        public int CycleDays { get; set; } = 365;
+        public DateTimeOffset? LastCalibrated { get; set; }
+        public string? StorageLocation { get; set; }
+        public string? Remarks { get; set; }
+    }
+
+    private sealed class CalibrationFormModel
+    {
+        public DateTimeOffset? Date { get; set; } = DateTimeOffset.Now.Date;
+        public string Result { get; set; } = "Pass";
+        public string CertificateNo { get; set; } = string.Empty;
+        public string OperatorId { get; set; } = string.Empty;
+        public DateTimeOffset? NextDue { get; set; }
+        public string? Remarks { get; set; }
+    }
+}

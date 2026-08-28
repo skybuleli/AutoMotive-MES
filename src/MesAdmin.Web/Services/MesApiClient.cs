@@ -386,6 +386,42 @@ public class MesApiClient
     public Task<List<CalibrationRecordDto>?> GetGaugeRecordsAsync(string id, CancellationToken ct = default)
         => GetAsync<List<CalibrationRecordDto>>($"api/v1/gauges/{id}/records", ct);
 
+    // ═══════════════════════════════════════════
+    // S03 受控文档中心 API
+    // ═══════════════════════════════════════════
+
+    /// <summary>查询受控文档列表</summary>
+    public Task<List<ControlledDocumentDto>?> GetDocumentsAsync(CancellationToken ct = default)
+        => GetAsync<List<ControlledDocumentDto>>("api/v1/documents", ct);
+
+    /// <summary>查询受控文档详情（含版本列表）</summary>
+    public Task<DocumentDetailDto?> GetDocumentDetailAsync(string id, CancellationToken ct = default)
+        => GetAsync<DocumentDetailDto>($"api/v1/documents/{id}", ct);
+
+    /// <summary>新建文档/版本（S03 · 文件以 Base64 上传）</summary>
+    public Task<(bool Ok, DocumentDetailDto? Data, int Status)> CreateDocumentAsync(CreateDocumentBody body, CancellationToken ct = default)
+        => PostAsync<DocumentDetailDto>("api/v1/documents", body, ct);
+
+    /// <summary>提交版本审批（Draft → PendingApproval）</summary>
+    public Task<(bool Ok, DocumentVersionDto? Data, int Status)> SubmitDocumentVersionAsync(string docId, string versionId, CancellationToken ct = default)
+        => PostAsync<DocumentVersionDto>($"api/v1/documents/{docId}/versions/{versionId}/submit", new {}, ct);
+
+    /// <summary>批准发布版本（Pending → Released，旧版自动 Superseded）</summary>
+    public Task<(bool Ok, DocumentVersionDto? Data, int Status)> ApproveDocumentVersionAsync(string docId, string versionId, CancellationToken ct = default)
+        => PostAsync<DocumentVersionDto>($"api/v1/documents/{docId}/versions/{versionId}/approve", new {}, ct);
+
+    /// <summary>下载文档版本文件（返回字节与文件名）</summary>
+    public async Task<(bool Ok, byte[]? Content, string? FileName, int Status)> DownloadDocumentFileAsync(string docId, string versionId, CancellationToken ct = default)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, $"api/v1/documents/{docId}/versions/{versionId}/file");
+        await AttachTokenAsync(req);
+        var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return (false, null, null, (int)resp.StatusCode);
+        var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+        var fileName = resp.Content.Headers.ContentDisposition?.FileNameStar ?? resp.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "document";
+        return (true, bytes, fileName, (int)resp.StatusCode);
+    }
+
     /// <summary>完成维护工单</summary>
     public Task<(bool Ok, MaintenanceOrderDto? Data, int Status)> CompleteMaintenanceOrderAsync(string id, string completedBy, string remarks, CancellationToken ct = default)
         => PostAsync<MaintenanceOrderDto>($"api/v1/maintenance/orders/{id}/complete", new CompleteMaintenanceOrderBody(completedBy, remarks), ct);
@@ -406,13 +442,13 @@ public class MesApiClient
     public Task<InspectionDto?> GetInspectionAsync(string orderId, string inspectionId, CancellationToken ct = default)
         => GetAsync<InspectionDto>($"api/v1/orders/{orderId}/inspections/{inspectionId}", ct);
 
-    /// <summary>创建首件检验任务（班组长/质量工程师）</summary>
-    public Task<(bool Ok, InspectionDto? Data, int Status)> CreateInspectionAsync(string orderId, string inspectionType, string operatorId, CancellationToken ct = default)
-        => PostAsync<InspectionDto>($"api/v1/orders/{orderId}/inspections", new CreateInspectionBody(inspectionType, operatorId), ct);
+    /// <summary>创建首件检验任务（班组长/质量工程师，S02 可选量具）</summary>
+    public Task<(bool Ok, InspectionDto? Data, int Status)> CreateInspectionAsync(string orderId, string inspectionType, string operatorId, string? gaugeId = null, CancellationToken ct = default)
+        => PostAsync<InspectionDto>($"api/v1/orders/{orderId}/inspections", new CreateInspectionBody(inspectionType, operatorId, gaugeId), ct);
 
-    /// <summary>记录检验项实测值（质量工程师）</summary>
-    public Task<(bool Ok, InspectionDto? Data, int Status)> RecordInspectionValueAsync(string orderId, string inspectionId, string characteristicCode, double actualValue, CancellationToken ct = default)
-        => PatchAsync<InspectionDto>($"api/v1/orders/{orderId}/inspections/{inspectionId}/items/{characteristicCode}", new RecordInspectionValueBody(actualValue), ct);
+    /// <summary>记录检验项实测值（质量工程师，S02 必选在校准期内量具）</summary>
+    public Task<(bool Ok, InspectionDto? Data, int Status)> RecordInspectionValueAsync(string orderId, string inspectionId, string characteristicCode, double actualValue, string? gaugeId = null, CancellationToken ct = default)
+        => PatchAsync<InspectionDto>($"api/v1/orders/{orderId}/inspections/{inspectionId}/items/{characteristicCode}", new RecordInspectionValueBody(actualValue, gaugeId), ct);
 
     /// <summary>完成首件检验（质量工程师审核放行）</summary>
     public Task<(bool Ok, InspectionDto? Data, int Status)> CompleteInspectionAsync(string orderId, string inspectionId, string inspectorId, CancellationToken ct = default)

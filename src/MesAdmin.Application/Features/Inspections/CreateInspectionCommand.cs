@@ -10,16 +10,27 @@ namespace MesAdmin.Application.Features.Inspections;
 public sealed partial record CreateInspectionCommand(
     Ulid OrderId,
     string InspectionType,
-    string OperatorId) : IWriteCommand<FirstArticleInspection>;
+    string OperatorId,
+    Ulid? GaugeId = null) : IWriteCommand<FirstArticleInspection>;
 
 internal sealed class CreateInspectionHandler(
     IFirstArticleInspectionRepository repo,
-    IProductionOrderRepository orders) : ICommandHandler<CreateInspectionCommand, FirstArticleInspection>
+    IProductionOrderRepository orders,
+    IGaugeRepository? gaugeRepo = null) : ICommandHandler<CreateInspectionCommand, FirstArticleInspection>
 {
     public async Task<FirstArticleInspection> ExecuteAsync(CreateInspectionCommand cmd, CancellationToken ct)
     {
         var order = await orders.GetByIdAsync(cmd.OrderId, ct)
             ?? throw new KeyNotFoundException($"工单 {cmd.OrderId} 不存在");
+
+        if (gaugeRepo is not null && cmd.GaugeId is { } gid)
+        {
+            var gauge = await gaugeRepo.GetByIdAsync(gid, ct)
+                ?? throw new KeyNotFoundException($"量具 {gid} 不存在");
+            if (!gauge.IsWithinCalibration(DateTimeOffset.UtcNow))
+                throw new InvalidOperationException(
+                    $"量具 {gauge.GaugeNumber} 校准已过期或已报废（状态 {gauge.Status}），禁止用于检验");
+        }
 
         var items = InspectionControlPlans.Esp9
             .Select(c => InspectionItem.Create(c.Code, c.Name, c.Std, c.Unit, c.Upper, c.Lower))
@@ -27,7 +38,7 @@ internal sealed class CreateInspectionHandler(
 
         var inspection = FirstArticleInspection.Create(
             cmd.OrderId, order.OrderNumber, order.ProductCode,
-            cmd.InspectionType, cmd.OperatorId, items);
+            cmd.InspectionType, cmd.OperatorId, items, cmd.GaugeId);
 
         await repo.AddAsync(inspection, ct);
         await repo.SaveChangesAsync(ct);

@@ -24,13 +24,25 @@ public class RecordSpcSampleEndpoint : MesEndpoint<RecordSpcSampleRequest, SpcSa
 
     public override async Task HandleAsync(RecordSpcSampleRequest req, CancellationToken ct)
     {
+        Ulid? gaugeId = null;
+        if (!string.IsNullOrWhiteSpace(req.GaugeId))
+        {
+            if (!Ulid.TryParse(req.GaugeId, out var parsed))
+            {
+                AddError("GaugeId", "无效的量具 Id");
+                ThrowIfAnyErrors();
+            }
+            gaugeId = parsed;
+        }
+
         var result = await new RecordSpcSampleCommand(
             req.CharacteristicCode,
             req.OrderId is not null ? Ulid.Parse(req.OrderId) : null,
             req.OrderNumber,
             req.EquipmentCode,
             req.Values,
-            req.Source ?? "Manual").ExecuteAsync(ct);
+            req.Source ?? "Manual",
+            gaugeId).ExecuteAsync(ct);
 
         Response = new SpcSampleResultResponse(
             QualityMapper.ToSampleResponse(result.Sample),
@@ -46,6 +58,9 @@ public class RecordSpcSampleValidator : Validator<RecordSpcSampleRequest>
         RuleFor(x => x.CharacteristicCode).NotEmpty().WithMessage("特性编码不能为空");
         RuleFor(x => x.Values).NotEmpty().WithMessage("测量值不能为空")
             .Must(v => v.Count >= 2).WithMessage("至少需要 2 个测量值");
+        RuleFor(x => x.GaugeId)
+            .NotEmpty().WithMessage("人工录入 SPC 样本必须选择在校准有效期内的量具（S02）")
+            .When(x => x.Source is null or "Manual");
     }
 }
 
@@ -58,6 +73,9 @@ public partial class RecordSpcSampleRequest
     public string? EquipmentCode { get; set; }
     public List<double> Values { get; set; } = [];
     public string? Source { get; set; }
+
+    /// <summary>量具 Id（S02 · 人工录入必填，PLC 自动采集豁免）</summary>
+    public string? GaugeId { get; set; }
 }
 
 // ═══════════════════════════════════════════

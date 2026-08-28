@@ -45,6 +45,7 @@ public static class AppRoutes
         new("hydraulic-test", "液压测试台", "equipment", Icons.Material.Filled.Speed),
         new("andon", "Andon 报警", "equipment", Icons.Material.Filled.Campaign),
         new("routing", "工艺管理", "master", Icons.Material.Filled.Route),
+        new("documents", "受控文档", "master", Icons.Material.Filled.Article),
         new("users", "用户管理", "system", Icons.Material.Filled.People),
         new("audit-logs", "审计日志", "system", Icons.Material.Filled.ReceiptLong),
         new("login", "登录", null, Icons.Material.Filled.Login),

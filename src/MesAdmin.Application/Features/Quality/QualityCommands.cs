@@ -47,15 +47,41 @@ internal sealed class CreateIqcRecordHandler(
 public sealed partial record RecordIqcMeasurementCommand(
     Ulid RecordId,
     string CharacteristicCode,
-    double ActualValue) : IWriteCommand<QualityRecord>;
+    double ActualValue,
+    Ulid? GaugeId = null) : IWriteCommand<QualityRecord>;
 
 internal sealed class RecordIqcMeasurementHandler(
-    IQualityRecordRepository repo) : ICommandHandler<RecordIqcMeasurementCommand, QualityRecord>
+    IQualityRecordRepository repo,
+    IGaugeRepository? gaugeRepo = null) : ICommandHandler<RecordIqcMeasurementCommand, QualityRecord>
 {
     public async Task<QualityRecord> ExecuteAsync(RecordIqcMeasurementCommand cmd, CancellationToken ct)
     {
         var record = await repo.GetByIdTrackedAsync(cmd.RecordId, ct)
             ?? throw new KeyNotFoundException($"检验记录 {cmd.RecordId} 不存在");
+
+        // S02 · 仅当注入 gaugeRepo 时执行校验；测试环境若未提供 gaugeRepo 则跳过
+        if (gaugeRepo is not null)
+        {
+            if (cmd.GaugeId is { } gid)
+            {
+                var gauge = await gaugeRepo.GetByIdAsync(gid, ct)
+                    ?? throw new KeyNotFoundException($"量具 {gid} 不存在");
+                if (!gauge.IsWithinCalibration(DateTimeOffset.UtcNow))
+                    throw new InvalidOperationException(
+                        $"量具 {gauge.GaugeNumber} 校准已过期或已报废（状态 {gauge.Status}），禁止用于检验");
+                record.GaugeId ??= gid;
+            }
+            else
+            {
+                if (record.GaugeId is null)
+                    throw new InvalidOperationException("检验录入实测值必须选择在校准有效期内的量具");
+                var existing = await gaugeRepo.GetByIdAsync(record.GaugeId.Value, ct);
+                if (existing is not null && !existing.IsWithinCalibration(DateTimeOffset.UtcNow))
+                    throw new InvalidOperationException(
+                        $"已绑定的量具 {existing.GaugeNumber} 校准已过期，禁止继续记录实测值");
+            }
+        }
+
         record.RecordCharacteristic(cmd.CharacteristicCode, cmd.ActualValue);
         await repo.SaveChangesAsync(ct);
         return record;
@@ -137,7 +163,8 @@ public sealed partial record RecordSpcSampleCommand(
     string? OrderNumber,
     string? EquipmentCode,
     List<double> Values,
-    string Source) : IWriteCommand<SpcSampleResult>;
+    string Source,
+    Ulid? GaugeId = null) : IWriteCommand<SpcSampleResult>;
 
 /// <summary>SPC 样本记录结果：包含样本本身 + 触发的判异规则告警</summary>
 [MemoryPackable]
@@ -148,16 +175,29 @@ public sealed partial record SpcSampleResult(
 internal sealed class RecordSpcSampleHandler(
     ISpcSampleRepository sampleRepo,
     ISpcRuleAlertRepository alertRepo,
-    IInspectionPlanRepository planRepo) : ICommandHandler<RecordSpcSampleCommand, SpcSampleResult>
+    IInspectionPlanRepository planRepo,
+    IGaugeRepository? gaugeRepo = null) : ICommandHandler<RecordSpcSampleCommand, SpcSampleResult>
 {
     public async Task<SpcSampleResult> ExecuteAsync(RecordSpcSampleCommand cmd, CancellationToken ct)
     {
+        // S02 · 人工录入 SPC 样本必须绑定在校准期内的量具（PLC 自动采集豁免；测试环境 gaugeRepo 为空时跳过校验）
+        if (gaugeRepo is not null && cmd.Source == "Manual")
+        {
+            if (cmd.GaugeId is null)
+                throw new InvalidOperationException("人工录入 SPC 样本必须选择在校准有效期内的量具");
+            var gauge = await gaugeRepo.GetByIdAsync(cmd.GaugeId.Value, ct)
+                ?? throw new KeyNotFoundException($"量具 {cmd.GaugeId.Value} 不存在");
+            if (!gauge.IsWithinCalibration(DateTimeOffset.UtcNow))
+                throw new InvalidOperationException(
+                    $"量具 {gauge.GaugeNumber} 校准已过期或已报废（状态 {gauge.Status}），禁止用于 SPC 录入");
+        }
+
         var nextIndex = await sampleRepo.GetMaxSubgroupIndexAsync(cmd.CharacteristicCode, ct) + 1;
         var values = cmd.Values.ToArray();
 
         var sample = SpcSample.Create(
             cmd.CharacteristicCode, nextIndex, values.AsSpan(),
-            cmd.OrderId, cmd.OrderNumber, cmd.EquipmentCode);
+            cmd.OrderId, cmd.OrderNumber, cmd.EquipmentCode, gaugeId: cmd.GaugeId);
         await sampleRepo.AddAsync(sample, ct);
 
         // 检查 Western Electric 判异规则

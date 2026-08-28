@@ -2,6 +2,7 @@ using MesAdmin.Infrastructure.Data.Repositories;
 using MesAdmin.Infrastructure.Caching;
 using MesAdmin.Infrastructure.Sap;
 using MesAdmin.Infrastructure.RealTime;
+using MesAdmin.Infrastructure.Storage;
 using MesAdmin.Application.Features.Quality;
 using MesAdmin.Infrastructure.Data;
 using MesAdmin.Domain.Models;
@@ -10,6 +11,7 @@ using MesAdmin.Application.Features.ProductionOrders;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
 using Testcontainers.PostgreSql;
 
 namespace MesAdmin.Application.Tests;
@@ -443,6 +445,7 @@ public class DatabaseFixture : IAsyncLifetime
         // 质量体系仓储（T2.x）
         services.AddScoped<IQualityRecordRepository, QualityRecordRepository>();
         services.AddScoped<IInspectionPlanRepository, InspectionPlanRepository>();
+        services.AddScoped<IFirstArticleInspectionRepository, FirstArticleInspectionRepository>();
         services.AddScoped<IHydraulicTestRepository, HydraulicTestRepository>();
         services.AddScoped<ISpcSampleRepository, SpcSampleRepository>();
         services.AddScoped<ISpcRuleAlertRepository, SpcRuleAlertRepository>();
@@ -464,6 +467,18 @@ public class DatabaseFixture : IAsyncLifetime
         // 计量器具台账仓储（S01）
         services.AddScoped<IGaugeRepository, GaugeRepository>();
         services.AddScoped<ICalibrationRecordRepository, GaugeRepository>();
+
+        // 受控文档中心（S03）
+        services.AddScoped<DocumentRepository>();
+        services.AddScoped<IControlledDocumentRepository>(sp => sp.GetRequiredService<DocumentRepository>());
+        services.AddScoped<IDocumentVersionRepository>(sp => sp.GetRequiredService<DocumentRepository>());
+        services.AddSingleton<IFileStorage>(sp =>
+            new MesAdmin.Infrastructure.Storage.LocalFileStorage(
+                new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["DocumentStorage:BasePath"] = Path.Combine(Path.GetTempPath(), $"automes-docs-test-{Guid.NewGuid():N}")
+                }).Build(),
+                sp.GetRequiredService<ILogger<MesAdmin.Infrastructure.Storage.LocalFileStorage>>()));
 
         // 工艺路线仓储（T3.1/T3.2 M07）
         services.AddScoped<IRoutingRepository, RoutingRepository>();

@@ -128,7 +128,18 @@ public class RecordIqcMeasurementEndpoint : MesEndpoint<RecordIqcMeasurementRequ
             ThrowIfAnyErrors();
         }
 
-        var record = await new RecordIqcMeasurementCommand(recordId, req.CharacteristicCode, req.ActualValue).ExecuteAsync(ct);
+        Ulid? gaugeId = null;
+        if (!string.IsNullOrWhiteSpace(req.GaugeId))
+        {
+            if (!Ulid.TryParse(req.GaugeId, out var parsed))
+            {
+                AddError("GaugeId", "无效的量具 Id");
+                ThrowIfAnyErrors();
+            }
+            gaugeId = parsed;
+        }
+
+        var record = await new RecordIqcMeasurementCommand(recordId, req.CharacteristicCode, req.ActualValue, gaugeId).ExecuteAsync(ct);
         Response = QualityMapper.ToRecordResponse(record);
         await SendDualAsync(ct);
     }
@@ -139,6 +150,18 @@ public partial class RecordIqcMeasurementRequest
 {
     public string CharacteristicCode { get; set; } = string.Empty;
     public double ActualValue { get; set; }
+
+    /// <summary>量具 Id（S02 · IATF 16949 计量溯源，必填）</summary>
+    public string? GaugeId { get; set; }
+}
+
+public class RecordIqcMeasurementValidator : Validator<RecordIqcMeasurementRequest>
+{
+    public RecordIqcMeasurementValidator()
+    {
+        RuleFor(x => x.CharacteristicCode).NotEmpty().WithMessage("特性编码不能为空");
+        RuleFor(x => x.GaugeId).NotEmpty().WithMessage("量具不能为空（S02 · 请在校准有效期内的量具中选择）");
+    }
 }
 
 // ═══════════════════════════════════════════

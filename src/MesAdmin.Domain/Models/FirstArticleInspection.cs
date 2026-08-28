@@ -40,6 +40,9 @@ public partial class FirstArticleInspection
     /// <summary>操作员工号</summary>
     public string OperatorId { get; set; } = string.Empty;
 
+    /// <summary>本次检验所用量具 Id（S02 · IATF 16949 计量溯源，nullable 兼容历史存量）</summary>
+    public Ulid? GaugeId { get; set; }
+
     /// <summary>质量工程师工号（审核人）</summary>
     public string? InspectorId { get; set; }
 
@@ -61,7 +64,8 @@ public partial class FirstArticleInspection
         string productCode,
         string inspectionType,
         string operatorId,
-        List<InspectionItem> items)
+        List<InspectionItem> items,
+        Ulid? gaugeId = null)
     {
         if (string.IsNullOrWhiteSpace(orderNumber))
             throw new ArgumentException("工单号不能为空", nameof(orderNumber));
@@ -82,6 +86,7 @@ public partial class FirstArticleInspection
             ProductCode = productCode.Trim().ToUpperInvariant(),
             InspectionType = inspectionType.Trim(),
             OperatorId = operatorId.Trim(),
+            GaugeId = gaugeId,
             Items = items,
             Status = InspectionStatus.Pending,
             CreatedAt = DateTimeOffset.UtcNow,

@@ -49,6 +49,9 @@ public partial class SpcSample
     /// <summary>数据来源（Manual=人工录入 / Plc=PLC 自动采集）</summary>
     public string Source { get; set; } = "Manual";
 
+    /// <summary>关联量具 Id（S02 · IATF 16949 计量溯源，nullable 兼容历史/PLC 自动采集）</summary>
+    public Ulid? GaugeId { get; set; }
+
     /// <summary>
     /// 创建 SPC 样本并计算均值、极差、标准差。
     /// 使用 stackalloc 零分配计算（AGENTS.md 4.3 零分配铁律）。
@@ -60,7 +63,8 @@ public partial class SpcSample
         Ulid? orderId = null,
         string? orderNumber = null,
         string? equipmentCode = null,
-        DateTimeOffset? collectedAt = null)
+        DateTimeOffset? collectedAt = null,
+        Ulid? gaugeId = null)
     {
         if (string.IsNullOrWhiteSpace(characteristicCode))
             throw new ArgumentException("特性编码不能为空", nameof(characteristicCode));
@@ -106,6 +110,7 @@ public partial class SpcSample
             Range = Math.Round(range, 4),
             StdDev = Math.Round(stdDev, 4),
             CollectedAt = collectedAt ?? DateTimeOffset.UtcNow,
+            GaugeId = gaugeId,
         };
     }
 }

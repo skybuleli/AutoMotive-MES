@@ -28,7 +28,18 @@ public class CreateInspectionEndpoint : MesEndpoint<CreateInspectionRequest, Ins
             ThrowIfAnyErrors();
         }
 
-        var inspection = await new CreateInspectionCommand(orderId, req.InspectionType, req.OperatorId).ExecuteAsync(ct);
+        Ulid? gaugeId = null;
+        if (!string.IsNullOrWhiteSpace(req.GaugeId))
+        {
+            if (!Ulid.TryParse(req.GaugeId, out var parsed))
+            {
+                AddError("GaugeId", "无效的量具 Id");
+                ThrowIfAnyErrors();
+            }
+            gaugeId = parsed;
+        }
+
+        var inspection = await new CreateInspectionCommand(orderId, req.InspectionType, req.OperatorId, gaugeId).ExecuteAsync(ct);
         Response = InspectionMapper.ToResponse(inspection);
         await SendCreatedDualAsync<GetInspectionByIdEndpoint>(
             new { orderId = orderIdStr, inspectionId = inspection.Id.ToString() }, ct);
@@ -49,4 +60,7 @@ public partial class CreateInspectionRequest
 {
     public string InspectionType { get; set; } = string.Empty;
     public string OperatorId { get; set; } = string.Empty;
+
+    /// <summary>量具 Id（S02 · IATF 16949 计量溯源，可选，记录时强制校验）</summary>
+    public string? GaugeId { get; set; }
 }

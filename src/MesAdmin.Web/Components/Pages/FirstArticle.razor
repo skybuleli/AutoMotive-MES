@@ -218,6 +218,49 @@
                     </MudChip>
                 </MudStack>
 
+                @* S02 · 量具选择（IATF 16949 计量溯源：仅展示校准有效期内量具） *@
+                @if (CanEdit)
+                {
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudSelect T="string" Label="本次检验所用量具（S02 · 必选校准期内）"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense
+                                   Style="min-width:260px;"
+                                   Value="_detailGaugeId" ValueChanged="OnDetailGaugeChanged">
+                            @if (_availableGauges.Count == 0)
+                            {
+                                <MudSelectItem T="string" Value="@string.Empty" Disabled>暂无在校准期内的量具（请先在计量器具台账建账/校准）</MudSelectItem>
+                            }
+                            else
+                            {
+                                @foreach (var g in _availableGauges)
+                                {
+                                    <MudSelectItem T="string" Value="@g.Id">
+                                        @g.GaugeNumber · @g.Name (@FormatGaugeStatus(g.Status) · 剩余 @g.DaysToDue 天)
+                                    </MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
+                        @if (string.IsNullOrWhiteSpace(_detailGaugeId))
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense Style="flex:1;">
+                                请选择在校准有效期内的量具后方可录入实测值。
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                                已选量具：@(_availableGauges.FirstOrDefault(g => g.Id == _detailGaugeId)?.GaugeNumber ?? _detailGaugeId)
+                            </MudChip>
+                        }
+                    </MudStack>
+                }
+                else if (!string.IsNullOrWhiteSpace(_detailInspection.GaugeId))
+                {
+                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined">
+                        所用量具：@_detailInspection.GaugeId
+                    </MudChip>
+                }
+
                 @if (_detailInspection.Status == "Passed" || _detailInspection.Status == "Failed")
                 {
                     <MudAlert Severity="@(_detailInspection.Status == "Passed" ? Severity.Success : Severity.Error)"
@@ -266,7 +309,7 @@
                                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense
                                                          Style="width:110px;" />
                                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                                   Disabled="@(!_itemInputs.TryGetValue(context.CharacteristicCode, out var v) || v is null)"
+                                                   Disabled="@(string.IsNullOrWhiteSpace(_detailGaugeId) || !_itemInputs.TryGetValue(context.CharacteristicCode, out var v) || v is null)"
                                                    OnClick="() => SaveItemValueAsync(context)">
                                             保存
                                         </MudButton>
@@ -294,7 +337,7 @@
                                                          Variant="Variant.Outlined" Margin="Margin.Dense" Dense
                                                          Style="width:110px;" />
                                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
-                                                   Disabled="@(!_itemInputs.TryGetValue(context.CharacteristicCode, out var v) || v is null)"
+                                                   Disabled="@(string.IsNullOrWhiteSpace(_detailGaugeId) || !_itemInputs.TryGetValue(context.CharacteristicCode, out var v) || v is null)"
                                                    OnClick="() => SaveItemValueAsync(context)">
                                             保存
                                         </MudButton>
@@ -317,11 +360,13 @@
                                     <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
                                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
                                                    StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                   Disabled="@string.IsNullOrWhiteSpace(_detailGaugeId)"
                                                    OnClick="() => SavePassItemAsync(context, true)">
                                             合格
                                         </MudButton>
                                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
                                                    StartIcon="@Icons.Material.Filled.Cancel"
+                                                   Disabled="@string.IsNullOrWhiteSpace(_detailGaugeId)"
                                                    OnClick="() => SavePassItemAsync(context, false)">
                                             不合格
                                         </MudButton>
@@ -433,6 +478,9 @@
     private InspectionDto? _detailInspection;
     private Dictionary<string, double?> _itemInputs = [];
     private int _recordedCount;
+    // S02 · 可用量具（仅校准有效期内）
+    private List<GaugeDto> _availableGauges = [];
+    private string? _detailGaugeId;
 
     // ── 完成审核对话框 ──
     private bool _showCompleteDialog;
@@ -602,6 +650,26 @@
             _detailInspection = fresh;
             _itemInputs = fresh.Items.ToDictionary(i => i.CharacteristicCode, _ => (double?)null);
             _recordedCount = fresh.Items.Count(i => i.ActualValue is not null);
+            // S02 · 加载可用量具（仅校准期内）
+            try
+            {
+                var gauges = await Api.GetGaugesAsync();
+                _availableGauges = (gauges ?? []).Where(g => g.Status is "InService" or "DueSoon").ToList();
+                _detailGaugeId = fresh.GaugeId;
+                if (string.IsNullOrWhiteSpace(_detailGaugeId)) _detailGaugeId = null;
+                // 若已绑定但不在可用列表（已临期转过期边界），仍保留显示已绑定值
+                if (!string.IsNullOrWhiteSpace(fresh.GaugeId) && !_availableGauges.Any(g => g.Id == fresh.GaugeId))
+                {
+                    var all = await Api.GetGaugesAsync();
+                    var bound = (all ?? []).FirstOrDefault(g => g.Id == fresh.GaugeId);
+                    if (bound is not null) _availableGauges.Insert(0, bound);
+                }
+            }
+            catch (Exception ex)
+            {
+                PageLogger.LogWarning(ex, "加载量具列表失败（S02）");
+                _availableGauges = [];
+            }
             _completeInspectorId = string.Empty;
             _showDetailDialog = true;
         }
@@ -627,22 +695,33 @@
         if (_detailInspection is null) return;
         if (!_itemInputs.TryGetValue(item.CharacteristicCode, out var v) || v is null) return;
 
+        if (string.IsNullOrWhiteSpace(_detailGaugeId))
+        {
+            _message = "请选择在校准有效期内的量具后方可录入实测值（S02）";
+            _isError = true;
+            return;
+        }
         _isLoading = true;
         try
         {
             var (ok, data, status) = await Api.RecordInspectionValueAsync(
-                _detailInspection.OrderId, _detailInspection.Id, item.CharacteristicCode, v.Value);
+                _detailInspection.OrderId, _detailInspection.Id, item.CharacteristicCode, v.Value, _detailGaugeId);
             if (ok && data is not null)
             {
                 _detailInspection = data;
                 _itemInputs.Remove(item.CharacteristicCode);
                 _recordedCount = data.Items.Count(i => i.ActualValue is not null);
-                _message = $"{item.CharacteristicCode} 实测值 {v.Value.ToString("G")} 已记录";
+                _message = $"{item.CharacteristicCode} 实测值 {v.Value.ToString("G")} 已记录（量具 {_availableGauges.FirstOrDefault(g => g.Id == _detailGaugeId)?.GaugeNumber ?? _detailGaugeId}）";
                 _isError = false;
+            }
+            else if (status == 400)
+            {
+                _message = $"量具校验失败（HTTP 400）：校准已过期/已报废或量具不存在，请更换量具";
+                _isError = true;
             }
             else
             {
-                _message = $"记录失败（HTTP {status}）：需质量工程师权限";
+                _message = $"记录失败（HTTP {status}）：需质量工程师权限或量具校验未通过";
                 _isError = true;
             }
         }
@@ -661,11 +740,17 @@
     private async Task SavePassItemAsync(InspectionItemDto item, bool pass)
     {
         if (_detailInspection is null) return;
+        if (string.IsNullOrWhiteSpace(_detailGaugeId))
+        {
+            _message = "请选择在校准有效期内的量具后方可录入实测值（S02）";
+            _isError = true;
+            return;
+        }
         _isLoading = true;
         try
         {
             var (ok, data, status) = await Api.RecordInspectionValueAsync(
-                _detailInspection.OrderId, _detailInspection.Id, item.CharacteristicCode, pass ? 1.0 : 0.0);
+                _detailInspection.OrderId, _detailInspection.Id, item.CharacteristicCode, pass ? 1.0 : 0.0, _detailGaugeId);
             if (ok && data is not null)
             {
                 _detailInspection = data;
@@ -675,9 +760,14 @@
                     : $"{item.CharacteristicCode} 已记录（不合格）";
                 _isError = false;
             }
+            else if (status == 400)
+            {
+                _message = $"量具校验失败（HTTP 400）：校准已过期/已报废或量具不存在，请更换量具";
+                _isError = true;
+            }
             else
             {
-                _message = $"记录失败（HTTP {status}）：需质量工程师权限";
+                _message = $"记录失败（HTTP {status}）：需质量工程师权限或量具校验未通过";
                 _isError = true;
             }
         }
@@ -692,6 +782,18 @@
             _isLoading = false;
         }
     }
+
+    private void OnDetailGaugeChanged(string? gaugeId)
+        => _detailGaugeId = string.IsNullOrWhiteSpace(gaugeId) ? null : gaugeId;
+
+    private static string FormatGaugeStatus(string status) => status switch
+    {
+        "InService" => "在用",
+        "DueSoon" => "临期",
+        "Overdue" => "已过期",
+        "Scrapped" => "已报废",
+        _ => status
+    };
 
     // ═══════════════════════════════════════════
     // 完成审核（放行）

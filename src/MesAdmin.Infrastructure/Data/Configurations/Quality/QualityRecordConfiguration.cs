@@ -21,6 +21,8 @@ public sealed class QualityRecordConfiguration : IEntityTypeConfiguration<Qualit
         builder.Property(r => r.InspectionPlanName).HasMaxLength(64).IsRequired();
         builder.Property(r => r.AqlScheme).HasMaxLength(32);
         builder.Property(r => r.InspectorId).HasMaxLength(32).IsRequired();
+        builder.Property(r => r.GaugeId).IsRequired(false);
+        builder.HasIndex(r => r.GaugeId).HasDatabaseName("idx_quality_gauge");
         builder.Property(r => r.Verdict).HasConversion<string>().HasMaxLength(16);
         builder.Property(r => r.SupplierCode).HasMaxLength(32);
         builder.Property(r => r.SupplierName).HasMaxLength(64);
