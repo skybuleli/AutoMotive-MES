@@ -70,51 +70,53 @@
     --mes-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, 'Cascadia Code', monospace;
 }
 
-/* ── 亮色模式（车间终端）令牌覆盖：与 MesTheme.LightPalette 对齐 ── */
+/* ── 亮色模式（车间终端 · 护眼豆沙绿纸感）令牌覆盖：与 MesTheme.LightPalette 对齐 ──
+   画布淡绿豆沙（降低亮度刺激），卡面暖白，文字加深拉高对比，
+   品牌紫随之加深；信号色保持高饱和但压暗一档——醒目不刺眼 */
 :root[data-mes-theme="light"] {
-    --mes-bg: #F5F5FA;
-    --mes-bg-2: #EDEDF5;
-    --mes-surface: #FFFFFF;
-    --mes-surface-2: #F1F1F8;
-    --mes-surface-3: #E4E4EF;
+    --mes-bg: #F0F4E6;
+    --mes-bg-2: #E7EDD8;
+    --mes-surface: #FBFCF4;
+    --mes-surface-2: #F2F5E7;
+    --mes-surface-3: #E9EDDB;
 
-    --mes-lav: #8F6AAF;
-    --mes-lav-strong: #7C5A9E;
-    --mes-lav-soft: rgba(143, 106, 175, 0.12);
-    --mes-lav-line: rgba(143, 106, 175, 0.38);
-    --mes-sky: #3B82F6;
-    --mes-mint: #16A34A;
-    --mes-gold: #D97706;
+    --mes-lav: #7C5A9E;
+    --mes-lav-strong: #68488A;
+    --mes-lav-soft: rgba(124, 90, 158, 0.14);
+    --mes-lav-line: rgba(124, 90, 158, 0.42);
+    --mes-sky: #2563EB;
+    --mes-mint: #15803D;
+    --mes-gold: #B45309;
     --mes-rose: #DC2626;
 
-    --mes-lav-rgb: 143, 106, 175;
-    --mes-sky-rgb: 59, 130, 246;
-    --mes-mint-rgb: 22, 163, 74;
-    --mes-gold-rgb: 217, 119, 6;
+    --mes-lav-rgb: 124, 90, 158;
+    --mes-sky-rgb: 37, 99, 235;
+    --mes-mint-rgb: 21, 128, 61;
+    --mes-gold-rgb: 180, 83, 9;
     --mes-rose-rgb: 220, 38, 38;
 
-    --mes-ok: #16A34A;
-    --mes-warn: #D97706;
+    --mes-ok: #15803D;
+    --mes-warn: #B45309;
     --mes-err: #DC2626;
-    --mes-idle: #B9BDCC;
-    --mes-ok-rgb: 22, 163, 74;
-    --mes-warn-rgb: 217, 119, 6;
+    --mes-idle: #A9B199;
+    --mes-ok-rgb: 21, 128, 61;
+    --mes-warn-rgb: 180, 83, 9;
     --mes-err-rgb: 220, 38, 38;
-    --mes-idle-rgb: 185, 189, 204;
+    --mes-idle-rgb: 169, 177, 153;
 
-    --mes-text: #1F2937;
-    --mes-text-2: #5B6478;
-    --mes-text-3: #8A91A5;
+    --mes-text: #232B1D;
+    --mes-text-2: #4F5A44;
+    --mes-text-3: #6E7860;
 
-    --mes-border: rgba(15, 23, 42, 0.10);
-    --mes-border-strong: rgba(15, 23, 42, 0.16);
+    --mes-border: rgba(46, 56, 32, 0.13);
+    --mes-border-strong: rgba(46, 56, 32, 0.20);
 
-    --mes-shadow: 0 8px 24px -12px rgba(31, 41, 55, 0.18);
-    --mes-shadow-lg: 0 20px 48px -20px rgba(31, 41, 55, 0.25);
-    --mes-glow: 0 0 0 1px var(--mes-lav-line), 0 18px 48px -22px rgba(143, 106, 175, 0.30);
+    --mes-shadow: 0 8px 24px -12px rgba(40, 48, 30, 0.20);
+    --mes-shadow-lg: 0 20px 48px -20px rgba(40, 48, 30, 0.28);
+    --mes-glow: 0 0 0 1px var(--mes-lav-line), 0 18px 48px -22px rgba(124, 90, 158, 0.30);
 
-    --mes-accent: linear-gradient(90deg, #8F6AAF 0%, #5E7BD8 55%, #3F9D5A 100%);
-    --mes-accent-soft: linear-gradient(135deg, rgba(143, 106, 175, 0.14), rgba(94, 123, 216, 0.06));
+    --mes-accent: linear-gradient(90deg, #7C5A9E 0%, #4F6BC8 55%, #3F8F52 100%);
+    --mes-accent-soft: linear-gradient(135deg, rgba(124, 90, 158, 0.16), rgba(79, 107, 200, 0.07));
 }
 
 /* ═══════════════ 基础 ═══════════════ */
@@ -675,12 +677,12 @@ a { color: inherit; }
 
 :root[data-mes-theme="light"] .mud-appbar.mud-appbar-fixed-top,
 :root[data-mes-theme="light"] .mes-appbar {
-    background: rgba(255, 255, 255, 0.86) !important;
+    background: rgba(248, 250, 240, 0.88) !important;
 }
 
 :root[data-mes-theme="light"] .mes-drawer,
 :root[data-mes-theme="light"] .mud-drawer {
-    background: rgba(250, 250, 253, 0.94) !important;
+    background: rgba(246, 249, 238, 0.94) !important;
 }
 
 .layout-subtitle { color: var(--mes-text-3); }
@@ -750,7 +752,7 @@ a { color: inherit; }
 }
 
 :root[data-mes-theme="light"] .mud-navmenu .mud-nav-link:hover {
-    background: rgba(15, 23, 42, 0.05);
+    background: rgba(46, 56, 32, 0.06);
 }
 
 .mud-navmenu .mud-nav-link.active {

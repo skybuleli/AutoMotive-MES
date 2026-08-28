@@ -9,7 +9,7 @@ window.mesTheme = {
         try { localStorage.setItem('mes.theme', mode); } catch (e) { /* 隐私模式等场景忽略 */ }
         document.documentElement.setAttribute('data-mes-theme', mode);
         if (document.body) {
-            document.body.style.background = mode === 'light' ? '#F5F5FA' : '#191925';
+            document.body.style.background = mode === 'light' ? '#F0F4E6' : '#191925';
         }
     }
 };
