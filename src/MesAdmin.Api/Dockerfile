@@ -23,12 +23,15 @@ RUN touch /dpkeys.stamp
 FROM restore AS publish
 COPY src/ src/
 WORKDIR /src/src/MesAdmin.Api
+# TARGETARCH 由 BuildKit 注入（amd64/arm64），映射为 .NET RID；
+# RID 特定发布只保留 Linux 原生库，剔除 OPC UA 等包的 win/osx 原生件
+ARG TARGETARCH
 # 完整源码覆盖后再还原一次：csproj 内容（而非文件列表）变化时刷新包资产；
 # 包来自缓存挂载，秒级完成
 RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet restore MesAdmin.Api.csproj
-RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet publish MesAdmin.Api.csproj -c Release --no-restore -o /publish
+    case "$TARGETARCH" in amd64) rid=linux-x64 ;; *) rid="linux-$TARGETARCH" ;; esac \
+    && dotnet restore MesAdmin.Api.csproj -r "$rid" \
+    && dotnet publish MesAdmin.Api.csproj -c Release --no-restore -r "$rid" --self-contained false -o /publish
 
 # ── Stage 3: 运行时 ──
 # chiseled-extra：无 shell、非 root、含 ICU/tzdata，体积比标准 aspnet 小约 40%

@@ -23,15 +23,18 @@ RUN touch /dpkeys.stamp
 FROM restore AS publish
 COPY src/ src/
 WORKDIR /src/src/MesAdmin.Web
+# TARGETARCH 由 BuildKit 注入（amd64/arm64），映射为 .NET RID；
+# RID 特定发布只保留 Linux 原生库，剔除 win/osx 原生件
+ARG TARGETARCH
 # 完整源码覆盖后再还原一次：csproj 内容（而非文件列表）变化时刷新包资产，
-# 避免复用还原层导致资产过期；包来自缓存挂载，秒级完成
-RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet restore MesAdmin.Web.csproj
+# 避免复用还原层导致资产过期；包来自缓存挂载，秒级完成。
 # .NET 10 framework asset manifest 在 publish 期间生成，但 SDK 镜像不会把
 # 框架文件复制进独立输出目录。保留 blazor.web.js 供 Interactive Server 引导。
 # 必须与 publish 同一个 RUN：NuGet 缓存挂载仅在该步骤内可见
 RUN --mount=type=cache,target=/root/.nuget/packages \
-    dotnet publish MesAdmin.Web.csproj -c Release --no-restore -o /publish \
+    case "$TARGETARCH" in amd64) rid=linux-x64 ;; *) rid="linux-$TARGETARCH" ;; esac \
+    && dotnet restore MesAdmin.Web.csproj -r "$rid" \
+    && dotnet publish MesAdmin.Web.csproj -c Release --no-restore -r "$rid" --self-contained false -o /publish \
     && framework_assets="$(find /root/.nuget/packages/microsoft.aspnetcore.app.internal.assets -type f -path '*/_framework/blazor.web.js' | sort -V | tail -n 1)" \
     && test -n "$framework_assets" \
     && mkdir -p /publish/wwwroot/_framework \
