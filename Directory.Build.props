@@ -1,7 +1,7 @@
 <Project>
   <ItemGroup Condition="'$(MSBuildProjectName)' != 'MesAdmin.Generators'">
-    <PackageReference Include="Meziantou.Analyzer" Version="3.0.121" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
-    <PackageReference Include="Roslynator.Analyzers" Version="4.15.0" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="Meziantou.Analyzer" Version="3.0.190" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="Roslynator.Analyzers" Version="4.16.1" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
     <!-- ErrorProne.NET：正确性/并发/异步/异常处理 + struct 性能陷阱（详见 .editorconfig 规则策略） -->
     <PackageReference Include="ErrorProne.NET.CoreAnalyzers" Version="0.9.0-beta.4" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
     <PackageReference Include="ErrorProne.NET.Structs" Version="0.6.1-beta.1" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
