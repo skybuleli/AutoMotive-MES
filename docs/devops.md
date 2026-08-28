@@ -101,6 +101,23 @@ GitHub Actions 无法直接触达内网 VM（OrbStack NAT）。如需 push 即�
 
 结论：**Uncloud 是该场景的最优解**，缺的只是 CI 多架构镜像与自动化脚本——已补齐。
 
+## 六点五、DevOps 原则对账（2026-08 审计）
+
+| 原则 | 状态 | 说明 |
+|------|------|------|
+| 无 Dockerfile | **有意偏离** | SDK 容器发布（`dotnet publish /t:PublishContainer`）无法表达本仓必需的自定义步骤：blazor.web.js 补拷贝、chiseled 无 shell 下的 DP 密钥目录属主修正、busybox 探活；且容器发布不产出多平台 manifest（CI 双架构刚需）、不支持 HEALTHCHECK。Dockerfile 本身即声明式配置，维护成本已通过缓存挂载压到最低。重新评估触发条件：引入纯 API 微服务（可 AOT）且放弃 chiseled 细节控制时 |
+| 无 Registry（可选） | **符合** | 双通道：日常迭代走本机构建 + Unregistry（`uc deploy` 内建，SSH 直推）；GHCR 仅作为 CI 多架构产物与版本历史仓库。"可选"语义成立 |
+| Compose 即部署 | **符合（不含 Aspire）** | Compose 被 Uncloud 直接消费、零 K8s ✓。Aspire 编排**有意不引入**：`aspire publish` 生成的 Compose 无法表达 Uncloud 扩展（x-caddy/x-ports/secrets/configs），反而需要手工 overlay 双轨维护；服务拓扑仅 7 项，收益不抵重构成本 |
+| SSH 即权限 | **部分符合（待硬化）** | 现状：日常管理走 Uncloud 客户端证书（WireGuard），SSH 仅 bootstrap；但 VM 仍以 root 运维、CI 不是部署入口（NAT 不可达）。改进路线见下 |
+| 小镜像优先 | **部分符合** | Chiseled ✓（241MB 基座 + 应用）。RID 特定发布后 315/325MB（-23%）。**Native AOT 对本应用不可行**：Blazor Server 交互模式与 EF Core 均依赖反射，不支持 AOT；15-100MB 目标仅适用于无 UI 的纯计算微服务。后续可再挖：`-p:PublishTrimmed`（需逐包验证反射安全）、PDB 剔除（牺牲行号诊断，不建议） |
+
+### SSH/权限硬化路线（未实施，按需启用）
+
+1. VM 上建 `deploy` 专用用户（docker 组），禁 root SSH，仅用于镜像清理等运维命令；
+2. Mac 上生成部署专钥并 `authorized_keys` 限制（`command=` 前缀只允许 docker prune）；
+3. 完整 CD：Mac 装 self-hosted runner（NAT 内唯一可行入口），main 合入自动执行
+   `deploy-uncloud.sh --registry`。当前单人开发保持手动门禁是有意选择。
+
 ## 七、已知权衡 / 后续
 
 - GHCR 私有转公开已完成；若未来改回私有，本机 `docker login ghcr.io`
