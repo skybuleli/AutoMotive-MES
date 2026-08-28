@@ -78,7 +78,8 @@ fi
 # 构建完成后推送镜像并在远端执行健康门禁滚动发布；-y 跳过交互确认。
 DEPLOY_FLAGS=(-y)
 if [ "$REGISTRY_MODE" = "1" ]; then
-  [ -n "${IMAGE_TAG:-}" ] || fail "镜像仓库模式需指定 IMAGE_TAG=<tag>"
+  IMAGE_TAG="${IMAGE_TAG:-latest}"
+  export IMAGE_TAG   # uc deploy 子进程读取 compose 插值变量，必须导出
   docker manifest inspect "ghcr.io/skybuleli/automotive-mes/mes-api:${IMAGE_TAG}" >/dev/null 2>&1 \
     || fail "GHCR 上找不到 mes-api:${IMAGE_TAG}（检查 IMAGE_TAG 或先 docker login ghcr.io）"
   info "镜像仓库模式：IMAGE_TAG=${IMAGE_TAG}，跳过本机构建"
@@ -106,13 +107,18 @@ if [ "$NO_PRUNE" = "1" ]; then
 else
   MACHINE="$("$UC" machine ls -c "$CONTEXT" -o json 2>/dev/null | python3 -c 'import json,sys; m=json.load(sys.stdin)[0]; print(m["Name"])' 2>/dev/null || true)"
   SSH_TRY=()
-  [ -n "${DEPLOY_SSH:-}" ] && SSH_TRY=("$DEPLOY_SSH")
-  [ -n "$MACHINE" ] && SSH_TRY+=("root@${MACHINE}@orb" "root@${MACHINE}")
+  if [ -n "${DEPLOY_SSH:-}" ]; then
+    SSH_TRY+=("$DEPLOY_SSH")
+  elif [ -n "$MACHINE" ]; then
+    SSH_TRY+=("root@${MACHINE}@orb" "root@${MACHINE}")
+  fi
   PRUNED=0
-  for t in "${SSH_TRY[@]}"; do
+  for t in ${SSH_TRY[@]+"${SSH_TRY[@]}"}; do
     if /usr/bin/ssh -o ConnectTimeout=5 -o BatchMode=yes "$t" "docker image prune -f" >/dev/null 2>&1; then
-      ok "已清理 VM（$t）悬空镜像"; PRUNED=1; break
+      ok "已清理 VM（${t}）悬空镜像"; PRUNED=1; break
     fi
   done
-  [ "$PRUNED" = "0" ] && warn "VM 镜像清理未执行（可用 DEPLOY_SSH=user@host 指定目标）"
+  if [ "$PRUNED" = "0" ]; then
+    warn "VM 镜像清理未执行（可用 DEPLOY_SSH=user@host 指定目标）"
+  fi
 fi

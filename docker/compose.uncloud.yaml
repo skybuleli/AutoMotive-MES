@@ -94,7 +94,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5040
-      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=secret://postgres_password
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       Jwt__Secret: secret://jwt_secret
       Sap__BaseUrl: ${SAP_BASE_URL:-http://sap-erp:8000/sap/opu/odata}
       Sap__Username: ${SAP_USERNAME:-}
@@ -144,7 +144,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:5138
-      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=secret://postgres_password
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Database=automes;Username=mes;Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       Jwt__Secret: secret://jwt_secret
       Api__BaseUrl: http://mes-api:5040/
       SignalR__DashboardHubUrl: http://mes-api:5040/hubs/dashboard
@@ -204,11 +204,11 @@ volumes:
     driver: local
 
 # ── Uncloud 0.20 secrets ──
-# 部署时在本机执行 x-command 解析（目录 = compose 文件所在目录），
+# 部署时在本机执行 x-command 解析（目录 = compose 文件所在目录 docker/），
 # 值存入集群配置而不出现在部署计划、命令行参数或 shell 环境里。
 # 轮换方式：改 .env.uncloud.local 后重新 uc deploy 即可滚动注入新值。
 secrets:
   postgres_password:
-    x-command: sh -c 'grep "^POSTGRES_PASSWORD=" ../../.env.uncloud.local | cut -d= -f2-'
+    x-command: sh -c 'grep "^POSTGRES_PASSWORD=" ../.env.uncloud.local | cut -d= -f2- || { echo "POSTGRES_PASSWORD not found in .env.uncloud.local" >&2; exit 1; }'
   jwt_secret:
-    x-command: sh -c 'grep "^JWT_SECRET=" ../../.env.uncloud.local | cut -d= -f2-'
+    x-command: sh -c 'grep "^JWT_SECRET=" ../.env.uncloud.local | cut -d= -f2- || { echo "JWT_SECRET not found in .env.uncloud.local" >&2; exit 1; }'
