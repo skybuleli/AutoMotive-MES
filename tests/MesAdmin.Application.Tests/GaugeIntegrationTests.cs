@@ -86,7 +86,7 @@ public class GaugeIntegrationTests
         var gauge = CreateGauge("GT-IT-CAL");
         await gaugeRepo.AddAsync(gauge);
 
-        var calibratedAt = DateTimeOffset.UtcNow;
+        var calibratedAt = UtcNowMicro();
         var record = CalibrationRecord.Create(
             Ulid.NewUlid(), gauge.Id, calibratedAt, CalibrationResult.Pass,
             "CERT-IT-001", "QE-IT", calibratedAt.AddDays(gauge.CalibrationCycleDays));
@@ -185,11 +185,21 @@ public class GaugeIntegrationTests
 
     // ── 辅助 ──
 
+    /// <summary>
+    /// PostgreSQL timestamp 精度为微秒（DateTimeOffset tick 为 100ns），
+    /// 生成微秒对齐时间，避免落库后断言出现亚微秒尾差。
+    /// </summary>
+    private static DateTimeOffset UtcNowMicro()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new DateTimeOffset(now.Ticks / 10 * 10, now.Offset);
+    }
+
     private static Gauge CreateGauge(string number)
         => Gauge.Create(
             Ulid.NewUlid(), number, "集成测试量具", GaugeType.TorqueWrench,
             "0-100 Nm", "0.01 Nm", "0.5 级", 365,
-            DateTimeOffset.UtcNow.AddDays(-30));
+            UtcNowMicro().AddDays(-30));
 
     /// <summary>捕获消息的飞书通知桩。</summary>
     private sealed class CapturingFeishuNotifier : IFeishuNotifier
