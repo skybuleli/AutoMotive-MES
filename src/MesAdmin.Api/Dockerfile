@@ -5,7 +5,7 @@
 # ── Stage 1: 还原 ──
 # 先只复制项目文件：csproj 未变时此层命中缓存，源码改动不触发重新还原；
 # NuGet 包放在 BuildKit 缓存挂载中，即使还原层失效也不会重新下载。
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS restore
 WORKDIR /src
 
 COPY Directory.Build.props .
